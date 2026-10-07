@@ -17,8 +17,8 @@ import { AssignmentOrgChart } from "../assignment-org-chart/assignment-org-chart
 import { AssignmentTree } from "../assignment-tree/assignment-tree";
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { environment } from '../../../../environments/environment';
 import { BreadcrumbService } from '../../../services/framework-services/breadcrumb.service';
+import { userPhotoUrl } from '../../../core/media/media-token';
 
 // Interfaces
 interface ActionItem {
@@ -975,7 +975,7 @@ export class AssignmentManagement implements OnInit {
   }
 
   getUserPhotoUrl(personalNo: string): string {
-    return `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${personalNo}.jpg`)}&w=48&q=75`;
+    return userPhotoUrl(personalNo);
   }
 
   getUserInitials(userName: string): string {

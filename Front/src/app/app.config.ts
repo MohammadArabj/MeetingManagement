@@ -13,6 +13,7 @@ import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { loadingInterceptor } from './core/interceptors/loading.interceptor';
 import { validationInterceptor } from './core/interceptors/validation.interceptor';
 import { MeetingAccessService } from './core/meeting-access/meeting-access.service';
+import { MediaTokenService } from './core/media/media-token';
 
 /**
  * ترتیب interceptor ها (درخواست از بالا به پایین، پاسخ برعکس):
@@ -31,18 +32,21 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     { provide: LocationStrategy, useClass: HashLocationStrategy },
 
-    // ① پردازش بازگشت از SSO / بارگذاری کاربر  ② آماده‌سازی نشست و دسترسی‌ها  ③ تنظیمات عمومی
+    // ① پردازش بازگشت از SSO / بارگذاری کاربر  ② آماده‌سازی نشست و دسترسی‌ها  ③ تنظیمات عمومی  ④ توکن عکس‌ها
     provideAppInitializer(async () => {
       const auth = inject(AuthService);
       const bootstrap = inject(SessionBootstrapService);
       const settings = inject(SystemSettingService);
       const meetingAccess = inject(MeetingAccessService);
+      const mediaToken = inject(MediaTokenService);
 
       const { freshLogin } = await auth.init();
       await Promise.all([
         bootstrap.run(freshLogin),
         settings.initializePublicSettings(),
         auth.isAuthenticated() ? meetingAccess.loadRoleConfig() : Promise.resolve(),
+        // توکن نمایش عکس‌های پرسنلی (قبل از رندر تا آواتارها بی‌درنگ بارگذاری شوند)
+        auth.isAuthenticated() ? mediaToken.ensure() : Promise.resolve(),
       ]);
     }),
   ]

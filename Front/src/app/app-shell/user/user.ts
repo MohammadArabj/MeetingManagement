@@ -29,6 +29,7 @@ import { environment } from '../../../environments/environment';
 import { ImpersonationService, ImpersonationTarget } from '../../services/framework-services/impersonation.service';
 import { UserActionsCellComponent } from './user-actions-cell.component';
 
+import { userPhotoUrl } from '../../core/media/media-token';
 // Cell Renderer Component
 
 interface GridState {
@@ -241,7 +242,7 @@ export class UserList extends AgGridBaseComponent implements OnInit, AfterViewIn
     const userName = params.data?.userName;
     if (!userName) return '<i class="fa fa-user text-muted"></i>';
 
-    const imageUrl = `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${userName}.jpg`)}&w=48&q=75`;
+    const imageUrl = userPhotoUrl(userName);
     return `
       <div class="user-avatar-cell">
         <img src="${imageUrl}"

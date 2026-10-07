@@ -22,7 +22,7 @@ import {
   ZOOM_STEP,
   ZoomState,
 } from './file-manager.models';
-import { formatSize, getFileKind } from './file-manager.utils';
+import { formatSize, getFileKind, thumbnailUrl } from './file-manager.utils';
 
 /**
  * پنل پیش‌نمایش فایل انتخاب‌شده (تصویر با زوم/جابجایی، PDF، ویدیو، صدا، متن).
@@ -94,11 +94,20 @@ import { formatSize, getFileKind } from './file-manager.utils';
                  (mousemove)="onImageMouseMove($event)"
                  (mouseup)="onImageMouseUp()"
                  (mouseleave)="onImageMouseUp()">
-              <img [src]="file.previewUrl"
-                   alt=""
-                   class="preview-image"
-                   [style.transform]="getImageTransform()"
-                   draggable="false" />
+              <!-- نمایش تدریجی: بندانگشتی (معمولاً از کش) فوراً، نسخه‌ی باکیفیت پس از بارگذاری جایگزین می‌شود -->
+              <div class="preview-image-stack" [style.transform]="getImageTransform()">
+                @if (!hiResLoaded()) {
+                  <img [src]="lowResUrl()" alt="" class="preview-image preview-image--placeholder" draggable="false" />
+                }
+                <img [src]="hiResUrl()"
+                     alt=""
+                     class="preview-image"
+                     [class.preview-image--pending]="!hiResLoaded()"
+                     decoding="async"
+                     (load)="hiResLoaded.set(true)"
+                     (error)="hiResLoaded.set(true)"
+                     draggable="false" />
+              </div>
             </div>
           }
 
@@ -224,6 +233,10 @@ import { formatSize, getFileKind } from './file-manager.utils';
     .image-preview--grabbing { cursor: grabbing; }
     .preview-image { max-width: none; max-height: none; transition: transform 0.1s ease-out; user-select: none; pointer-events: none; }
 
+    .preview-image-stack { position: relative; display: grid; place-items: center; max-width: 100%; max-height: 100%; transition: transform .1s ease-out; }
+    .preview-image-stack > .preview-image { grid-area: 1 / 1; }
+    .preview-image--placeholder { width: min(640px, 80vw); height: auto; filter: blur(10px); }
+    .preview-image--pending { opacity: 0; }
     .preview-iframe { width: 100%; height: 100%; border: none; border-radius: var(--fm-radius); background: var(--fm-surface); }
     .preview-video { max-width: 100%; max-height: 100%; border-radius: var(--fm-radius); background: #000; }
 
@@ -327,8 +340,17 @@ export class FilePreviewPaneComponent implements OnChanges {
   readonly zoomState = signal<ZoomState>({ ...INITIAL_ZOOM_STATE });
   readonly formatSize = formatSize;
 
+  /** آیا نسخه‌ی باکیفیت تصویر بارگذاری شده است (برای حذف placeholder) */
+  readonly hiResLoaded = signal(false);
+  lowResUrl(): string { return thumbnailUrl(this.file?.previewUrl, 320); }
+  /** حداکثر ۱۹۲۰ پیکسل؛ تصاویر چندمگابایتی دوربین به‌مراتب سریع‌تر نمایش داده می‌شوند */
+  hiResUrl(): string { return thumbnailUrl(this.file?.previewUrl, 1920); }
+
   ngOnChanges(changes: SimpleChanges): void {
     const change = changes['file'];
+    if (change && change.previousValue?.previewUrl !== change.currentValue?.previewUrl) {
+      this.hiResLoaded.set(false);
+    }
     if (change && !change.firstChange && change.previousValue?.id !== change.currentValue?.id) {
       this.resetZoom();
     }

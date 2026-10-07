@@ -75,3 +75,13 @@ export function formatSpeed(bps: number): string {
 export function normGuid(g: string): string {
   return (g || '').trim().toLowerCase();
 }
+
+/**
+ * نسخه‌ی کوچک‌شده‌ی تصویر از سامانه‌ی مدیریت فایل (WebP/JPEG، کش‌شده روی سرور و مرورگر).
+ * فقط برای آدرس‌های امضاشده‌ی /files/…؛ پیش‌نمایش محلی (blob:) دست‌نخورده برمی‌گردد.
+ */
+export function thumbnailUrl(url: string | null | undefined, width: number): string {
+  if (!url) return '';
+  if (!/\/files\/[^?]+\?[^#]*\bsig=/.test(url)) return url;
+  return `${url}&w=${Math.round(width)}`;
+}

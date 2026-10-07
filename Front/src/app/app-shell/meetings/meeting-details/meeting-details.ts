@@ -42,6 +42,7 @@ import { NavigationService } from '../../../services/framework-services/navigati
 import { MeetingRoles } from '../../../core/meeting-access/meeting-roles';
 import { MeetingStatus, MeetingStatuses } from '../../../core/meeting-access/meeting-status';
 import { MeetingAccessService } from '../../../core/meeting-access/meeting-access.service';
+import { mediaTokenParam } from '../../../core/media/media-token';
 
 declare var $: any;
 declare var Swal: any;
@@ -520,7 +521,7 @@ export class MeetingDetailsComponent implements OnInit {
             const photoUrl = encodeURIComponent(`photo/${member.userName}.jpg`);
             // تصویر پیش‌فرض برای کاربران بدون profileGuid
             member.image = member.userName
-              ? `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=48&q=75`
+              ? `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=96${mediaTokenParam()}`
               : 'img/default-avatar.png';
           }
         });
@@ -543,7 +544,7 @@ export class MeetingDetailsComponent implements OnInit {
                 const member = membersData[memberIndex];
                 const photoUrl = encodeURIComponent(`photo/${member.userName}.jpg`);
                 membersData[memberIndex].image = member.userName
-                  ? `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=48&q=75`
+                  ? `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=96${mediaTokenParam()}`
                   : 'img/default-avatar.png';
               }
             }
@@ -554,7 +555,7 @@ export class MeetingDetailsComponent implements OnInit {
               const member = membersData[memberIndex];
               const photoUrl = encodeURIComponent(`photo/${member.userName}.jpg`);
               membersData[memberIndex].image = member.userName
-                ? `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=48&q=75`
+                ? `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=96${mediaTokenParam()}`
                 : 'img/default-avatar.png';
             }
           }

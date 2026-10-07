@@ -1,7 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
-import { environment } from '../../environments/environment';
 import { MeetingDetails } from '../core/models/Meeting';
 import { Resolution } from '../core/models/Resolution';
 import { MeetingRoles } from '../core/meeting-access/meeting-roles';
@@ -11,6 +10,7 @@ import { BoardMemberService } from './board-member.service';
 import { MeetingMemberService } from './meeting-member.service';
 import { LocalStorageService } from './framework-services/local.storage.service';
 import { ToastService } from './framework-services/toast.service';
+import { signatureImageUrl } from '../core/media/media-token';
 
 type PrintSingleArgs = {
   resolution: Resolution;
@@ -168,11 +168,7 @@ export class MeetingPrintService {
   private signatures(members: any[]): { name: string; signatureUrl: string }[] {
     return members
       .filter(m => m.isSign)
-      .map(m => ({ name: m.name ?? '', signatureUrl: this.signatureUrl(m.userName) }));
-  }
-
-  private signatureUrl(userName?: string): string {
-    return userName ? `${environment.fileManagementEndpoint}/EpcSignature/${encodeURIComponent(userName)}.jpg` : '';
+      .map(m => ({ name: m.name ?? '', signatureUrl: signatureImageUrl(m.signatureUrl) }));
   }
 
   /** حاضرین، دبیر و خانه‌های امضای صورتجلسه هیئت مدیره (مهمان‌ها چاپ نمی‌شوند) */

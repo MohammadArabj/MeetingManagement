@@ -17,6 +17,7 @@ import {
   ResolutionFileDto,
   UserWithPosition,
 } from './resolution-form.models';
+import { mediaTokenParam } from '../../../../../core/media/media-token';
 
 // ═══════════════════════════════════════════════════════════
 // Generic helpers
@@ -145,7 +146,7 @@ export function buildUsersWithPositions(list: SystemUser[]): UserWithPosition[] 
 
 export function getUserPhotoUrl(personalNo: string): string {
   const photoUrl = encodeURIComponent(`photo/${personalNo}.jpg`);
-  return `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=48&q=75`;
+  return `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=96${mediaTokenParam()}`;
 }
 
 export function getUserInitials(userName: string): string {

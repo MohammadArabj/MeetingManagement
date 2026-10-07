@@ -14,8 +14,8 @@ import { USER_ID_NAME } from '../../../../core/types/configuration';
 import { ComboBase } from '../../../../shared/combo-base';
 import { CustomSelectComponent } from '../../../../shared/custom-controls/custom-select';
 import { getClientSettings } from '../../../../services/framework-services/code-flow.service';
-import { environment } from '../../../../../environments/environment';
 import { MeetingRoles } from '../../../../core/meeting-access/meeting-roles';
+import { userPhotoUrl } from '../../../../core/media/media-token';
 
 @Component({
   selector: 'app-meeting-attendance-announcement-tab',
@@ -332,7 +332,7 @@ readonly filteredUsers = computed(() => {
           positionGuid: position.positionGuid,
           position: position.positionTitle,
           image: user.userName
-            ? `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${user.userName}.jpg`)}&w=48&q=75`
+            ? userPhotoUrl(user.userName)
             : 'img/default-avatar.png',
           isSystem: true,
           baseUserGuid: user.guid,
@@ -348,7 +348,7 @@ readonly filteredUsers = computed(() => {
         positionGuid: '',
         position: 'بدون سمت',
         image: user.userName
-          ? `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${user.userName}.jpg`)}&w=48&q=75`
+          ? userPhotoUrl(user.userName)
           : 'img/default-avatar.png',
         isSystem: true,
         baseUserGuid: user.guid,

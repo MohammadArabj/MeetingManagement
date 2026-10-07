@@ -2,11 +2,11 @@ import { ElementRef } from '@angular/core';
 import { FormGroup } from '@angular/forms';
 import { Modal } from 'bootstrap';
 
-import { environment } from '../../../../../environments/environment';
 import { SystemUser, Position } from '../../../../core/models/User';
 import { ComboBase } from '../../../../shared/combo-base';
 import { MeetingRoles } from '../../../../core/meeting-access/meeting-roles';
 import { MeetingSummary, MemberListItem } from './meeting-members.models';
+import { signatureImageUrl, userPhotoUrl as mediaPhotoUrl } from '../../../../core/media/media-token';
 
 // ═══════════════════════════════════════════════════════════════
 // Images
@@ -16,12 +16,12 @@ export const DEFAULT_AVATAR = 'img/default-avatar.png';
 
 /** آدرس تصویر پرسنلی کاربر بر اساس نام کاربری */
 export function userPhotoUrl(userName: string): string {
-  return `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${userName}.jpg`)}&w=48&q=75`;
+  return mediaPhotoUrl(userName);
 }
 
-/** آدرس تصویر امضای کاربر */
-export function userSignatureUrl(userName: string): string {
-  return `${environment.fileManagementEndpoint}/EpcSignature/${userName}.jpg`;
+/** آدرس تصویر امضای کاربر (آدرس موقت امضاشده که سرور فقط برای افراد مجاز برمی‌گرداند) */
+export function userSignatureUrl(member: { signatureUrl?: string | null }): string {
+  return signatureImageUrl(member.signatureUrl);
 }
 
 // ═══════════════════════════════════════════════════════════════

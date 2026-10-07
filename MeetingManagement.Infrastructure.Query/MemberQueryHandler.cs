@@ -11,7 +11,9 @@ using MeetingManagement.Infrastructure.Acl;
 using MeetingManagement.Infrastructure.Persistence;
 using MeetingManagement.Infrastructure.Query.Contracts.Meeting;
 using MeetingManagement.Infrastructure.Query.Contracts.Member;
+using MeetingManagement.Common.FileUpload;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace MeetingManagement.Infrastructure.Query;
 
@@ -23,7 +25,8 @@ public class MemberQueryHandler(
     MeetingManagementQueryContext context,
     IUserManagementAclService userManagementAclService,
     IMeetingAccessService accessService,
-    IActingIdentityResolver identityResolver) : 
+    IActingIdentityResolver identityResolver,
+    IConfiguration configuration) : 
     IQueryHandlerAsync<Result<List<MeetingMemberListDto>>, MemberSearchDto>,
     IQueryHandlerAsync<Result<MeetingMemberSignatureDetailsDto>,MeetingMemberSearchDto>
 {
@@ -36,6 +39,7 @@ public class MemberQueryHandler(
         var identity = await identityResolver.ResolveAsync();
         var canSeeContacts = access.Can(MeetingCapability.ManageMembers);
         var canSeeSignatures = access.Can(MeetingCapability.ViewMinutes);
+        var signatureUrls = new SignatureUrlBuilder(configuration);
 
         var members = await context.MeetingsMembers
              .Where(c => c.Meeting.Guid == condition.MeetingGuid)
@@ -84,6 +88,9 @@ public class MemberQueryHandler(
             var isSelf = (m.PositionGuid != null && m.PositionGuid == identity.PositionGuid)
                          || (m.PositionGuid == null && m.UserGuid == identity.UserGuid);
             var showContact = canSeeContacts || isSelf;
+            var isSigned = m.IsSign ?? false;
+            // تصویر امضا: خود عضو (پیش‌نمایش پیش از امضا)، مدیر جلسه، و بینندگان صورتجلسه پس از امضا
+            var canSeeSignatureImage = m.UserGuid != null && (isSelf || canSeeContacts || (canSeeSignatures && isSigned));
 
             return new MeetingMemberListDto
             {
@@ -111,7 +118,9 @@ public class MemberQueryHandler(
                 Signer=m.Signer,
                 SignerName=signer,
                 Gender=m.Gender!=null?m.Gender.ToString():"",
-                SignerUserName =signerPersonalNo
+                SignerUserName =signerPersonalNo,
+                SignatureUrl = canSeeSignatureImage ? signatureUrls.Build(personalNo) : null,
+                SignerSignatureUrl = canSeeSignatures && isSigned && m.Signer != null ? signatureUrls.Build(signerPersonalNo) : null
             };
         }).ToList();
         return Result<List<MeetingMemberListDto>>.EmptyMessage(memberModels);

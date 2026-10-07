@@ -1,3 +1,4 @@
+import { userPhotoUrl } from '../media/media-token';
 import { environment } from "../../../environments/environment";
 import { FileService } from "../../services/file.service";
 import { MeetingMember } from "../models/Meeting";
@@ -67,7 +68,7 @@ export class ImageCacheManager {
             }
 
             if (member.userName) {
-                return `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${member.userName}.jpg`)}&w=48&q=75`;
+                return userPhotoUrl(member.userName);
             }
 
             return this.getDefaultImage(member);

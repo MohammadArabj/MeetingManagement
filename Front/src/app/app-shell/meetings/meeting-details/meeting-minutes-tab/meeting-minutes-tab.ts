@@ -44,6 +44,7 @@ import { FileManagerModalComponent } from '../../../../shared/file-manager/file-
 import { MeetingRoles } from '../../../../core/meeting-access/meeting-roles';
 import { PrintService } from '../../../../core/print/print.service';
 import { escapeHtml } from '../../../../core/print/template-engine';
+import { signatureImageUrl } from '../../../../core/media/media-token';
 
 declare var $: any;
 declare var Swal: any;
@@ -202,17 +203,17 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
       .sort((a, b) => Number(MeetingRoles.isChairman(b.roleId)) - Number(MeetingRoles.isChairman(a.roleId)))
       .map(m => {
         let name = m.name;
-        let userName = m.userName;
+        let signatureUrl = m.signatureUrl;
 
         if (isDelegate && m.signer && m.signer !== m.userGuid) {
           name = 'از طرف ' + m.signerName;
-          userName = m.signerUserName ?? '';
+          signatureUrl = m.signerSignatureUrl;
         }
 
         return {
           name,
           role: m.role ?? '',
-          signature: `${environment.fileManagementEndpoint}/EpcSignature/${userName}.jpg`,
+          signature: signatureImageUrl(signatureUrl),
         };
       });
   });
@@ -378,16 +379,11 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
           takeUntilDestroyed(this.destroyRef)
         ).subscribe(user => {
           this._mainUser.set(user.fullname);
-          this._signatureImage.set(
-            `${environment.fileManagementEndpoint}/EpcSignature/${user.userName}.jpg`
-          );
         });
       }
-    } else {
-      this._signatureImage.set(
-        `${environment.fileManagementEndpoint}/EpcSignature/${member.userName}.jpg`
-      );
     }
+    // ردیف خود کاربر (در تفویض: ردیف شخص اصلی) آدرس موقت امضا را از سرور دارد
+    this._signatureImage.set(signatureImageUrl(member.signatureUrl));
   }
 
   // Permission check method

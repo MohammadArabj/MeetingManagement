@@ -60,9 +60,7 @@ export class SignatureModalComponent {
     });
 
     // Load signature image
-    if (member.userName) {
-      this.signatureImage.set(userSignatureUrl(member.userName));
-    }
+    this.signatureImage.set(userSignatureUrl(member));
 
     this.cdr.markForCheck();
     showBootstrapModal(this.signatureModalRef);

@@ -28,6 +28,7 @@ import { ImpersonationService } from '../../services/framework-services/imperson
 import { NotificationBellComponent } from './notification-bell/notification-bell.component';
 import { HelpService } from '../../core/help/help.service';
 import { ThemeService } from '../../core/theme/theme.service';
+import { mediaTokenParam } from '../../core/media/media-token';
 
 interface UserInformation {
   fullname: string;
@@ -114,7 +115,7 @@ export class HeaderComponent implements OnInit {
     if (!userName) return 'img/default-avatar.png';
 
     const photoUrl = encodeURIComponent(`photo/${userName}.jpg`);
-    return `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=48&q=75`;
+    return `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=96${mediaTokenParam()}`;
   });
 
   readonly avatarStyle = computed(() => {

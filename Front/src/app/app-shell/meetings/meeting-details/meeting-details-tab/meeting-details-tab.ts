@@ -45,6 +45,7 @@ import { CustomSelectComponent } from '../../../../shared/custom-controls/custom
 import { MeetingBehaviorService } from '../meeting-behavior-service';
 import { getClientSettings } from '../../../../services/framework-services/code-flow.service';
 import { MeetingRoles } from '../../../../core/meeting-access/meeting-roles';
+import { userPhotoUrl, mediaTokenParam } from '../../../../core/media/media-token';
 
 declare var $: any;
 declare var Swal: any;
@@ -235,7 +236,7 @@ export class MeetingDetailsTabComponent {
     const userName = (info as any)?.userName;
     const photoUrl = encodeURIComponent(`photo/${userName}.jpg`);
     return userName
-      ? `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=48&q=75`
+      ? `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=96${mediaTokenParam()}`
       : '/img/default-avatar.png';
   });
 
@@ -491,7 +492,7 @@ export class MeetingDetailsTabComponent {
             position: pos.positionTitle,
             baseUserGuid: u.guid,
             image: u.userName
-              ? `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${u.userName}.jpg`)}&w=48&q=75`
+              ? userPhotoUrl(u.userName)
               : '/img/default-avatar.png',
           }));
         }
@@ -499,7 +500,7 @@ export class MeetingDetailsTabComponent {
           ...u,
           baseUserGuid: u.guid,
           image: u.userName
-            ? `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${u.userName}.jpg`)}&w=48&q=75`
+            ? userPhotoUrl(u.userName)
             : '/img/default-avatar.png',
         }];
       });
@@ -559,14 +560,14 @@ export class MeetingDetailsTabComponent {
       return 'img/default-avatar.png';
     }
     if (member.userName) {
-      return `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${member.userName}.jpg`)}&w=48&q=75`;
+      return userPhotoUrl(member.userName);
     }
     return 'img/default-avatar.png';
   }
 
   private getSystemUserImage(user: SystemUser): string {
     if (user.userName && user.userName.trim() !== '') {
-      return `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${user.userName}.jpg`)}&w=48&q=75`;
+      return userPhotoUrl(user.userName);
     }
     return 'img/default-avatar.png';
   }

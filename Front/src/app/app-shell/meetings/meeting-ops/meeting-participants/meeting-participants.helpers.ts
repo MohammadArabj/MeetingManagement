@@ -6,8 +6,8 @@ import { ConflictItem } from '../../../../core/types/conflict-result';
 import { ComboBase } from '../../../../shared/combo-base';
 import { generateGuid } from '../../../../core/types/configuration';
 import { MeetingRoles } from '../../../../core/meeting-access/meeting-roles';
-import { environment } from '../../../../../environments/environment';
 import { DEFAULT_AVATAR, MemberConflictType, MemberIdentity, ProcessedMember } from './meeting-participants.models';
+import { userPhotoUrl } from '../../../../core/media/media-token';
 
 // ═══════════════════════════════════════════════════════════
 // توابع کمکی خالص برای مدیریت اعضای جلسه
@@ -16,7 +16,7 @@ import { DEFAULT_AVATAR, MemberConflictType, MemberIdentity, ProcessedMember } f
 // ===== تصاویر =====
 export function getSystemUserImage(user: SystemUser): string {
   return user.userName
-    ? `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${user.userName}.jpg`)}&w=48&q=75`
+    ? userPhotoUrl(user.userName)
     : DEFAULT_AVATAR;
 }
 

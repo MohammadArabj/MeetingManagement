@@ -17,6 +17,9 @@ export interface MeetingMember {
   userName?: string;
   signerName?: string;
   signerUserName?: string;
+  /** آدرس موقت امضاشده‌ی تصویر امضا (فقط برای افراد مجاز از سرور می‌آید) */
+  signatureUrl?: string | null;
+  signerSignatureUrl?: string | null;
   isRemoved: boolean;
   replacementUserGuid?: any;
   role?: string;

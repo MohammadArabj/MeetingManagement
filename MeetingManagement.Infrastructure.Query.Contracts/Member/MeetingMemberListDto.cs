@@ -5,6 +5,11 @@ namespace MeetingManagement.Infrastructure.Query.Contracts.Member;
 
 public class MeetingMemberListDto
 {
+    /// <summary>آدرس موقت امضاشده‌ی تصویر امضای عضو (نسبت به آدرس سامانه‌ی مدیریت فایل)؛ فقط برای مجاز‌ها</summary>
+    public string? SignatureUrl { get; set; }
+    /// <summary>آدرس موقت تصویر امضای امضاکننده‌ی واقعی (وقتی تفویض‌گیرنده به جای عضو امضا کرده)</summary>
+    public string? SignerSignatureUrl { get; set; }
+
     public long Id { get; set; }
     public string Name { get; set; }
     public Guid? UserGuid { get; set; }

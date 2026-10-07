@@ -33,6 +33,9 @@ export interface MemberListItem {
   signer?: string;
   signerName?: string;
   signerUserName?: string;
+  /** آدرس موقت امضاشده‌ی تصویر امضا (فقط برای افراد مجاز از سرور می‌آید) */
+  signatureUrl?: string | null;
+  signerSignatureUrl?: string | null;
   image?: string;
   isRemoved: boolean;
 }

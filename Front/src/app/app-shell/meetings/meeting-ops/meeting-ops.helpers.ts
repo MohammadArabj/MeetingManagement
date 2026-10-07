@@ -2,9 +2,9 @@ import { AgendaItem, MeetingMember } from '../../../core/models/Meeting';
 import { Position, SystemUser } from '../../../core/models/User';
 import { generateGuid } from '../../../core/types/configuration';
 import { MeetingRoles } from '../../../core/meeting-access/meeting-roles';
-import { environment } from '../../../../environments/environment';
 import { AgendaFileDto } from './meeting-agendas/meeting-agendas';
 import { CreateMeetingDto, DEFAULT_AVATAR, MeetingMemberDto } from './meeting-ops.models';
+import { userPhotoUrl } from '../../../core/media/media-token';
 
 // ═══════════════════════════════════════════════════════════
 // توابع کمکی خالص (بدون وابستگی به state کامپوننت) برای ثبت جلسه
@@ -14,7 +14,7 @@ import { CreateMeetingDto, DEFAULT_AVATAR, MeetingMemberDto } from './meeting-op
 
 /** آدرس تصویر پرسنلی کاربر سیستم بر اساس userName */
 export function buildUserPhotoUrl(userName: string): string {
-  return `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${userName}.jpg`)}&w=48&q=75`;
+  return userPhotoUrl(userName);
 }
 
 export function getSystemUserImage(user: SystemUser): string {

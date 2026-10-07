@@ -6,7 +6,7 @@ import {
   FileItem,
 } from '../../services/framework-services/tus-upload.service';
 import { FileKind } from './file-manager.models';
-import { formatSize, formatSpeed, getFileKind } from './file-manager.utils';
+import { formatSize, formatSpeed, getFileKind, thumbnailUrl } from './file-manager.utils';
 
 /**
  * نمایش شبکه‌ای (کارت) فایل‌ها. کاملاً نمایشی است؛ همه اقدام‌ها به والد ارسال می‌شوند
@@ -28,7 +28,8 @@ import { formatSize, formatSpeed, getFileKind } from './file-manager.utils';
           <div class="file-card__thumb">
             @switch (getFileType(file)) {
               @case ('image') {
-                <img [src]="file.previewUrl" alt="" class="file-card__image" />
+                <img [src]="thumb(file.previewUrl)" alt="" class="file-card__image"
+                     loading="lazy" decoding="async" (load)="$any($event.target).classList.add('is-loaded')" />
               }
               @case ('pdf') {
                 <div class="file-card__icon file-card__icon--pdf"><i class="fas fa-file-pdf"></i></div>
@@ -154,7 +155,8 @@ import { formatSize, formatSpeed, getFileKind } from './file-manager.utils';
       background: linear-gradient(135deg, var(--fm-bg) 0%, var(--fm-surface) 100%);
       display: grid; place-items: center; overflow: hidden;
     }
-    .file-card__image { width: 100%; height: 100%; object-fit: cover; }
+    .file-card__image { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .25s ease; }
+    .file-card__image.is-loaded { opacity: 1; }
     .file-card__icon { font-size: 2.5rem; opacity: 0.8; }
     .file-card__icon--pdf { color: #ef4444; }
     .file-card__icon--video { color: #8b5cf6; }
@@ -227,6 +229,9 @@ import { formatSize, formatSpeed, getFileKind } from './file-manager.utils';
   `],
 })
 export class FileGridComponent {
+  /** بندانگشتی ۳۲۰ پیکسلی (دو برابر عرض کارت برای نمایشگرهای HiDPI) به جای تصویر اصلی */
+  readonly thumb = (url?: string) => thumbnailUrl(url, 320);
+
   private readonly service = inject(TusUploadService);
   readonly Status = UploadStatus;
 

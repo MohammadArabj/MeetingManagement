@@ -11,6 +11,7 @@ import { firstValueFrom } from 'rxjs';
 import { ActionItem, AssignmentService, AssignmentTreeNode } from '../../../services/assignment.service';
 import { environment } from '../../../../environments/environment';
 
+import { userPhotoUrl } from '../../../core/media/media-token';
 @Component({
   selector: 'app-assignment-org-chart',
   standalone: true,
@@ -237,7 +238,7 @@ export class AssignmentOrgChart implements OnInit, AfterViewInit, OnDestroy {
     const avatarId = Math.abs(hash) % 70 + 1; // Assuming you have 70 different avatar images
 
     // Return path to default avatar images or use a service like DiceBear
-    return `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${actorName}.jpg`)}&w=48&q=75`;
+    return userPhotoUrl(actorName);
 
     // Alternative: if you have local avatar images
     // return `assets/images/avatars/avatar-${avatarId}.png`;
