@@ -188,9 +188,28 @@
 - صفحه‌ی مستندات به دلیل نام اشتباه فایل‌های CSS/JS کار نمی‌کرد. اصلاح شد.
 - صفحه‌ی اول: PDF اسلاید اول بارگذاری نمی‌شد. اصلاح شد.
 
-**پیشنهاد (نیازمند فایل‌های `wwwroot/assets` که در مخزن نیستند):**
+**حجم صفحات (سرعت لود) — مستقل از پوشه‌ی `assets` روی سرور:**
 
-- `icons.min.css` (۶۶۰ کیلوبایت، شامل ۵ مجموعه آیکن که فقط FA استفاده می‌شود) با یک زیرمجموعه جایگزین شود.
-- `@import` فونت‌های Google از ابتدای `app.min.css` حذف شود. در شبکه‌ی بدون اینترنت، نمایش صفحه را تا Timeout معطل می‌کند.
-- jQuery دو بار بارگذاری می‌شود (`jquery.min.js` و داخل `vendor.min.js`).
+صفحات پرتال قبلاً از پوشه‌ی `wwwroot/assets` (فقط روی سرور، نه در سورس) این فایل‌ها را در `<head>` بارگذاری می‌کردند:
+Bootstrap 4 (در حالی که JS و markup نسخه‌ی ۵ بود)، قالب Minton (`app.min.css` با `@import` فونت گوگل که بدون اینترنت
+نمایش صفحه را تا Timeout معطل می‌کرد)، `icons.min.css` با ۶۶۰ کیلوبایت (۵ مجموعه آیکن؛ فقط ۱۱۵ آیکن استفاده می‌شد)،
+و در پایین صفحه jQuery دو بار + `vendor.min.js` + `app.min.js` قالب.
+
+| | قبل (gzip تقریبی) | بعد |
+|---|---|---|
+| CSS | Bootstrap4 ۲۹K + Minton ۲۴K + آیکن ۸۹K + فونت آیکن FA5 | Bootstrap 5.3 RTL ۳۱K + آیکن ۲K + فونت ۹K (woff2، preload) |
+| JS | jQuery ۳۰K + validate ۸K + vendor ۷۶K + app ۱۲K | `bootstrap.bundle` ۲۳K (jQuery و اعتبارسنجی فقط در صفحات فرم) |
+| درخواست خارجی | Google Fonts (مسدودکننده) | هیچ |
+
+- `wwwroot/lib/`: Bootstrap 5.3.8، jQuery 3.7.1، jquery-validation، و `fontawesome.subset.css` + `fa-solid-900.subset.woff2`
+  (Font Awesome 6.7.2 فقط با آیکن‌های استفاده‌شده؛ نام‌های قدیمی FA5 هم پشتیبانی می‌شود). همه با `asp-append-version` و کش یک‌ساله.
+- `_Layout`، `_LoginLayout` و صفحه‌ی اول دیگر به `assets` وابسته نیستند (فقط `Delegation/Create` هنوز select2 و
+  datepicker را از `assets/libs` می‌خواند و `Home/Index` فایل `assets/css/saas/custom.css` را).
+- `Views/Shared/_ValidationScripts.cshtml`: jQuery + اعتبارسنجی فقط در تغییر رمز و ثبت تفویض.
+- فایل‌های بلااستفاده حذف شدند (فهرست در `patches/sso-usermanagement.deleted.txt`؛ بعد از اعمال patch این فایل‌ها را پاک کنید).
+- اگر آیکن جدیدی در صفحات اضافه شد که در فایل subset نیست، فایل subset را دوباره بسازید (یا موقتاً `all.min.css` کامل Font Awesome 6 را بگذارید).
+
+**نیازمند اقدام شما:**
+
+- برای سرویس پیامک و فرزین به جای `AcceptAnyCertificateClients` بهتر است Thumbprint گواهی در `Http:PinnedCertificates` تنظیم شود.
 - کلیدهای امضای قدیمی `tempkey.jwk`/`tempkey.rsa` در تاریخچه‌ی git مخزن SSO هستند. اگر در Production استفاده شده‌اند، کلید را عوض کنید.
