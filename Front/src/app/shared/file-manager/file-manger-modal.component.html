@@ -1,0 +1,153 @@
+<div class="modal fade file-manager" [id]="modalId" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl modal-fullscreen-lg-down">
+    <div class="modal-content shell">
+
+      <!-- HEADER -->
+      <app-file-manager-header
+        [title]="title"
+        [totalFiles]="service.totalFiles()"
+        [isUploading]="service.isUploading()"
+        [totalProgress]="service.totalProgress()"
+        [readOnly]="readOnly"
+        [canUpload]="canUpload"
+        [disabled]="disabled"
+        [canAddMore]="canAddMore()"
+        [viewMode]="viewMode()"
+        (viewModeChange)="viewMode.set($event)"
+        (addFiles)="openFilePicker()"
+        (closeRequested)="requestClose()" />
+
+      <!-- BODY -->
+      <div class="modal-body body">
+        <div class="layout" [class.layout--preview-open]="showPreview()">
+
+          <!-- LEFT PANEL -->
+          <section class="panel-left"
+                   [class.panel-left--dragging]="isDragOver()"
+                   (dragover)="onDragOver($event)"
+                   (dragleave)="onDragLeave($event)"
+                   (drop)="onDrop($event)">
+
+            @if (canUpload && !readOnly) {
+              <app-file-dropzone
+                [dragging]="isDragOver()"
+                [multiple]="multiple"
+                [maxFiles]="effectiveMaxFiles()"
+                [maxFileSizeMB]="effectiveMaxFileSizeMB()"
+                [fileTypeCategories]="fileTypeCategories()"
+                (pick)="openFilePicker()" />
+            }
+
+            <!-- پیام حالت فقط مشاهده -->
+            @if (readOnly) {
+              <div class="readonly-notice">
+                <div class="readonly-notice__icon">
+                  <i class="fas fa-eye"></i>
+                </div>
+                <div class="readonly-notice__content">
+                  <p class="readonly-notice__title">حالت مشاهده</p>
+                  <p class="readonly-notice__subtitle">فقط امکان مشاهده و دانلود فایل‌ها وجود دارد</p>
+                </div>
+              </div>
+            }
+
+            @if (service.totalFiles() > 0) {
+              <div class="file-list">
+
+                <!-- GRID -->
+                @if (viewMode() === 'grid') {
+                  <app-file-grid
+                    [files]="service.files()"
+                    [selectedId]="selectedId()"
+                    [readOnly]="readOnly"
+                    [canDelete]="canDelete"
+                    (selectFile)="select($event)"
+                    (previewFile)="togglePreview($event)"
+                    (pauseUpload)="pause($event)"
+                    (resumeUpload)="resume($event)"
+                    (removeFile)="remove($event)"
+                    (downloadFile)="download($event)"
+                    (deleteFile)="deleteFromServer($event)" />
+                }
+
+                <!-- LIST -->
+                @if (viewMode() === 'list') {
+                  <app-file-table
+                    [files]="service.files()"
+                    [selectedId]="selectedId()"
+                    [readOnly]="readOnly"
+                    [canDelete]="canDelete"
+                    (selectFile)="select($event)"
+                    (previewFile)="togglePreview($event)"
+                    (removeFile)="remove($event)"
+                    (downloadFile)="download($event)"
+                    (deleteFile)="deleteFromServer($event)" />
+                }
+
+              </div>
+            } @else if (readOnly) {
+              <!-- پیام خالی بودن در حالت فقط مشاهده -->
+              <div class="empty-state">
+                <i class="fas fa-folder-open"></i>
+                <p>هیچ فایلی وجود ندارد</p>
+              </div>
+            }
+
+            <input #fileInput type="file"
+                   [multiple]="multiple"
+                   [accept]="effectiveAcceptedTypes()"
+                   (change)="onFilesSelected($event)"
+                   hidden />
+          </section>
+
+          <!-- RIGHT PANEL: PREVIEW -->
+          @if (showPreview() && selectedFile(); as file) {
+            <app-file-preview-pane
+              [file]="file"
+              [safeUrl]="selectedSafeUrl()"
+              [isFullscreen]="isFullscreen()"
+              [readOnly]="readOnly"
+              [canDelete]="canDelete"
+              (closed)="closePreview()"
+              (openInNewTab)="openPreviewInNewTab()"
+              (downloadFile)="download($event)"
+              (deleteFile)="deleteFromServer($event)" />
+          }
+
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <footer class="modal-footer footer">
+        <div class="footer__stats">
+          <span class="stat">
+            <i class="fas fa-file"></i>
+            {{ service.totalFiles() }} فایل
+          </span>
+          <span class="stat stat--success">
+            <i class="fas fa-check-circle"></i>
+            {{ service.completedFiles().length }} کامل
+          </span>
+          @if (service.pendingFiles().length > 0) {
+            <span class="stat stat--pending">
+              <i class="fas fa-clock"></i>
+              {{ service.pendingFiles().length }} در انتظار
+            </span>
+          }
+        </div>
+
+        <div class="footer__actions">
+          @if (!readOnly) {
+            <button type="button" class="btn btn--primary" (click)="onConfirm()" [disabled]="service.isUploading()">
+              تأیید
+            </button>
+          }
+          <button type="button" class="btn btn--secondary" (click)="requestClose()">
+            {{ readOnly ? 'بستن' : 'انصراف' }}
+          </button>
+        </div>
+      </footer>
+
+    </div>
+  </div>
+</div>
