@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Epc.Application.Command;
 using MeetingManagement.Application.Contracts.Agenda;
@@ -25,6 +25,7 @@ public class CreateMeetingDto:ICommand
     public Guid? RoomGuid { get; set; }
     public Guid? CategoryGuid { get; set; }
     public Guid? FollowGuid { get; set; }
+    [MeetingManagement.Common.Security.CallerPosition]
     public Guid? CreatorPositionGuid { get; set; }
     public List<AgendaDto> Agendas { get; set; }= [];
     public List<MeetingMemberDto> Members { get; set; } = [];

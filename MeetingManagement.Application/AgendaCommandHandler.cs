@@ -1,16 +1,24 @@
-﻿using Epc.Application.Command;
+using Epc.Application.Command;
 using Epc.Company.Query;
-using Epc.Identity;
 using MeetingManagement.Application.Contracts.Agenda;
+using MeetingManagement.Application.Services;
 using MeetingManagement.Common.Extensions;
 using MeetingManagement.Domain.FileAgg;
 using MeetingManagement.Domain.MeetingAgg;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Configuration;
+using MeetingManagement.Domain.Shared.Access;
 
 namespace MeetingManagement.Application;
 
-public class AgendaCommandHandler(IAgendaRepository repository, IMeetingRepository meetingRepository, IFileRepository fileRepository, IClaimHelper claimHelper, IHttpContextAccessor httpContextAccessor, IConfiguration configuration) :
+/// <summary>
+/// دستور جلسه و فایل‌های آن. همه‌ی عملیات نیازمند توانایی «مدیریت دستور جلسه» در همان جلسه است
+/// و هر شناسه‌ی ارسالی (دستور/فایل) باید متعلق به همان جلسه باشد.
+/// </summary>
+public class AgendaCommandHandler(
+    IAgendaRepository repository,
+    IMeetingRepository meetingRepository,
+    IFileRepository fileRepository,
+    IMeetingAccessService accessService,
+    IActingIdentityResolver identityResolver) :
     ICommandHandlerAsync<AgendaDto, Result<long>>,
     ICommandHandlerAsync<DeleteAgenda, Result<bool>>,
     ICommandHandlerAsync<UpdateAgendaOrderRequest, Result<bool>>,
@@ -18,134 +26,83 @@ public class AgendaCommandHandler(IAgendaRepository repository, IMeetingReposito
 {
     public async Task<Result<long>> Handle(AgendaDto command)
     {
-        var currentUserId = claimHelper.GetCurrentUserGuid();
-        var meeting = await meetingRepository.LoadAsync(command.MeetingGuid);
+        var check = await MeetingGuard.CheckAsync(accessService, command.MeetingGuid, MeetingCapability.ManageAgenda);
+        if (!check.Allowed) return check.Fail(0L);
 
-        if (meeting == null)
-            return Result<long>.Failure(0, "جلسه مورد نظر یافت نشد");
+        if (string.IsNullOrWhiteSpace(command.Text))
+            return Result<long>.Failure(0, "متن دستور جلسه الزامی است.");
 
-        if (command.Id != 0)
+        var identity = await identityResolver.ResolveAsync();
+        var meetingId = check.Access.MeetingId;
+        var files = command.Files ?? [];
+
+        if (command.Id is > 0)
         {
-            // ═══════════════════════════════════════════════════════════
-            // حالت ویرایش
-            // ═══════════════════════════════════════════════════════════
             var agenda = await repository.LoadAsync(command.Id.Value);
+            if (agenda == null || agenda.MeetingId != meetingId)
+                return Result<long>.Failure(0, "دستور جلسه یافت نشد.");
 
-            // 1️⃣ حذف فایل‌هایی که isRemoved = true هستند
-            var filesToRemove = command.Files
-                .Where(f => f.IsRemoved && f.Id != 0)
-                .Select(f => f.Id)
-                .ToList();
-
-            if (filesToRemove.Any())
+            var removeIds = files.Where(f => f.IsRemoved && f.Id != 0).Select(f => f.Id).ToList();
+            if (removeIds.Count > 0)
             {
-                var existingFiles = await fileRepository
-                    .FilterAsync(f => filesToRemove.Contains(f.Id) && f.Type == FileType.Agenda);
-
-                foreach (var file in existingFiles)
-                {
-                    fileRepository.Delete(file);
-                }
+                var existingFiles = await fileRepository.FilterAsync(f =>
+                    removeIds.Contains(f.Id) && f.Type == FileType.Agenda && f.ModuleId == agenda.Id);
+                foreach (var file in existingFiles) fileRepository.Delete(file!);
             }
 
-            // 2️⃣ افزودن فایل‌های جدید (Id = 0 و isRemoved = false)
-            var newFiles = command.Files
-                .Where(f => f.Id == 0 && !f.IsRemoved)
-                .ToList();
-
-            foreach (var item in newFiles)
-            {
-                var file = new Domain.FileAgg.File(currentUserId, agenda.Id, item.FileGuid, FileType.Agenda);
-                await fileRepository.CreateAsync(file);
-            }
-
-            // 3️⃣ فایل‌هایی که Id != 0 و isRemoved = false هستند → کاری نداریم
+            foreach (var item in files.Where(f => f.Id == 0 && !f.IsRemoved && f.FileGuid != Guid.Empty))
+                await fileRepository.CreateAsync(new Domain.FileAgg.File(identity.TokenUserGuid, agenda.Id, item.FileGuid, FileType.Agenda));
 
             agenda.Edit(command);
             repository.Update(agenda);
-
             return Result<long>.Success(agenda.Id);
         }
-        else
-        {
-            // ═══════════════════════════════════════════════════════════
-            // حالت ثبت جدید
-            // ═══════════════════════════════════════════════════════════
-            var lastSortOrder = (await repository.FilterAsync(r => r.MeetingId == meeting.Id))
-                .OrderByDescending(r => r.SortOrder)
-                .Select(r => r.SortOrder)
-                .FirstOrDefault();
 
-            var last = lastSortOrder == null ? 1 : lastSortOrder + 1;
-            command.Order = (byte)last;
+        var lastSortOrder = (await repository.FilterAsync(r => r.MeetingId == meetingId))
+            .Select(r => (int?)r!.SortOrder)
+            .Max() ?? 0;
+        command.Order = (byte)Math.Min(lastSortOrder + 1, byte.MaxValue);
 
-            var agenda = new Agenda(currentUserId, command, meeting.Id);
-            await repository.CreateAsync(agenda);
-            await repository.SaveChangesAsync();
+        var created = new Agenda(identity.TokenUserGuid, command, meetingId);
+        await repository.CreateAsync(created);
+        await repository.SaveChangesAsync();
 
-            // همه فایل‌ها جدید هستند (isRemoved = false)
-            var newFiles = command.Files.Where(f => !f.IsRemoved).ToList();
+        foreach (var item in files.Where(f => !f.IsRemoved && f.FileGuid != Guid.Empty))
+            await fileRepository.CreateAsync(new Domain.FileAgg.File(identity.TokenUserGuid, created.Id, item.FileGuid, FileType.Agenda));
 
-            foreach (var item in newFiles)
-            {
-                var file = new Domain.FileAgg.File(currentUserId, agenda.Id, item.FileGuid, FileType.Agenda);
-                await fileRepository.CreateAsync(file);
-            }
-
-            return Result<long>.Success(agenda.Id);
-        }
+        return Result<long>.Success(created.Id);
     }
-    private async Task ManageFilesAsync(List<FileDto> files, long agendaId, Guid currentUserId)
-    {
-        // 1. ابتدا فایل‌هایی که IsRemoved = true را حذف می‌کنیم
-        var filesToRemove = files.Where(f => f.IsRemoved && f.Id != 0).ToList();
-        foreach (var fileDto in filesToRemove)
-        {
-            var file = await fileRepository.LoadAsync(fileDto.Id);
-            if (file != null)
-            {
-                fileRepository.Delete(file);
-            }
-        }
 
-        // 2. فایل‌های جدید (Id = 0 و IsRemoved = false) را اضافه می‌کنیم
-        var newFiles = files.Where(f => f.Id == 0 && !f.IsRemoved).ToList();
-        foreach (var fileDto in newFiles)
-        {
-            var file = new Domain.FileAgg.File(currentUserId, agendaId, fileDto.FileGuid, FileType.Agenda);
-            await fileRepository.CreateAsync(file);
-        }
-
-        // 3. فایل‌هایی که Id != 0 و IsRemoved = false هستند، کاری با آنها نداریم
-        // این فایل‌ها از قبل در دیتابیس وجود دارند و تغییری نکرده‌اند
-
-        await fileRepository.SaveChangesAsync();
-    }
     public async Task<Result<bool>> Handle(DeleteAgenda command)
     {
-        var meetingMember = await repository.LoadAsync(command.Id);
+        var agenda = await repository.LoadAsync(command.Id);
+        if (agenda == null)
+            return Result<bool>.Failure(false, "دستور جلسه یافت نشد");
 
-        if (meetingMember != null)
-        {
-            repository.Delete(meetingMember);
-            return Result<bool>.Success(true);
-        }
+        var check = await MeetingGuard.CheckAsync(accessService, agenda.MeetingId ?? 0, MeetingCapability.ManageAgenda);
+        if (!check.Allowed) return check.Fail(false);
 
-        return Result<bool>.Failure(false, "دستور جلسه یافت نشد");
+        repository.Delete(agenda);
+        return Result<bool>.Success(true);
     }
 
     public async Task<Result<bool>> Handle(UpdateAgendaOrderRequest command)
     {
-        var resolutionIds = command.Agendas.Select(r => r.Id).ToList();
-        var resolutions = (await repository.FilterAsync(c => resolutionIds.Contains(c.Id))).ToList();
+        if (command.Agendas.Count == 0) return Result<bool>.Success(true);
 
-        foreach (var res in resolutions)
+        var ids = command.Agendas.Select(r => r.Id).ToList();
+        var agendas = (await repository.FilterAsync(c => ids.Contains(c.Id))).ToList();
+        var meetingIds = agendas.Select(a => a!.MeetingId).Distinct().ToList();
+        if (meetingIds.Count != 1)
+            return Result<bool>.Failure(false, "دستورهای انتخاب‌شده متعلق به یک جلسه نیستند.");
+
+        var check = await MeetingGuard.CheckAsync(accessService, meetingIds[0] ?? 0, MeetingCapability.ManageAgenda);
+        if (!check.Allowed) return check.Fail(false);
+
+        foreach (var agenda in agendas)
         {
-            var newOrder = command.Agendas.FirstOrDefault(r => r.Id == res.Id)?.SortOrder;
-            if (newOrder.HasValue)
-            {
-                res.SortOrder = newOrder.Value;
-            }
+            var newOrder = command.Agendas.FirstOrDefault(r => r.Id == agenda!.Id)?.SortOrder;
+            if (newOrder.HasValue) agenda!.SortOrder = newOrder.Value;
         }
 
         await repository.SaveChangesAsync();
@@ -155,8 +112,11 @@ public class AgendaCommandHandler(IAgendaRepository repository, IMeetingReposito
     public async Task<Result<Guid?>> Handle(DeleteAgendaFileDto command)
     {
         var agenda = await repository.LoadAsync(command.Id);
-        var token = httpContextAccessor.HttpContext.Request.Headers["Authorization"].ToString();
         if (agenda == null) return Result<Guid?>.Failure(null, "دستور یافت نشد");
+
+        var check = await MeetingGuard.CheckAsync(accessService, agenda.MeetingId ?? 0, MeetingCapability.ManageAgenda);
+        if (!check.Allowed) return check.Fail<Guid?>(null);
+
         var fileGuid = agenda.File;
         agenda.File = null;
         repository.Update(agenda);

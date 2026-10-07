@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 using Autofac;
 using Autofac.Extras.DynamicProxy;
@@ -40,6 +40,7 @@ public class MeetingManagementModule(string connectionString) : Module
         builder.RegisterType<MeetingAccessService>().As<IMeetingAccessService>().InstancePerLifetimeScope();
         builder.RegisterType<MeetingRoleConfigService>().AsSelf().As<IMeetingRoleConfigService>().InstancePerLifetimeScope();
         builder.RegisterType<NotificationPublisher>().As<INotificationPublisher>().InstancePerLifetimeScope();
+        builder.RegisterType<AssignmentPublication>().AsSelf().InstancePerLifetimeScope();
         builder.RegisterType<NotificationAdminService>().AsSelf().InstancePerLifetimeScope();
         builder.RegisterType<HttpSmsSender>().As<ISmsSender>().InstancePerLifetimeScope();
         builder.RegisterType<ServiceTokenProvider>().As<IServiceTokenProvider>().SingleInstance();

@@ -1,4 +1,4 @@
-﻿using Epc.Application.Command;
+using Epc.Application.Command;
 using Epc.Company.Query;
 using MeetingManagement.Application.Contracts.Action;
 using MeetingManagement.Application.Contracts.Assignment;
@@ -82,7 +82,9 @@ public class AssignmentCommandHandler(
                 creator: identity.TokenUserGuid));
             resolutionRepository.Update(resolution);
 
-            await PublishSafeAsync(NotificationEventCode.ResolutionAssigned, new NotificationPayload
+            // پیش از ابلاغ (امضای رئیس / اتمام جلسه) پیامی ارسال نمی‌شود؛ هنگام ابلاغ برای همه ارسال می‌شود
+            if (access.IsPublished)
+                await PublishSafeAsync(NotificationEventCode.ResolutionAssigned, new NotificationPayload
             {
                 MeetingId = resolution.MeetingId,
                 ResolutionId = resolution.Id,
@@ -121,6 +123,9 @@ public class AssignmentCommandHandler(
         if (assignment == null)
             return Result<bool>.Failure(false, "تخصیص مورد نظر یافت نشد");
 
+        var publishError = await EnsurePublishedAsync(assignment.ResolutionId);
+        if (publishError is not null) return Result<bool>.Failure(false, publishError);
+
         var identity = await identityResolver.ResolveAsync();
         var position = identity.PositionGuid ?? command.PositionGuid;
 
@@ -157,6 +162,9 @@ public class AssignmentCommandHandler(
         var parent = tree.FirstOrDefault(a => a.Id == command.ParentAssignmentId);
         if (parent == null)
             return Result<bool>.Failure(false, "تخصیص والد یافت نشد.");
+
+        var publishError = await EnsurePublishedAsync(parent.ResolutionId);
+        if (publishError is not null) return Result<bool>.Failure(false, publishError);
 
         var identity = await identityResolver.ResolveAsync();
         var referrerPosition = identity.PositionGuid ?? command.ReferrerPositionGuid;
@@ -283,6 +291,9 @@ public class AssignmentCommandHandler(
         if (assignment == null)
             return Result<bool>.Failure(false, "تخصیص یافت نشد");
 
+        var publishError = await EnsurePublishedAsync(assignment.ResolutionId);
+        if (publishError is not null) return Result<bool>.Failure(false, publishError);
+
         var identity = await identityResolver.ResolveAsync();
         var position = identity.PositionGuid ?? command.PositionGuid;
 
@@ -351,6 +362,13 @@ public class AssignmentCommandHandler(
                 stack.Push(child.Id);
             }
         }
+    }
+
+    private async Task<string?> EnsurePublishedAsync(long resolutionId)
+    {
+        var access = await accessService.GetByResolutionAsync(resolutionId);
+        if (!access.Exists) return "جلسه‌ی این تخصیص یافت نشد.";
+        return access.IsPublished ? null : "تخصیص هنوز ابلاغ نشده است (پس از امضای رئیس / اتمام جلسه).";
     }
 
     private async Task PublishSafeAsync(NotificationEventCode code, NotificationPayload payload)

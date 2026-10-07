@@ -1,4 +1,4 @@
-﻿using Epc.Domain;
+using Epc.Domain;
 
 namespace MeetingManagement.Domain.AssignmentAgg;
 
@@ -12,4 +12,7 @@ public interface IAssignmentRepository : IRepository<int, Assignment>
 
     /// <summary>یک تخصیص با اقدام‌ها و ارجاع‌های مستقیمش (Tracked).</summary>
     Task<Assignment?> LoadWithChildrenAsync(int id, CancellationToken ct = default);
+
+    /// <summary>تخصیص‌های اصلی (غیر ارجاع) همه‌ی مصوبات یک جلسه — برای اطلاع‌رسانی هنگام ابلاغ.</summary>
+    Task<List<Assignment>> GetOriginalsByMeetingAsync(long meetingId, CancellationToken ct = default);
 }

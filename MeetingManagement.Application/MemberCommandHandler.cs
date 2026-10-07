@@ -29,6 +29,7 @@ public class MemberCommandHandler(
     IMeetingAccessService accessService,
     IActingIdentityResolver identityResolver,
     INotificationPublisher notificationPublisher,
+    AssignmentPublication assignmentPublication,
     ILogger<MemberCommandHandler> logger
 ) : ICommandHandlerAsync<MeetingMemberDto, Result<long>>,
     ICommandHandlerAsync<DeleteMeetingMember, Result<bool>>,
@@ -196,11 +197,15 @@ public class MemberCommandHandler(
         member.Sign(identity.TokenUserGuid);
 
         if (isChairman)
+        {
             await PublishSafeAsync(NotificationEventCode.ChairmanSigned, new NotificationPayload
             {
                 MeetingId = member.MeetingId,
                 ActorUserGuid = identity.UserGuid,
             });
+            // با امضای رئیس، تخصیص‌های جلسه ابلاغ می‌شوند (در کارتابل اقدام‌کنندگان دیده می‌شوند)
+            await assignmentPublication.NotifyMeetingAssignmentsAsync(member.MeetingId ?? 0, identity.UserGuid);
+        }
 
         return null;
     }

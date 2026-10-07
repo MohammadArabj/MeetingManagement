@@ -43,6 +43,13 @@ public sealed record MeetingAccess
         Workflow.ResolutionEditableStatuses.Contains(StatusId)
         && !(Workflow.LockContentAfterChairmanSign && ChairmanSigned);
 
+    /// <summary>
+    /// تخصیص‌های جلسه «ابلاغ» شده‌اند؟ جلسات دارای صورتجلسه: پس از امضای رئیس؛ سایر جلسات: پس از اتمام.
+    /// پیش از ابلاغ، اقدام‌کننده تخصیص را نمی‌بیند و روی آن کاری انجام نمی‌دهد.
+    /// </summary>
+    public bool IsPublished => StatusId != MeetingStatusIds.Cancelled
+                               && (Workflow.HasMinutes ? ChairmanSigned : StatusId == MeetingStatusIds.Completed);
+
     public bool CanEditResolutions => Can(MeetingCapability.ManageResolutions) && (IsSuperAdmin || IsContentEditable);
     public bool CanManageAssignments => Can(MeetingCapability.ManageAssignments) && (IsSuperAdmin || IsContentEditable);
 
@@ -61,4 +68,7 @@ public interface IMeetingAccessService
     Task<MeetingAccess> GetAsync(long meetingId, CancellationToken ct = default);
     Task<MeetingAccess> GetAsync(Guid meetingGuid, CancellationToken ct = default);
     Task<MeetingAccess> GetByResolutionAsync(long resolutionId, CancellationToken ct = default);
+
+    /// <summary>دسترسی جلسه‌ای که فایل به آن تعلق دارد (فایل جلسه، مصوبه یا دستور جلسه)</summary>
+    Task<MeetingAccess> GetByFileModuleAsync(FileType type, long moduleId, CancellationToken ct = default);
 }

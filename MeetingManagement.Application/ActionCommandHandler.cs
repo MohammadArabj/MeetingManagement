@@ -1,4 +1,4 @@
-﻿using Epc.Application.Command;
+using Epc.Application.Command;
 using Epc.Company.Query;
 using MeetingManagement.Application.Contracts.Action;
 using MeetingManagement.Common.Extensions;
@@ -50,12 +50,17 @@ public class ActionCommandHandler(
         if (assignment == null)
             return Result<bool>.Failure(false, "تخصیص یافت نشد.");
 
+        var meetingAccess = await accessService.GetByResolutionAsync(assignment.ResolutionId);
+        if (!meetingAccess.IsPublished)
+            return Result<bool>.Failure(false, "تخصیص هنوز ابلاغ نشده است.");
+        if (await IsChainEndedAsync(assignment))
+            return Result<bool>.Failure(false, "تخصیص اصلی این ارجاع پایان یافته است؛ ثبت اقدام امکان‌پذیر نیست.");
+
         var isActor = Assignment.SamePerson(identity.UserGuid, identity.PositionGuid, assignment.ActorGuid, assignment.ActorPositionGuid);
         var isFollower = Assignment.SamePerson(identity.UserGuid, identity.PositionGuid, assignment.FollowerGuid, assignment.FollowerPositionGuid);
 
         // دبیر/مدیر جلسه (دارنده ManageAssignments) هم مجاز است به نیابت ثبت کند
-        var isManager = !isActor && !isFollower
-                        && (await accessService.GetByResolutionAsync(assignment.ResolutionId)).Can(MeetingCapability.ManageAssignments);
+        var isManager = !isActor && !isFollower && meetingAccess.Can(MeetingCapability.ManageAssignments);
 
         if (!identity.IsSuperAdmin && !isManager)
         {
@@ -70,7 +75,9 @@ public class ActionCommandHandler(
 
         var newAction = new Action(identity.TokenUserGuid, command.AssignmentId, command.Description.Trim(),
             command.ActionDate ?? Assignment.ToShamsi(DateTime.Now),
-            command.UserGuid == Guid.Empty ? identity.UserGuid : command.UserGuid, command.Type);
+            // ثبت به نام شخص دیگر فقط برای مدیر جلسه (ثبت به نیابت اقدام‌کننده)
+            (isManager || identity.IsSuperAdmin) && command.UserGuid != Guid.Empty ? command.UserGuid : identity.UserGuid,
+            command.Type);
 
         if (command.Type == ActionType.Action && assignment.ActionStatus == ActionStatus.Pending)
             assignment.ChangeStatus(ActionStatus.InProgress);
@@ -87,7 +94,7 @@ public class ActionCommandHandler(
                 await notificationPublisher.PublishAsync(NotificationEventCode.ActionRegistered, new NotificationPayload
                 {
                     ResolutionId = assignment.ResolutionId,
-                    MeetingId = (await accessService.GetByResolutionAsync(assignment.ResolutionId)).MeetingId,
+                    MeetingId = meetingAccess.MeetingId,
                     ActorUserGuid = identity.TokenUserGuid,
                     Targets = [new NotificationTarget(NotificationRecipient.Follower, assignment.FollowerGuid, assignment.FollowerPositionGuid)],
                     Values = { ["ActorUserGuid"] = identity.UserGuid.ToString() },
@@ -100,6 +107,21 @@ public class ActionCommandHandler(
         }
 
         return Result<bool>.Success(true);
+    }
+
+    /// <summary>آیا این تخصیص یا یکی از اجدادش پایان یافته است؟</summary>
+    private async Task<bool> IsChainEndedAsync(Assignment assignment)
+    {
+        if (!assignment.IsReferral) return false;
+        var tree = await assignmentRepository.GetResolutionTreeAsync(assignment.ResolutionId);
+        var visited = new HashSet<int>();
+        for (var current = tree.FirstOrDefault(a => a.Id == assignment.ParentAssignmentId);
+             current is not null && visited.Add(current.Id);
+             current = tree.FirstOrDefault(a => a.Id == current.ParentAssignmentId))
+        {
+            if (current.IsEnded) return true;
+        }
+        return false;
     }
 
     public async Task<Result<bool>> Handle(DeleteActionDto command)

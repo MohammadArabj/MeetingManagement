@@ -1,4 +1,4 @@
-﻿using Epc.Application.Command;
+using Epc.Application.Command;
 using Epc.Company.Query;
 using MeetingManagement.Application.Contracts.Resolution;
 using MeetingManagement.Common.Extensions;
@@ -118,8 +118,17 @@ public class ResolutionCommandHandler(
         if (string.IsNullOrWhiteSpace(command.Title))
             return Result<long>.Failure(0, "عنوان مصوبه الزامی است.");
 
-        long? parentMeetingId = command.ParentMeetingGuid is { } pg ? (await accessService.GetAsync(pg)).MeetingId : null;
-        long? committeeMeetingId = command.CommitteeMeetingGuid is { } cg ? (await accessService.GetAsync(cg)).MeetingId : null;
+        // ارجاع به جلسه‌ی دیگر فقط اگر کاربر اجازه‌ی دیدن مصوبات آن را داشته باشد
+        long? parentMeetingId, committeeMeetingId;
+        try
+        {
+            parentMeetingId = command.ParentMeetingGuid is { } pg ? await ReferencedMeetingIdAsync(pg) : null;
+            committeeMeetingId = command.CommitteeMeetingGuid is { } cg ? await ReferencedMeetingIdAsync(cg) : null;
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result<long>.Failure(0, ex.Message);
+        }
         if (parentMeetingId == 0) parentMeetingId = null;
         if (committeeMeetingId == 0) committeeMeetingId = null;
 
@@ -240,6 +249,15 @@ public class ResolutionCommandHandler(
     // ═══════════════════════════════════════════════════════════
     // Helpers
     // ═══════════════════════════════════════════════════════════
+    private async Task<long?> ReferencedMeetingIdAsync(Guid meetingGuid)
+    {
+        var referenced = await accessService.GetAsync(meetingGuid);
+        if (!referenced.Exists) return null;
+        if (!referenced.Can(MeetingCapability.ViewResolutions))
+            throw new InvalidOperationException("شما به جلسه‌ی ارجاع‌شده دسترسی ندارید.");
+        return referenced.MeetingId;
+    }
+
     private static string? CheckEditAccess(MeetingAccess access)
     {
         if (!access.Exists) return "جلسه مورد نظر یافت نشد.";
@@ -414,7 +432,8 @@ public class ResolutionCommandHandler(
     private async Task PublishAssignedAsync(MeetingAccess access, long resolutionId,
         List<(Guid user, Guid? position, string? due)> actors)
     {
-        if (actors.Count == 0) return;
+        // پیش از ابلاغ (امضای رئیس / اتمام جلسه هیئت مدیره) پیامی ارسال نمی‌شود؛ هنگام ابلاغ برای همه ارسال می‌شود
+        if (actors.Count == 0 || !access.IsPublished) return;
         try
         {
             foreach (var group in actors.GroupBy(a => a.due))

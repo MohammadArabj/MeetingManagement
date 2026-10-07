@@ -54,6 +54,25 @@ public sealed class MeetingAccessService(
         return meetingId is null ? MeetingAccess.NotFound : await GetAsync(meetingId.Value, ct);
     }
 
+    public async Task<MeetingAccess> GetByFileModuleAsync(FileType type, long moduleId, CancellationToken ct = default)
+    {
+        switch (type)
+        {
+            case FileType.Meeting:
+                return await GetAsync(moduleId, ct);
+            case FileType.Resolution:
+                return await GetByResolutionAsync(moduleId, ct);
+            case FileType.Agenda:
+                var meetingId = await context.Agendas.AsNoTracking()
+                    .Where(a => a.Id == moduleId)
+                    .Select(a => a.MeetingId)
+                    .FirstOrDefaultAsync(ct);
+                return meetingId is null ? MeetingAccess.NotFound : await GetAsync(meetingId.Value, ct);
+            default:
+                return MeetingAccess.NotFound;
+        }
+    }
+
     public async Task<MeetingAccess> GetAsync(long meetingId, CancellationToken ct = default)
     {
         if (_cache.TryGetValue(meetingId, out var cached)) return cached;

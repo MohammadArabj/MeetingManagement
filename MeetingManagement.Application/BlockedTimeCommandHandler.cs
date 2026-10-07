@@ -1,4 +1,4 @@
-﻿// MeetingManagement.Application/BlockedTimeCommandHandler.cs
+// MeetingManagement.Application/BlockedTimeCommandHandler.cs
 using Epc.Application.Command;
 using Epc.Company.Query;
 using Epc.Identity;
@@ -68,7 +68,7 @@ public class BlockedTimeCommandHandler(
         var positionGuid = command.UserGuid;
 
         var blockedTime = await repository.LoadAsync(command.Guid);
-        if (blockedTime == null || blockedTime.UserGuid != positionGuid)
+        if (blockedTime == null || (blockedTime.UserGuid != positionGuid && blockedTime.CreatedBy != userGuid))
             return Result<BlockedTimeJsonModel>.Failure(null, "زمان عدم حضور یافت نشد");
 
         var date = DateTime.Parse(command.Date, new CultureInfo("en-Us"));
@@ -104,7 +104,8 @@ public class BlockedTimeCommandHandler(
 
 
         var blockedTime = await repository.LoadAsync(command.Guid);
-        if (blockedTime == null)
+        // فقط صاحب زمان عدم حضور می‌تواند آن را حذف کند
+        if (blockedTime == null || (blockedTime.UserGuid != claimHelper.GetCurrentUserGuid() && blockedTime.CreatedBy != claimHelper.GetCurrentUserGuid()))
             return Result<bool>.Failure(false, "زمان عدم حضور یافت نشد");
 
         repository.Delete(blockedTime);

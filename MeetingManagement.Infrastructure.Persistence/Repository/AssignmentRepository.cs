@@ -18,4 +18,10 @@ public class AssignmentRepository(DbContext commandContext)
             .Include(a => a.Actions)
             .Include(a => a.ReferredAssignments)
             .FirstOrDefaultAsync(a => a.Id == id, ct);
+
+    public Task<List<Assignment>> GetOriginalsByMeetingAsync(long meetingId, CancellationToken ct = default) =>
+        commandContext.Set<Assignment>()
+            .AsNoTracking()
+            .Where(a => !a.IsReferral && a.Resolution.MeetingId == meetingId)
+            .ToListAsync(ct);
 }

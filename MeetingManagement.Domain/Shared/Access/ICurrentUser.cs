@@ -7,7 +7,15 @@ namespace MeetingManagement.Domain.Shared.Access;
 public interface ICurrentUser
 {
     bool IsAuthenticated { get; }
+
+    /// <summary>کاربر توکن؛ برای توکن سرویس‌به‌سرویس (بدون کاربر) Guid.Empty</summary>
     Guid UserGuid { get; }
+
+    /// <summary>شناسه کلاینت صادرکننده‌ی توکن (claim: client_id)</summary>
+    string? ClientId { get; }
+
+    /// <summary>توکن سرویس‌به‌سرویس (client_credentials) است و کاربری پشت آن نیست</summary>
+    bool IsServiceClient { get; }
 
     /// <summary>سمت فعال (claim: activatedPosition)</summary>
     Guid? PositionGuid { get; }

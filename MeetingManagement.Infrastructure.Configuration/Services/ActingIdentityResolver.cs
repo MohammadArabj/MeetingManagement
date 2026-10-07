@@ -47,7 +47,8 @@ public sealed class ActingIdentityResolver(
     {
         if (_resolved is not null) return _resolved;
 
-        if (!currentUser.IsAuthenticated)
+        // توکن سرویس‌به‌سرویس هیچ هویت کاربری ندارد و هیچ هدر سمت/تفویضی از آن پذیرفته نمی‌شود
+        if (!currentUser.IsAuthenticated || currentUser.IsServiceClient)
             return _resolved = new ActingIdentity(Guid.Empty, Guid.Empty, null, false, false, false, EmptySet);
 
         var tokenUser = currentUser.UserGuid;

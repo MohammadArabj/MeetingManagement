@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using Epc.Identity;
 using MeetingManagement.Domain.Shared.Access;
 using Microsoft.AspNetCore.Http;
 
@@ -9,7 +8,7 @@ namespace MeetingManagement.Application.Services;
 /// پیاده‌سازی <see cref="ICurrentUser"/> بر اساس Claim های توکن SSO.
 /// Claim ها: id/sub ، activatedPosition ، isDelegate ، permission (اضافه‌شده توسط CustomTokenRequestValidator).
 /// </summary>
-public sealed class CurrentUser(IHttpContextAccessor httpContextAccessor, IClaimHelper claimHelper) : ICurrentUser
+public sealed class CurrentUser(IHttpContextAccessor httpContextAccessor) : ICurrentUser
 {
     private ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
 
@@ -22,10 +21,13 @@ public sealed class CurrentUser(IHttpContextAccessor httpContextAccessor, IClaim
         get
         {
             var raw = Find("id") ?? Find("sub") ?? Find(ClaimTypes.NameIdentifier);
-            if (Guid.TryParse(raw, out var g)) return g;
-            return claimHelper.GetCurrentUserGuid();
+            return Guid.TryParse(raw, out var g) ? g : Guid.Empty;
         }
     }
+
+    public string? ClientId => Find("client_id");
+
+    public bool IsServiceClient => IsAuthenticated && Find("id") is null && Find("sub") is null && Find(ClaimTypes.NameIdentifier) is null;
 
     public Guid? PositionGuid => Guid.TryParse(Find("activatedPosition"), out var g) && g != Guid.Empty ? g : null;
 
