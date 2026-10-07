@@ -14,7 +14,7 @@
 
 /* Enhanced Search Card */
 .search-card {
-    background: var(--mm-accent);
+    background: var(--mm-primary);
     border-radius: 20px;
     overflow: hidden;
     box-shadow: 0 10px 40px rgba(var(--mm-primary-rgb), 0.3);
@@ -53,7 +53,7 @@
 
 .header-title {
     margin: 0;
-    color: var(--mm-text) !important;
+    color: #fff !important;
 }
 
 .collapse-btn {
@@ -138,9 +138,7 @@
 }
 
 .btn-search {
-    background: linear-gradient(135deg,
-            var(--mm-accent) 0%,
-            var(--mm-accent) 100%);
+    background: linear-gradient(135deg, var(--mm-primary) 0%, var(--mm-primary-2) 100%);
     color: #fff;
 }
 
@@ -185,9 +183,7 @@
 
 .results-header {
     padding: 11px 30px;
-    background: linear-gradient(135deg,
-            var(--mm-accent) 0%,
-            var(--mm-accent) 100%);
+    background: linear-gradient(135deg, var(--mm-primary) 0%, var(--mm-primary-2) 100%);
     display: flex;
     justify-content: space-between;
     align-items: center;

@@ -5,7 +5,7 @@
     --primary: var(--mm-primary);
     --success: var(--mm-success);
     --info: var(--mm-info);
-    --warning: var(--mm-accent);
+    --warning: var(--mm-primary);
     --danger: var(--mm-danger);
     --secondary: #6c757d;
 
@@ -43,7 +43,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem 1.5rem;
-    background: var(--mm-accent);
+    background: var(--mm-primary);
     border-radius: var(--radius-xl);
     margin-bottom: 1.5rem;
     box-shadow: var(--shadow);
@@ -501,12 +501,12 @@
 }
 
 .guest-type-option:hover {
-    border-color: var(--mm-accent);
-    background: rgba(var(--mm-accent-rgb), 0.1);
+    border-color: var(--mm-primary);
+    background: rgba(var(--mm-primary-rgb), 0.1);
 }
 
 .guest-type-option.active {
-    border-color: var(--mm-accent);
+    border-color: var(--mm-primary);
     background: #f0bd050f;
 }
 
@@ -516,7 +516,7 @@
 
 .guest-type-option i {
     font-size: 2rem;
-    color: var(--mm-accent);
+    color: var(--mm-primary);
 }
 
 .guest-type-option span {
@@ -545,11 +545,11 @@
 }
 
 .gender-option:hover {
-    border-color: var(--mm-accent)
+    border-color: var(--mm-primary)
 }
 
 .gender-option.active {
-    border-color: var(--mm-accent);
+    border-color: var(--mm-primary);
     background: #f0bd050f;
 }
 

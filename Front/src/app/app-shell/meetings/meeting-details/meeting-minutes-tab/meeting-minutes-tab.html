@@ -1,213 +1,156 @@
 <!-- meeting-minutes-tab.html -->
-
-<div class="container">
-    <div class="row">
-        <div class="col-md-12 text-end">
-            <div class="btn-group btn-group-sm align-items-center">
-                <app-help-button topic="minutes" label="راهنمای امضا و صورتجلسه" class="ms-2" />
-
-                <!-- دکمه امضا و ثبت نظر -->
-                @if(canSign()) {
-                <button (click)="showSignModal()" class="btn btn-success btn-sm" style="width:100px;margin-left: 0;"
-                    title="جهت ثبت نظر و امضای جلسه کلیک کنید">
-                    امضا و ثبت نظر
-                </button>
-                }
-
-                <!-- دکمه چاپ صورتجلسه نهایی -->
-                @if(canPrintFinal()) {
-                <button (click)="printMeeting()" class="btn btn-primary btn-sm" style="width:100px;"
-                    title="جهت پرینت صورتجلسه کلیک کنید">
-                    چاپ
-                </button>
-                }
-
-                <!-- دکمه چاپ پیش‌نویس -->
-                @if(canPrintDraft()) {
-                <button (click)="printDraftMeeting()" class="btn btn-primary btn-sm" style="width:100px;"
-                    title="جهت پرینت پیش‌نویس جلسه کلیک کنید">
-                    چاپ
-                </button>
-                }
-
-                <!-- ✅ دکمه فایل‌ها - اصلاح شده -->
-                @if(canAccessFiles()) {
-                <button (click)="openFileManagerModal()" class="btn btn-info btn-sm position-relative"
-                    style="width:100px;" title="جهت مشاهده و آپلود فایل‌ها کلیک کنید" [disabled]="isLoadingFiles()">
-                    فایل‌ها
-                    @if(fileCount() > 0) {
-                    <span style="width: 16px !important;" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                        {{ fileCount() }}
-                    </span>
-                    }
-                </button>
-                }
-
-            </div>
+<div class="mn">
+    <!-- نوار ابزار -->
+    <div class="mn-toolbar">
+        <div class="mn-toolbar-title">
+            <i class="fa fa-file-contract"></i>
+            <span>صورتجلسه</span>
+            @if (chairmanSigned()) {
+            <span class="mm-status mm-status-6">امضای رئیس ثبت شده</span>
+            } @else {
+            <span class="mm-status mm-status-1">در انتظار امضای رئیس</span>
+            }
+            <app-help-button topic="minutes" label="راهنمای امضا و صورتجلسه" />
+        </div>
+        <div class="mn-toolbar-actions">
+            @if (canSign()) {
+            <button (click)="showSignModal()" class="btn btn-success btn-sm" title="ثبت نظر و امضای صورتجلسه">
+                <i class="fa fa-signature me-1"></i>امضا و ثبت نظر
+            </button>
+            }
+            @if (canPrintFinal()) {
+            <button (click)="printMeeting()" class="btn btn-primary btn-sm" title="چاپ صورتجلسه‌ی نهایی">
+                <i class="fa fa-print me-1"></i>چاپ
+            </button>
+            }
+            @if (canPrintDraft()) {
+            <button (click)="printDraftMeeting()" class="btn btn-outline-primary btn-sm" title="چاپ پیش‌نویس (با واترمارک)">
+                <i class="fa fa-print me-1"></i>چاپ پیش‌نویس
+            </button>
+            }
+            @if (canAccessFiles()) {
+            <button (click)="openFileManagerModal()" class="btn btn-outline-secondary btn-sm position-relative"
+                title="مشاهده و بارگذاری فایل‌ها" [disabled]="isLoadingFiles()">
+                <i class="fa fa-paperclip me-1"></i>فایل‌ها
+                @if (fileCount() > 0) { <span class="mn-count">{{ fileCount() }}</span> }
+            </button>
+            }
         </div>
     </div>
 
-    <div id="meeting-Minute">
-        <header>
-            <div class="right-side">
-                <div class="name-of-god">به نام خدا</div>
-                <div class="meeting-title">
-                    موضوع جلسه : {{meeting()?.title}}
-                </div>
+    <!-- برگه‌ی صورتجلسه -->
+    <article class="mn-sheet">
+        <header class="mn-sheet-head">
+            <img class="mn-logo" src="{{ siteUrl() }}/img/MainLogo.png" alt="لوگو">
+            <div class="mn-sheet-title">
+                <small>به نام خدا</small>
+                <h5>{{ meeting()?.title }}</h5>
             </div>
-            <div class="logo">
-                <img src="{{siteUrl()}}/img/MainLogo.png" width="140" alt="logo">
+            <div class="mn-sheet-no">
+                <span>شماره</span>
+                <strong>{{ meeting()?.number }}</strong>
             </div>
         </header>
 
-        <section class="main">
-            <div class="metting-information">
-                <table>
+        <dl class="mn-facts">
+            <div><dt><i class="fa fa-calendar-alt"></i>تاریخ</dt><dd>{{ meeting()?.mtDate }}</dd></div>
+            <div><dt><i class="fa fa-clock"></i>زمان</dt><dd>{{ meeting()?.startTime }}</dd></div>
+            <div><dt><i class="fa fa-map-marker-alt"></i>محل تشکیل</dt><dd>{{ meeting()?.location }}</dd></div>
+            <div><dt><i class="fa fa-user-tie"></i>رئیس جلسه</dt><dd>{{ meeting()?.chairman }}</dd></div>
+            <div><dt><i class="fa fa-user-edit"></i>دبیر جلسه</dt><dd>{{ meeting()?.secretary }}</dd></div>
+            <div><dt><i class="fa fa-paperclip"></i>پیوست</dt><dd>{{ fileCount() === 0 ? 'ندارد' : fileCount() + ' فایل' }}</dd></div>
+        </dl>
+
+        <div class="mn-people">
+            <div><span class="mn-people-label">اعضا</span><span>{{ internalTitles() || '—' }}</span></div>
+            <div><span class="mn-people-label absent">غائبین</span><span>{{ absentedTitles() || '—' }}</span></div>
+            <div><span class="mn-people-label guest">مهمان‌ها</span><span>{{ guestTitles() || '—' }}</span></div>
+        </div>
+
+        @if (meeting()?.description) {
+        <section class="mn-block">
+            <h6>شرح جلسه</h6>
+            <div class="mn-text space-preline">{{ meeting()?.description }}</div>
+        </section>
+        }
+
+        @if (resolutions()?.length > 0) {
+        <section class="mn-block">
+            <h6>مصوبات</h6>
+            <div class="table-responsive">
+                <table class="mn-table">
                     <thead>
-                        <tr class="text-center">
-                            <th>محل تشکیل جلسه</th>
-                            <th>تاریخ</th>
-                            <th>زمان</th>
-                            <th>شماره صورت جلسه</th>
-                            <th>رئیس جلسه</th>
-                            <th>دبیر جلسه</th>
-                            <th>پیوست</th>
+                        <tr>
+                            <th style="width:48px">ردیف</th>
+                            <th>شرح مصوبه</th>
+                            <th>مسئول اقدام</th>
+                            <th>نوع تخصیص</th>
+                            <th>مسئول پیگیری</th>
+                            <th>مهلت اقدام</th>
                         </tr>
                     </thead>
-
                     <tbody>
-                        <tr class="meeting-information">
-                            <td>{{meeting()?.location}}</td>
-                            <td>{{meeting()?.mtDate}}</td>
-                            <td>{{meeting()?.startTime}}</td>
-                            <td>{{meeting()?.number}}</td>
-                            <td>{{meeting()?.chairman}}</td>
-                            <td>{{meeting()?.secretary}}</td>
-                            <td>{{fileCount() === 0 ? "ندارد" : fileCount() + " فایل"}}</td>
-                        </tr>
+                        @for (resolution of resolutions(); let i = $index; track trackByResolutionId(i, resolution)) {
+                        @let groups = formattedAssignments()[i];
+                        @if (groups && groups.length > 0) {
+                        @for (group of groups; let j = $index; track j) {
                         <tr>
-                            <td class="type">مهمان‌ها</td>
-                            <td colspan="6">{{guestTitles()}}</td>
+                            @if (j === 0) {
+                            <td class="mn-num" [attr.rowspan]="groups.length">{{ i + 1 }}</td>
+                            <td class="mn-res space-preline" [innerHTML]="resolution.text" [attr.rowspan]="groups.length"></td>
+                            }
+                            <td [innerHTML]="group.actionerNames"></td>
+                            <td>{{ group.type }}</td>
+                            <td>{{ group.followerName }}</td>
+                            <td class="mn-date">{{ group.dueDate }}</td>
                         </tr>
+                        }
+                        } @else {
                         <tr>
-                            <td class="type">غائبین</td>
-                            <td colspan="6">{{absentedTitles()}}</td>
+                            <td class="mn-num">{{ i + 1 }}</td>
+                            <td class="mn-res space-preline" [innerHTML]="resolution.text"></td>
+                            <td colspan="4" class="text-muted">بدون تخصیص</td>
                         </tr>
-                        <tr>
-                            <td class="type">اعضاء</td>
-                            <td colspan="6">{{internalTitles()}}</td>
-                        </tr>
+                        }
+                        }
                     </tbody>
                 </table>
             </div>
+        </section>
+        }
 
-            @if(meeting()?.description) {
-            <div class="metting-summary space-preline">
-                <div class="right-side">
-                    <span>شرح جلسه</span>
-                </div>
-                <div class="main">
-                    {{meeting()?.description}}
-                </div>
-            </div>
-            }
+        @if (memberDescriptions().length > 0) {
+        <section class="mn-block">
+            <h6>نظرات اعضا</h6>
+            <ul class="mn-comments">
+                @for (member of memberDescriptions(); track $index) {
+                <li><strong>{{ member.name }}</strong><p>{{ member.comment }}</p></li>
+                }
+            </ul>
+        </section>
+        }
 
-            @if(resolutions().length > 0) {
-            <div class="metting-directives">
-                <div class="main">
-                    <div class="label">مصوبات</div>
-                    <table>
-                        <thead>
-                            <tr class="text-center">
-                                <th>ردیف</th>
-                                <th>شرح مصوبه</th>
-                                <th>مسئول اقدام</th>
-                                <th>نوع تخصیص</th>
-                                <th>مسئول پیگیری</th>
-                                <th>مهلت اقدام</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @for (resolution of resolutions(); let i = $index; track trackByResolutionId(i, resolution))
-                            {
-                            @let groups = formattedAssignments()[i];
+        @if (meeting()?.rider) {
+        <section class="mn-block">
+            <h6>الحاقیه</h6>
+            <div class="mn-text space-preline">{{ meeting()?.rider }}</div>
+        </section>
+        }
 
-                            @if (groups && groups.length > 0) {
-                            @for (group of groups; let j = $index; track j) {
-                            <tr>
-                                @if (j === 0) {
-                                <td [attr.rowspan]="groups.length">{{ i + 1 }}</td>
-                                <td class="space-preline" [innerHTML]="resolution.text" [attr.rowspan]="groups.length">
-                                </td>
-                                }
-                                <td style="width: 8%;" [innerHTML]="group.actionerNames"></td>
-                                <td [innerHTML]="group.type"></td>
-                                <td style="width: 8%;" [innerHTML]="group.followerName"></td>
-                                <td [innerHTML]="group.dueDate"></td>
-                            </tr>
-                            }
-                            } @else {
-                            <tr>
-                                <td>{{ i + 1 }}</td>
-                                <td class="space-preline" [innerHTML]="resolution.text"></td>
-                                <td colspan="4"></td>
-                            </tr>
-                            }
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            }
-
-            @if(memberDescriptions().length > 0) {
-            <div class="metting-directives metting-description">
-                <div class="main">
-                    <div class="label">توضیحات</div>
-                    <table>
-                        <thead>
-                            <tr class="text-center">
-                                <th>نام عضو جلسه</th>
-                                <th>توضیح ارائه شده</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @for(member of memberDescriptions(); track $index) {
-                            <tr>
-                                <td>{{member.name}}</td>
-                                <td>{{member.comment}}</td>
-                            </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            }
-
-            @if(meeting()?.rider) {
-            <div class="metting-summary">
-                <div class="right-side">
-                    <span>الحاقیه</span>
-                </div>
-                <div class="main">
-                    {{meeting()?.rider}}
-                </div>
-            </div>
-            }
-
-            <div class="meeting-signatures">
-                <div class="top">امضا</div>
-                <div class="main row mb-2">
-                    @for(item of signedMembers(); track $index) {
-                    <div class="col-md-2 col-sm-2">
-                        <img src="{{item.signature}}" alt="signature" width="90px">
-                        <span>{{item.name}}</span>
-                    </div>
-                    }
-                </div>
+        <section class="mn-block">
+            <h6>امضاها</h6>
+            <div class="mn-signatures">
+                @for (item of signedMembers(); track $index) {
+                <figure class="mn-signature">
+                    <img src="{{ item.signature }}" alt="امضا">
+                    <figcaption><strong>{{ item.name }}</strong>@if (item.role) { <small>{{ item.role }}</small> }</figcaption>
+                </figure>
+                } @empty {
+                <div class="mn-empty"><i class="fa fa-signature"></i>هنوز امضایی ثبت نشده است.</div>
+                }
             </div>
         </section>
-    </div>
+    </article>
 </div>
 
 <!-- ✅ کامپوننت جدید مدیریت فایل -->

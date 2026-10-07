@@ -423,9 +423,11 @@ export class MeetingOpsComponent implements OnInit {
 
   // ===== INITIALIZATION METHODS =====
   private initializeBreadcrumbs(): void {
+    // داخل صفحه‌ی جزئیات جلسه (ویرایش)، مسیر را خود صفحه‌ی جزئیات تعیین می‌کند
+    if (this.router.url.includes('/meetings/details/')) return;
     this.breadcrumbService.setItems([
       { label: 'جلسات', routerLink: '/meetings/list' },
-      { label: 'ثبت جلسه', routerLink: '/meetings/ops' }
+      { label: 'ثبت جلسه', routerLink: '/meetings/create' }
     ]);
   }
 

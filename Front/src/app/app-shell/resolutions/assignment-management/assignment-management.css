@@ -10,7 +10,7 @@
     --muted: #64748b;
     --line: #e2e8f0;
 
-    --accent: var(--mm-accent);
+    --accent: var(--mm-primary);
     /* amber */
     --accent2: #fdc300;
     --blue: var(--mm-primary);
@@ -48,7 +48,7 @@
     position: absolute;
     inset: 0 0 auto 0;
     height: 4px;
-    background: linear-gradient(90deg, var(--accent2), var(--accent), var(--mm-accent-hover));
+    background: linear-gradient(90deg, var(--accent2), var(--accent), var(--mm-primary-hover));
 }
 
 .header-title {
@@ -467,7 +467,7 @@
 }
 
 .activity-card-header.actions-header {
-    background: var(--mm-accent);
+    background: var(--mm-primary);
     color: #fff;
 }
 
@@ -769,7 +769,7 @@
 }
 
 .modern-table thead th {
-    background: linear-gradient(56deg, var(--mm-accent), var(--mm-accent));
+    background: linear-gradient(56deg, var(--mm-primary), var(--mm-primary));
     color: #fff;
     padding: .9rem .95rem;
     font-weight: 900;
@@ -947,7 +947,7 @@
     --tree-line: #e2e8f0;
     --tree-text: #0f172a;
     --tree-muted: #64748b;
-    --tree-accent: var(--mm-accent);
+    --tree-accent: var(--mm-primary);
     --tree-blue: var(--mm-primary);
     --tree-shadow: 0 10px 30px rgba(2, 6, 23, .08);
     --tree-shadow2: 0 6px 18px rgba(2, 6, 23, .08);
@@ -1005,7 +1005,7 @@
 }
 
 .toggle-btn.active {
-    background: linear-gradient(135deg, #fdc300, var(--mm-accent));
+    background: linear-gradient(135deg, #fdc300, var(--mm-primary));
     color: #0b1220;
     border-color: rgba(245, 158, 11, .25);
     box-shadow: 0 12px 18px rgba(245, 158, 11, .22);
@@ -1054,7 +1054,7 @@
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, #fdc300, var(--mm-accent), var(--mm-primary));
+    background: linear-gradient(90deg, #fdc300, var(--mm-primary), var(--mm-primary));
     opacity: .9;
     pointer-events: none;
 }
@@ -1140,7 +1140,7 @@
     --tree-line: #e2e8f0;
     --tree-text: #0f172a;
     --tree-muted: #64748b;
-    --tree-accent: var(--mm-accent);
+    --tree-accent: var(--mm-primary);
     --tree-blue: var(--mm-primary);
     --tree-shadow: 0 10px 30px rgba(2, 6, 23, .08);
     --tree-shadow2: 0 6px 18px rgba(2, 6, 23, .08);
@@ -1198,7 +1198,7 @@
 }
 
 .toggle-btn.active {
-    background: linear-gradient(135deg, #fdc300, var(--mm-accent));
+    background: linear-gradient(135deg, #fdc300, var(--mm-primary));
     color: #0b1220;
     border-color: rgba(245, 158, 11, .25);
     box-shadow: 0 12px 18px rgba(245, 158, 11, .22);
@@ -1247,7 +1247,7 @@
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, #fdc300, var(--mm-accent), var(--mm-primary));
+    background: linear-gradient(90deg, #fdc300, var(--mm-primary), var(--mm-primary));
     opacity: .9;
     pointer-events: none;
 }

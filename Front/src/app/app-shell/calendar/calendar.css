@@ -2,9 +2,9 @@
 
 /* ===== Variables ===== */
 :host {
-  --primary-color: var(--mm-accent);
-  --primary-dark: #d4a505;
-  --primary-light: #fef3cd;
+  --primary-color: var(--mm-primary);
+  --primary-dark: var(--mm-primary-hover);
+  --primary-light: var(--mm-primary-50);
   --danger-color: var(--mm-danger);
   --danger-dark: #bb2d3b;
   --text-dark: #1a1a1a;
@@ -466,7 +466,7 @@
 
 .btn-save:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(var(--mm-accent-rgb), 0.4);
+  box-shadow: 0 4px 12px rgba(var(--mm-primary-rgb), 0.4);
 }
 
 .btn-save:disabled {
@@ -530,7 +530,7 @@
 }
 
 :host ::ng-deep .fc-daygrid-day:hover {
-  background: rgba(var(--mm-accent-rgb), 0.1);
+  background: rgba(var(--mm-primary-rgb), 0.1);
   cursor: pointer;
 }
 
@@ -609,3 +609,5 @@
     gap: 0.75rem;
   }
 }
+.calendar-header-card .header-title,
+.calendar-header-card .header-title * { color: #fff !important; }

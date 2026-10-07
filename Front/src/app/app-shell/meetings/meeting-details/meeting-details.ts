@@ -119,6 +119,12 @@ export class MeetingDetailsComponent implements OnInit {
   readonly isBoardMeeting = computed(() => this.meetingBehaviorService.isBoardMeeting());
 
   readonly statusId = computed(() => this.meeting()?.statusId);
+  readonly statusTitle = computed(() => MeetingStatuses.title(this.statusId()));
+  /** شماره‌ی مرحله‌ی فعلی در نوار مراحل */
+  readonly stepIndex = computed(() => {
+    const list = this.isBoardMeeting() ? this.boardMeetingsteps : this.steps;
+    return list.findIndex(s => s.id === this.statusId());
+  });
   readonly roleId = computed(() => this.meeting()?.roleId);
 
   // Constants

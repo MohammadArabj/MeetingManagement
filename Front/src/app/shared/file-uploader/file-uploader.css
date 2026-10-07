@@ -1,6 +1,6 @@
 /* استایل‌های اصلی کامپوننت آپلودر */
 .elegant-file-uploader {
-  --primary-color: #4a6cf7;
+  --primary-color: var(--mm-primary);
   --success-color: #0cbc87;
   --danger-color: #d6293e;
   --secondary-color: #6c757d;

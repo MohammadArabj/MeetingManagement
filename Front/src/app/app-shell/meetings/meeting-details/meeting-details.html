@@ -1,6 +1,65 @@
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-  <!-- تب‌ها -->
-  <ul class="nav nav-pills flex-nowrap overflow-auto rounded px-3 py-2" role="tablist">
+<!-- ═══════════ سرصفحه‌ی جلسه: عنوان، وضعیت، مراحل و عملیات ═══════════ -->
+<section class="md-head">
+  <div class="md-top">
+    <div class="md-title">
+      <span class="mm-page-icon"><i class="fa fa-file-signature"></i></span>
+      <div class="min-w-0">
+        <h4>{{ meetingTitle() || 'جلسه' }}</h4>
+        <div class="md-meta">
+          <span class="mm-status mm-status-{{ statusId() }}">{{ statusTitle() }}</span>
+          @if (meeting()?.number) { <span><i class="fa fa-hashtag"></i>{{ meeting()?.number }}</span> }
+          @if (meeting()?.mtDate) { <span><i class="fa fa-calendar-alt"></i>{{ meeting()?.mtDate }}{{ meeting()?.startTime ? ' — ' + meeting()?.startTime : '' }}</span> }
+          @if (isBoardMeeting()) { <span class="md-board"><i class="fa fa-landmark"></i>هیئت مدیره</span> }
+        </div>
+      </div>
+    </div>
+
+    <div class="md-actions">
+      <app-help-button topic="statuses" label="راهنمای وضعیت‌ها و مراحل جلسه" />
+      @if (isSuperAdmin()) {
+        @if (canGoBack()) {
+        <button class="btn btn-sm btn-outline-secondary" title="بازگشت به مرحله قبل (ادمین)" (click)="adminGoBack()">
+          <i class="fa fa-arrow-right me-1"></i>مرحله قبل
+        </button>
+        }
+        @if (canGoForward()) {
+        <button class="btn btn-sm btn-outline-primary" title="پیشروی به مرحله بعد (ادمین)" (click)="changeStatus(nextStatus()!)">
+          مرحله بعد<i class="fa fa-arrow-left ms-1"></i>
+        </button>
+        }
+      }
+      @if (showButton()) {
+      <button class="btn btn-primary" title="{{ buttonText() }}" (click)="changeStatus(buttonStatus())">
+        <i class="fa fa-check-circle me-1"></i>{{ buttonText() }}
+      </button>
+      }
+      <button type="button" class="btn btn-light" (click)="goBack()"><i class="fa fa-arrow-right me-1"></i>بازگشت</button>
+    </div>
+  </div>
+
+  @if (statusId() === 1 || statusId() === 5 || statusId() === 7) {
+  <div class="md-note" [class.danger]="statusId() === 5" [class.warn]="statusId() === 7">
+    <i class="fa" [class.fa-pencil-alt]="statusId() === 1" [class.fa-ban]="statusId() === 5" [class.fa-hourglass-half]="statusId() === 7"></i>
+    @switch (statusId()) {
+      @case (1) { این جلسه پیش‌نویس است و فقط برای شما قابل مشاهده است؛ با «ثبت اولیه» برای اعضا منتشر می‌شود. }
+      @case (5) { این جلسه لغو شده است. }
+      @case (7) { تاریخ این جلسه گذشته و هنوز تعیین تکلیف نشده است؛ آن را برگزار یا لغو کنید. }
+    }
+  </div>
+  } @else {
+  <ol class="md-stepper">
+    @for (step of (isBoardMeeting() ? boardMeetingsteps : steps); track step.id; let i = $index) {
+    <li [class.done]="stepIndex() > i" [class.current]="stepIndex() === i">
+      <span class="md-step-dot">@if (stepIndex() > i) { <i class="fa fa-check"></i> } @else { {{ i + 1 }} }</span>
+      <span class="md-step-label">{{ step.label }}</span>
+    </li>
+    }
+  </ol>
+  }
+</section>
+
+<!-- ═══════════ تب‌ها ═══════════ -->
+<ul class="nav nav-tabs md-tabs" role="tablist">
     @if(hasAccessToTab('meetingDetails')) {
     <li class="nav-item" role="presentation">
       <button type="button" class="nav-link active" role="tab" data-bs-toggle="tab"
@@ -75,73 +134,6 @@
     }
 
   </ul>
-
-  <!-- بردکرامب + دکمه بازگشت -->
-  <div class="d-flex align-items-center gap-2">
-    <app-help-button topic="statuses" label="راهنمای وضعیت‌ها و مراحل جلسه" />
-    <nav aria-label="breadcrumb">
-      <ol class="breadcrumb bg-light rounded px-3 py-2 shadow-sm mb-0">
-        @if(statusId() === 1) {
-        <li class="breadcrumb-item active d-flex align-items-center gap-1" aria-current="page">
-          <i class="fa fa-pencil-square text-primary"></i>
-          <span class="text-primary fw-semibold">پیش نویس</span>
-        </li>
-        } @else {
-        @if(isBoardMeeting()){
-        @for(step of boardMeetingsteps; track $index) {
-        <li class="breadcrumb-item d-flex align-items-center gap-1" [class.active]="statusId() === step.id"
-          [attr.aria-current]="statusId() === step.id ? 'page' : null">
-          <i [class]="step.icon + (statusId() === step.id ? ' text-primary' : ' text-muted')"></i>
-          <span [class.text-primary]="statusId() === step.id" [class.fw-semibold]="statusId() === step.id">{{ step.label
-            }}</span>
-        </li>
-        }
-        }
-        @else {
-        @for(step of steps; track $index) {
-        <li class="breadcrumb-item d-flex align-items-center gap-1" [class.active]="statusId() === step.id"
-          [attr.aria-current]="statusId() === step.id ? 'page' : null">
-          <i [class]="step.icon + (statusId() === step.id ? ' text-primary' : ' text-muted')"></i>
-          <span [class.text-primary]="statusId() === step.id" [class.fw-semibold]="statusId() === step.id">{{
-            step.label}}</span>
-        </li>
-        }
-        }
-
-        }
-      </ol>
-    </nav>
-    @if(showButton()) {
-    <button class="btn btn-info" title="{{buttonText()}}" (click)="changeStatus(buttonStatus())">
-      {{buttonText()}}
-    </button>
-    }
-    @if(isSuperAdmin()) {
-    <div class="d-flex align-items-center gap-1">
-
-      @if(canGoBack()) {
-      <button class="btn btn-sm btn-danger" title="بازگشت به مرحله قبل (ادمین)" (click)="adminGoBack()">
-        <i class="fa fa-step-forward me-1"></i>
-        مرحله قبل
-      </button>
-      }
-
-      @if(canGoForward()) {
-      <button class="btn btn-sm btn-primary" title="پیشروی به مرحله بعد (ادمین)"
-        (click)="changeStatus(nextStatus()!)">
-        مرحله بعد
-
-        <i class="fa fa-step-backward ms-1"></i>
-      </button>
-      }
-
-    </div>
-    }
-    <a class="btn btn-warning" (click)="goBack()">
-      بازگشت
-    </a>
-  </div>
-</div>
 
 <div class="tab-content">
   @if(showMainTab()&&_loaded()){

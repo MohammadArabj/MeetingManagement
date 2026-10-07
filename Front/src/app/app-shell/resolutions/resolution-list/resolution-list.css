@@ -473,7 +473,7 @@
 
 /* اکسنته سراسری همین صفحه */
 :host {
-    --accent: var(--mm-accent);
+    --accent: var(--mm-primary);
     --accent-700: #c99d00;
     --accent-100: #fff3c8;
     --text: #1f2937;
@@ -528,7 +528,7 @@
 /* هماهنگ‌سازی کنترل‌ها و دکمه‌ها با اکسنته */
 .form-select:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(var(--mm-accent-rgb), .18);
+    box-shadow: 0 0 0 3px rgba(var(--mm-primary-rgb), .18);
 }
 
 .form-select:hover {
@@ -542,7 +542,7 @@
 
 .btn-primary:hover {
     background: linear-gradient(135deg, #e6b300, #ffc83d);
-    box-shadow: 0 4px 12px rgba(var(--mm-accent-rgb), .30);
+    box-shadow: 0 4px 12px rgba(var(--mm-primary-rgb), .30);
 }
 
 /* هدر گرید */

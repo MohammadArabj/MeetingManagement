@@ -87,17 +87,17 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    background: rgba(var(--mm-accent-rgb), 0.15);
-    border: 1px solid var(--mm-accent);
+    background: rgba(var(--mm-primary-rgb), 0.15);
+    border: 1px solid var(--mm-primary);
     border-radius: 6px;
-    color: var(--mm-accent);
+    color: var(--mm-primary);
     font-size: 12px;
     cursor: pointer;
     transition: all 0.3s ease;
 }
 
 .table-report-btn:hover {
-    background: var(--mm-accent);
+    background: var(--mm-primary);
     color: var(--mm-ink);
     transform: scale(1.1);
 }
@@ -108,8 +108,8 @@
     align-items: center;
     gap: 4px;
     padding: 4px 10px;
-    background: var(--mm-accent-50);
-    border: 1px solid var(--mm-accent);
+    background: var(--mm-primary-50);
+    border: 1px solid var(--mm-primary);
     border-radius: 12px;
     font-size: 12px;
     font-weight: 600;
@@ -117,7 +117,7 @@
 }
 
 .actions-count-badge i {
-    color: var(--mm-accent);
+    color: var(--mm-primary);
     font-size: 11px;
 }
 

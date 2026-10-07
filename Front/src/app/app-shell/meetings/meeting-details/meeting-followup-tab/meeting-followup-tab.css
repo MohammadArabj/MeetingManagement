@@ -17,7 +17,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 15px 20px;
-    background: var(--mm-accent);
+    background: var(--mm-primary);
     border-radius: 12px;
     margin-bottom: 20px;
     color: var(--mm-text);
@@ -290,7 +290,7 @@
 }
 
 .error-state i {
-    color: var(--mm-accent);
+    color: var(--mm-primary);
 }
 
 .empty-state h5 {
@@ -321,14 +321,14 @@
     justify-content: space-between;
     align-items: center;
     padding: 15px 20px;
-    background: var(--mm-accent);
+    background: var(--mm-primary);
     color: var(--mm-text);
     cursor: pointer;
     transition: background 0.3s ease;
 }
 
 .resolution-header:hover {
-    background: var(--mm-accent);
+    background: var(--mm-primary);
 }
 
 .resolution-info {

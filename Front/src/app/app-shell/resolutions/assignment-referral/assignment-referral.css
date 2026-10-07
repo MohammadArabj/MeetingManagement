@@ -238,7 +238,7 @@
 }
 
 .tree-view-card .card-header {
-    background: linear-gradient(135deg, var(--mm-accent) 0%, var(--mm-accent) 100%);
+    background: linear-gradient(135deg, var(--mm-primary) 0%, var(--mm-primary-2) 100%);
     border: none;
     padding: 20px 25px;
 }

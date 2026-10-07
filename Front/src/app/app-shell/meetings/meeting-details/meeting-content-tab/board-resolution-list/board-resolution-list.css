@@ -1482,7 +1482,7 @@
        align-items: center;
        gap: 8px;
        padding: 10px 20px;
-       background: linear-gradient(135deg, var(--mm-accent) 0%, var(--mm-accent-hover) 100%);
+       background: linear-gradient(135deg, var(--mm-primary) 0%, var(--mm-primary-hover) 100%);
        border: none;
        border-radius: 8px;
        color: var(--mm-ink);
@@ -1494,9 +1494,9 @@
    }
 
    .action-btn.report:hover {
-       background: linear-gradient(135deg, var(--mm-accent-hover) 0%, #d4a400 100%);
+       background: linear-gradient(135deg, var(--mm-primary-hover) 0%, #d4a400 100%);
        transform: translateY(-2px);
-       box-shadow: 0 4px 16px rgba(var(--mm-accent-rgb), 0.4);
+       box-shadow: 0 4px 16px rgba(var(--mm-primary-rgb), 0.4);
    }
 
    .action-btn.report:active {
@@ -1514,7 +1514,7 @@
        justify-content: center;
        width: 32px;
        height: 32px;
-       background: linear-gradient(135deg, var(--mm-accent) 0%, var(--mm-accent-hover) 100%);
+       background: linear-gradient(135deg, var(--mm-primary) 0%, var(--mm-primary-hover) 100%);
        border: none;
        border-radius: 8px;
        color: var(--mm-ink);
@@ -1524,9 +1524,9 @@
    }
 
    .action-btn-sm.report:hover {
-       background: linear-gradient(135deg, var(--mm-accent-hover) 0%, #d4a400 100%);
+       background: linear-gradient(135deg, var(--mm-primary-hover) 0%, #d4a400 100%);
        transform: translateY(-2px);
-       box-shadow: 0 4px 12px rgba(var(--mm-accent-rgb), 0.4);
+       box-shadow: 0 4px 12px rgba(var(--mm-primary-rgb), 0.4);
    }
 
    /* دکمه outline طلایی */
@@ -1560,8 +1560,8 @@
        min-width: 20px;
        height: 20px;
        padding: 0 6px;
-       background: var(--mm-accent-50);
-       border: 1px solid var(--mm-accent);
+       background: var(--mm-primary-50);
+       border: 1px solid var(--mm-primary);
        border-radius: 10px;
        font-size: 11px;
        font-weight: 700;
@@ -1576,17 +1576,17 @@
        justify-content: center;
        width: 28px;
        height: 28px;
-       background: rgba(var(--mm-accent-rgb), 0.15);
-       border: 1px solid var(--mm-accent);
+       background: rgba(var(--mm-primary-rgb), 0.15);
+       border: 1px solid var(--mm-primary);
        border-radius: 6px;
-       color: var(--mm-accent);
+       color: var(--mm-primary);
        font-size: 12px;
        cursor: pointer;
        transition: all 0.3s ease;
    }
 
    .report-icon-btn:hover {
-       background: var(--mm-accent);
+       background: var(--mm-primary);
        color: var(--mm-ink);
    }
 
