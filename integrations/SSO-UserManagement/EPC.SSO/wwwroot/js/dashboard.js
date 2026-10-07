@@ -2,7 +2,7 @@
    EPC Portal — Dashboard  (dashboard.js)
    وابستگی‌ها: site-header.js، announcement-common.js (escHtml/escAttr/ANN_TYPE/openAnnouncementDetail)،
                jalali-picker.js، page-tour.js، bootstrap (vendor.min.js)
-   همه‌ی داده‌ها با یک درخواست (/Grants/GetDashboardData) و به‌صورت موازی سمت سرور گرفته می‌شوند.
+   هر ویجت مستقل بارگذاری و به محض آماده شدن نمایش داده می‌شود (داده‌ی نشست قبلی بی‌درنگ نمایش داده می‌شود).
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
     'use strict';
@@ -499,20 +499,49 @@
         }, 500);
     });
 
-    load();
-    async function load() {
+    /*  بارگذاری تدریجی
+        ─────────────────────────────────────────────────────────────────────
+        • آخرین داده‌ی دیده‌شده (sessionStorage، فقط برای همین کاربر و همین نشست مرورگر) بی‌درنگ نمایش داده می‌شود.
+        • هر ویجت درخواست مستقل دارد و به محض رسیدن پاسخش به‌روز می‌شود؛ قبلاً کل داشبورد منتظر کندترین API
+          (تا ۱۰ ثانیه) می‌ماند.
+        • خطای یک ویجت فقط همان ویجت را «تلاش دوباره» نشان می‌دهد و داده‌ی قبلی (اگر بود) حفظ می‌شود. */
+    const CACHE_PREFIX = `epc-dash:${personnelCode}:`;
+    const readCache = key => { try { return JSON.parse(sessionStorage.getItem(CACHE_PREFIX + key) || 'null'); } catch { return null; } };
+    const writeCache = (key, value) => { try { sessionStorage.setItem(CACHE_PREFIX + key, JSON.stringify(value)); } catch { /* حجم/حالت خصوصی */ } };
+
+    const WIDGETS = [
+        { key: 'meetings', url: '/Grants/GetMeetings', render: renderMeetings },
+        { key: 'announcements', url: '/Grants/GetAnnouncements', render: renderAnnouncements, after: startForceRead },
+        { key: 'surveys', url: '/Grants/GetSurveys', render: renderSurveys },
+        { key: 'windowsApps', url: '/Grants/GetWindowsApps', render: renderWindowsApps },
+        { key: 'otherPrograms', url: '/Grants/GetOtherPrograms', render: renderOtherPrograms },
+        { key: 'suggestions', url: '/Grants/GetSuggestions', render: renderSuggesters },
+    ];
+
+    function paint(widget, data) {
+        try { widget.render(data); } catch (e) { console.error('[dashboard]', widget.key, e); }
+        $$('.p-scroll').forEach(el => { if (!el.dataset.watched) { el.dataset.watched = '1'; watchScroll(el); } });
+    }
+
+    async function loadWidget(widget) {
+        const cached = readCache(widget.key);
         try {
-            const d = await getJson('/Grants/GetDashboardData');
-            renderMeetings(d.meetings);
-            renderAnnouncements(d.announcements);
-            renderSurveys(d.surveys);
-            renderSuggesters(d.suggestions);
-            renderWindowsApps(d.windowsApps);
-            renderOtherPrograms(d.otherPrograms);
-            startForceRead(d.announcements);
-            $$('.p-scroll').forEach(watchScroll);
+            const data = await getJson(widget.url);
+            if (data === null && cached) return; // منبع در دسترس نیست؛ همان داده‌ی قبلی می‌ماند
+            if (data !== null) writeCache(widget.key, data);
+            paint(widget, data);
+            if (data !== null) widget.after?.(data);
         } catch {
-            renderMeetings(null); renderAnnouncements(null); renderSurveys(null); renderSuggesters(null);
+            if (!cached) paint(widget, null);
         }
     }
+
+    function load() {
+        // نمایش فوری از نشست قبلی (بدون انتظار برای شبکه)
+        WIDGETS.forEach(w => { const c = readCache(w.key); if (c) paint(w, c); });
+        // همه با هم و مستقل
+        WIDGETS.forEach(loadWidget);
+    }
+
+    load();
 })();

@@ -1,33 +1,1480 @@
+diff --git a/EPC.SSO/Infrastructure/AppCache.cs b/EPC.SSO/Infrastructure/AppCache.cs
+index b857f70..dcc3049 100644
+--- a/EPC.SSO/Infrastructure/AppCache.cs
++++ b/EPC.SSO/Infrastructure/AppCache.cs
+@@ -1,3 +1,4 @@
++using System.Collections.Concurrent;
+ using Microsoft.Extensions.Caching.Memory;
+ 
+ namespace EPC.SSO.Infrastructure;
+@@ -5,7 +6,9 @@ namespace EPC.SSO.Infrastructure;
+ /// <summary>
+ /// کش یکپارچه‌ی SSO.
+ ///
+-/// مشکلاتی که این کلاس حل می‌کند (همه در کد قبلی وجود داشتند):
++/// مشکلاتی که این کلاس حل می‌کند:
++///  ۰) Stale-while-revalidate: پس از تازگی، داده‌ی قبلی فوراً برگردانده و در پس‌زمینه تازه می‌شود؛
++///     کاربر هرگز منتظر API کند نمی‌ماند مگر بار اولی که داده‌ای وجود ندارد.
+ ///  ۱) Cache Stampede: وقتی کش منقضی می‌شد، صدها درخواست هم‌زمان همگی به API پشتی
+ ///     حمله می‌کردند. اینجا برای هر کلید فقط «یک» درخواست به منبع می‌رود و بقیه منتظر
+ ///     همان نتیجه می‌مانند.
+@@ -39,9 +42,15 @@ public sealed class AppCache(IMemoryCache memoryCache, ILogger<AppCache> logger)
+ {
+     private static readonly TimeSpan NegativeCacheDuration = TimeSpan.FromSeconds(15);
+ 
+-    // قفل‌های Striped: تعداد ثابت، بدون نشت حافظه (برخلاف ConcurrentDictionary<string, SemaphoreSlim>
+-    // که برای هر کلید یک Semaphore می‌سازد و هرگز پاک نمی‌شود).
+-    private static readonly SemaphoreSlim[] Locks = CreateLocks(512);
++    /// <summary>حداکثر زمان یک بارگذاری از منبع؛ مستقل از لغو درخواست کاربری که آن را شروع کرده</summary>
++    private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(20);
++
++    /// <summary>
++    /// بارگذاری‌های در حال اجرا (single-flight): برای هر کلید حداکثر یک درخواست به منبع.
++    /// پس از پایان حذف می‌شود؛ برخلاف قفل‌های striped قبلی، کلیدهای نامرتبط هرگز منتظر هم نمی‌مانند
++    /// و قفلی در طول فراخوانی شبکه نگه داشته نمی‌شود.
++    /// </summary>
++    private readonly ConcurrentDictionary<string, Lazy<Task<object?>>> _inflight = new();
+ 
+     private sealed record Entry<T>(T Value, DateTime FreshUntilUtc);
+     private sealed record NegativeEntry;
+@@ -53,32 +62,45 @@ public sealed class AppCache(IMemoryCache memoryCache, ILogger<AppCache> logger)
+         TimeSpan? staleFor = null,
+         CancellationToken cancellationToken = default) where T : class
+     {
+-        if (memoryCache.TryGetValue(key, out Entry<T>? entry) && entry is not null && entry.FreshUntilUtc > DateTime.UtcNow)
++        if (memoryCache.TryGetValue(key, out Entry<T>? entry) && entry is not null)
++        {
++            if (entry.FreshUntilUtc > DateTime.UtcNow)
++                return entry.Value;
++
++            // Stale-while-revalidate: داده‌ی قبلی بی‌درنگ برگردانده می‌شود و به‌روزرسانی در پس‌زمینه انجام می‌شود.
++            // (قبلاً هر ۲ تا ۳ دقیقه یک کاربر باید منتظر کندترین API می‌ماند.)
++            _ = LoadAsync(key, factory, freshFor, staleFor);
+             return entry.Value;
++        }
+ 
+-        if (entry is null && memoryCache.TryGetValue(NegativeKey(key), out NegativeEntry? _))
++        if (memoryCache.TryGetValue(NegativeKey(key), out NegativeEntry? _))
+             return null;
+ 
+-        var gate = Locks[(key.GetHashCode() & int.MaxValue) % Locks.Length];
+-        await gate.WaitAsync(cancellationToken);
++        // داده‌ای نیست: منتظر بارگذاری (مشترک با درخواست‌های همزمان دیگر) می‌مانیم
++        return await LoadAsync(key, factory, freshFor, staleFor).WaitAsync(cancellationToken);
++    }
++
++    private async Task<T?> LoadAsync<T>(string key, Func<CancellationToken, Task<T?>> factory, TimeSpan freshFor, TimeSpan? staleFor)
++        where T : class
++    {
++        var job = _inflight.GetOrAdd(key, k => new Lazy<Task<object?>>(() => RunFactoryAsync(k, factory, freshFor, staleFor)));
++        return (T?)await job.Value;
++    }
++
++    private async Task<object?> RunFactoryAsync<T>(string key, Func<CancellationToken, Task<T?>> factory, TimeSpan freshFor, TimeSpan? staleFor)
++        where T : class
++    {
+         try
+         {
+-            // Double-check: شاید درخواست دیگری همین الان پرش کرده باشد.
+-            if (memoryCache.TryGetValue(key, out entry) && entry is not null && entry.FreshUntilUtc > DateTime.UtcNow)
+-                return entry.Value;
+-
++            using var timeout = new CancellationTokenSource(LoadTimeout);
+             T? value = null;
+             try
+             {
+-                value = await factory(cancellationToken);
+-            }
+-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+-            {
+-                throw;
++                value = await factory(timeout.Token);
+             }
+             catch (Exception ex)
+             {
+-                logger.LogWarning(ex, "[AppCache] factory برای کلید {Key} خطا داد", key);
++                logger.LogWarning(ex, "[AppCache] بارگذاری کلید {Key} خطا داد", key);
+             }
+ 
+             if (value is not null)
+@@ -87,10 +109,11 @@ public sealed class AppCache(IMemoryCache memoryCache, ILogger<AppCache> logger)
+                 return value;
+             }
+ 
+-            if (entry is not null)
++            // منبع در دسترس نیست: نسخه‌ی قدیمی (اگر هست) دست‌نخورده می‌ماند؛ وگرنه کوتاه Negative-Cache
++            if (memoryCache.TryGetValue(key, out Entry<T>? stale) && stale is not null)
+             {
+-                logger.LogInformation("[AppCache] منبع در دسترس نیست؛ نسخه‌ی قدیمی {Key} برگردانده شد", key);
+-                return entry.Value;
++                logger.LogInformation("[AppCache] منبع در دسترس نیست؛ نسخه‌ی قدیمی {Key} حفظ شد", key);
++                return stale.Value;
+             }
+ 
+             memoryCache.Set(NegativeKey(key), new NegativeEntry(), new MemoryCacheEntryOptions
+@@ -102,7 +125,7 @@ public sealed class AppCache(IMemoryCache memoryCache, ILogger<AppCache> logger)
+         }
+         finally
+         {
+-            gate.Release();
++            _inflight.TryRemove(key, out _);
+         }
+     }
+ 
+@@ -136,11 +159,4 @@ public sealed class AppCache(IMemoryCache memoryCache, ILogger<AppCache> logger)
+     }
+ 
+     private static string NegativeKey(string key) => "neg:" + key;
+-
+-    private static SemaphoreSlim[] CreateLocks(int count)
+-    {
+-        var locks = new SemaphoreSlim[count];
+-        for (var i = 0; i < count; i++) locks[i] = new SemaphoreSlim(1, 1);
+-        return locks;
+-    }
+ }
+diff --git a/EPC.SSO/Quickstart/Account/AccountController.cs b/EPC.SSO/Quickstart/Account/AccountController.cs
+index 2f6ed78..30f3710 100644
+--- a/EPC.SSO/Quickstart/Account/AccountController.cs
++++ b/EPC.SSO/Quickstart/Account/AccountController.cs
+@@ -51,6 +51,7 @@ public class AccountController(
+     SmsApiService smsApiService,
+     IMemoryCache memoryCache,
+     IConfiguration configuration,
++    DashboardPrefetcher dashboardPrefetcher,
+     ILogger<AccountController> logger) : Controller
+ {
+     private const string CaptchaSessionKey = "login.captcha";
+@@ -460,6 +461,10 @@ public class AccountController(
+             DisplayName = user.PersonnelCode,
+             AdditionalClaims = claims
+         }, null);
++
++        // داده‌های داشبورد در پس‌زمینه آماده می‌شوند تا کاربر پس از ورود منتظر APIها نماند
++        dashboardPrefetcher.Prefetch(user.Guid, activatedPosition,
++            portalIdentity?.IsSuperAdmin ?? user.IsSuperAdmin, portalIdentity?.PersonnelCode ?? user.PersonnelCode);
+     }
+ 
+     private IActionResult ResolveRedirect(AuthorizationRequest? authContext, string? returnUrl)
 diff --git a/EPC.SSO/Quickstart/Grants/GrantsController.cs b/EPC.SSO/Quickstart/Grants/GrantsController.cs
-index fb94d73..5f18441 100644
+index fb94d73..0f009ee 100644
 --- a/EPC.SSO/Quickstart/Grants/GrantsController.cs
 +++ b/EPC.SSO/Quickstart/Grants/GrantsController.cs
-@@ -49,6 +49,7 @@ public class GrantsController(
-     IAppCache cache,
-     IIpAccessRestrictionService ipAccessRestrictionService,
-     ExternalApiClientService externalApiClient,
-+    EPC.SSO.Realtime.PortalCacheVersions cacheVersions,
-     ILogger<GrantsController> logger)
-     : Controller
- {
-@@ -135,7 +136,7 @@ public class GrantsController(
-         var userGuid = CurrentUserGuid;
-         var positionGuid = await GetSelectedPositionGuidAsync();
-         var meetings = await cache.GetOrCreateAsync(
+@@ -1,444 +1,437 @@
+-using System.Globalization;
+-using System.Security.Claims;
+-using System.Text.Json;
+-using Epc.Application.Setting;
+-using EPC.SSO.Facades;
+-using EPC.SSO.Infrastructure;
+-using EPC.SSO.Services;
+-using EPC.SSO.SettingModels;
+-using IdentityServer8;
+-using IdentityServer8.Events;
+-using IdentityServer8.Extensions;
+-using IdentityServer8.Services;
+-using Microsoft.AspNetCore.Authentication;
+-using Microsoft.AspNetCore.Authorization;
+-using Microsoft.AspNetCore.Mvc;
+-using Microsoft.Net.Http.Headers;
+-using UserManagement.Domain.PermissionAgg.Services;
+-using UserManagement.Infrastructure.Query.Contract.UserPortal;
+-
+-namespace EPC.SSO.Quickstart.Grants;
+-
+-/// <summary>
+-/// داشبورد پورتال.
+-///
+-/// اصلاحات:
+-///  • همه‌ی کش‌ها از IAppCache (ضد Stampede + بازگشت به داده‌ی قبلی هنگام خطا).
+-///  • خطای API دیگر به‌صورت «لیست خالی» برای چند دقیقه کش نمی‌شود.
+-///  • 🔴 جزئیات اطلاعیه از endpoint اختصاصی کاربر (GetForUser) خوانده می‌شود، نه GetForEdit.
+-///  • 🔴 IP کاربر از Connection.RemoteIpAddress (که ForwardedHeaders فقط برای پراکسی‌های مورد اعتماد
+-///    اصلاحش می‌کند) — قبلاً X-Forwarded-For بدون بررسی پذیرفته می‌شد و محدودیت IP قابل جعل بود.
+-///  • 🔴 ChangePosition محافظ AntiForgery دارد.
+-///  • فایل‌های داشبورد از کش دیسکی محلی سرو می‌شوند.
+-/// </summary>
+-[SecurityHeaders]
+-[Authorize]
+-public class GrantsController(
+-    IIdentityServerInteractionService interaction,
+-    IEventService events,
+-    IConfiguration configuration,
+-    WindowsProgramService windowsProgramService,
+-    ISettingService settingService,
+-    SurveyApiService surveyApiService,
+-    IUserPortalQueryFacade userPortalQueryFacade,
+-    MeetingApiService meetingApiService,
+-    AnnouncementApiService announcementApiService,
+-    AnnouncementFileCache fileCache,
+-    SuggestionService suggestionService,
+-    OtherProgramService otherProgramService,
+-    IAppCache cache,
+-    IIpAccessRestrictionService ipAccessRestrictionService,
+-    ExternalApiClientService externalApiClient,
+-    ILogger<GrantsController> logger)
+-    : Controller
+-{
+-    private const string UserProfilePermissionCode = "SSO.ViewUserProfile";
+-    private static readonly TimeSpan StaleWindow = TimeSpan.FromMinutes(30);
+-
+-    // ════════════════════════════════════════════════════════════════════════
+-    //  INDEX
+-    // ════════════════════════════════════════════════════════════════════════
+-    public async Task<IActionResult> Index()
+-    {
+-        var model = await BuildViewModelAsync();
+-
+-        ViewData["PositionsJson"] = JsonSerializer.Serialize(
+-            model.Positions.Select(p => new { guid = p.Guid, title = p.Title, isDelegated = p.IsDelegated }));
+-        ViewData["SelectedPositionGuid"] = model.SelectedPositionGuid?.ToString() ?? string.Empty;
+-        ViewData["CanViewUserProfiles"] = await CanViewUserProfilesAsync();
+-
+-        return View("Index", model);
+-    }
+-
+-    private async Task<GrantsViewModel> BuildViewModelAsync()
+-    {
+-        var userGuid = CurrentUserGuid;
+-        var positionGuid = SelectedPositionFromClaim;
+-        var isSuperAdmin = IsSuperAdmin;
+-
+-        var portal = await cache.GetOrCreateAsync(
+-            $"portal:dashboard:{userGuid:N}:{positionGuid:N}",
+-            _ => userPortalQueryFacade.GetDashboard(new PortalDashboardSearchModel
+-            {
+-                UserGuid = userGuid,
+-                SelectedPositionGuid = positionGuid,
+-                IsSuperAdmin = isSuperAdmin
+-            })!,
+-            TimeSpan.FromMinutes(2), StaleWindow, HttpContext.RequestAborted);
+-
+-        return new GrantsViewModel
+-        {
+-            Grants = (portal?.Systems ?? []).Select(s => new GrantViewModel
+-            {
+-                ClientId = s.Guid.ToString(),
+-                ClientName = s.Title,
+-                ClientLogoUrl = s.Image,
+-                ClientUrl = s.Url ?? string.Empty,
+-                Description = s.Description ?? string.Empty
+-            }).ToList(),
+-            Positions = (portal?.Positions ?? []).Select(p => new PositionModel
+-            {
+-                Guid = p.Guid,
+-                Title = p.Title,
+-                IsDelegated = p.IsDelegated,
+-                DelegationId = p.DelegationId
+-            }).ToList(),
+-            SelectedPositionGuid = portal?.EffectivePositionGuid ?? positionGuid,
+-            PersonnelCode = User.FindFirst("PersonnelCode")?.Value ?? "0"
+-        };
+-    }
+-
+-    // ════════════════════════════════════════════════════════════════════════
+-    //  ویجت‌های داشبورد (AJAX)
+-    // ════════════════════════════════════════════════════════════════════════
+-    [HttpGet]
+-    public async Task<IActionResult> GetAnnouncements()
+-    {
+-        var list = await GetDashboardAnnouncementsAsync(CurrentUserGuid);
+-        return Json(list ?? []);
+-    }
+-
+-    [HttpGet]
+-    public async Task<IActionResult> GetSurveys()
+-    {
+-        var userGuid = CurrentUserGuid;
+-        var surveys = await cache.GetOrCreateAsync(
+-            $"surveys:{userGuid:N}",
+-            ct => surveyApiService.GetMySurveysAsync(userGuid, ct),
+-            TimeSpan.FromMinutes(3), StaleWindow, HttpContext.RequestAborted);
+-        return Json(surveys ?? []);
+-    }
+-
+-    [HttpGet]
+-    public async Task<IActionResult> GetMeetings()
+-    {
+-        var userGuid = CurrentUserGuid;
+-        var positionGuid = await GetSelectedPositionGuidAsync();
+-        var meetings = await cache.GetOrCreateAsync(
 -            $"meetings:{userGuid:N}:{positionGuid:N}",
-+            $"meetings:{userGuid:N}:{positionGuid:N}:{cacheVersions.Of(userGuid)}",
-             ct => meetingApiService.GetMyMeetingsAsync(userGuid, positionGuid, ct),
-             TimeSpan.FromMinutes(3), StaleWindow, HttpContext.RequestAborted);
-         return Json(meetings ?? []);
-@@ -172,7 +173,7 @@ public class GrantsController(
-         var announcementsTask = Safe(() => GetDashboardAnnouncementsAsync(userGuid));
-         var surveysTask = Safe(() => cache.GetOrCreateAsync($"surveys:{userGuid:N}",
-             c => surveyApiService.GetMySurveysAsync(userGuid, c), TimeSpan.FromMinutes(3), StaleWindow, ct));
+-            ct => meetingApiService.GetMyMeetingsAsync(userGuid, positionGuid, ct),
+-            TimeSpan.FromMinutes(3), StaleWindow, HttpContext.RequestAborted);
+-        return Json(meetings ?? []);
+-    }
+-
+-    [HttpGet]
+-    public async Task<IActionResult> GetSuggestions()
+-        => Json(await suggestionService.GetTopSuggestionsAsync(5));
+-
+-    [HttpGet]
+-    public async Task<IActionResult> GetWindowsApps()
+-    {
+-        var personnelCode = User.FindFirst("PersonnelCode")?.Value;
+-        if (string.IsNullOrWhiteSpace(personnelCode)) return Json(Array.Empty<WindowsAppViewModel>());
+-        return Json(await windowsProgramService.GetAccessibleAppsAsync(personnelCode));
+-    }
+-
+-    [HttpGet]
+-    public async Task<IActionResult> GetOtherPrograms()
+-        => Json(await otherProgramService.GetAllAsync());
+-
+-    /// <summary>
+-    /// همه‌ی ویجت‌ها در یک درخواست و به‌صورت موازی (هر بخش مستقل؛ خطای یکی بقیه را خراب نمی‌کند).
+-    /// صفحه‌ی جدید داشبورد از این endpoint استفاده می‌کند.
+-    /// </summary>
+-    [HttpGet]
+-    public async Task<IActionResult> GetDashboardData()
+-    {
+-        var userGuid = CurrentUserGuid;
+-        var ct = HttpContext.RequestAborted;
+-        var personnelCode = User.FindFirst("PersonnelCode")?.Value;
+-        var positionGuid = await GetSelectedPositionGuidAsync();
+-
+-        var announcementsTask = Safe(() => GetDashboardAnnouncementsAsync(userGuid));
+-        var surveysTask = Safe(() => cache.GetOrCreateAsync($"surveys:{userGuid:N}",
+-            c => surveyApiService.GetMySurveysAsync(userGuid, c), TimeSpan.FromMinutes(3), StaleWindow, ct));
 -        var meetingsTask = Safe(() => cache.GetOrCreateAsync($"meetings:{userGuid:N}:{positionGuid:N}",
-+        var meetingsTask = Safe(() => cache.GetOrCreateAsync($"meetings:{userGuid:N}:{positionGuid:N}:{cacheVersions.Of(userGuid)}",
-             c => meetingApiService.GetMyMeetingsAsync(userGuid, positionGuid, c), TimeSpan.FromMinutes(3), StaleWindow, ct));
-         var winAppsTask = Safe(async () => string.IsNullOrWhiteSpace(personnelCode)
-             ? []
+-            c => meetingApiService.GetMyMeetingsAsync(userGuid, positionGuid, c), TimeSpan.FromMinutes(3), StaleWindow, ct));
+-        var winAppsTask = Safe(async () => string.IsNullOrWhiteSpace(personnelCode)
+-            ? []
+-            : await windowsProgramService.GetAccessibleAppsAsync(personnelCode));
+-        var otherTask = Safe(() => otherProgramService.GetAllAsync()!);
+-        var suggestionsTask = Safe(() => suggestionService.GetTopSuggestionsAsync(5)!);
+-
+-        await Task.WhenAll(announcementsTask, surveysTask, meetingsTask, winAppsTask, otherTask, suggestionsTask);
+-
+-        return Json(new
+-        {
+-            announcements = await announcementsTask,
+-            surveys = await surveysTask,
+-            meetings = await meetingsTask,
+-            windowsApps = await winAppsTask,
+-            otherPrograms = await otherTask,
+-            suggestions = await suggestionsTask
+-        });
+-    }
+-
+-    /// <summary>
+-    /// عیب‌یابی اتصال SSO به APIها (فقط سوپرادمین): /Grants/Diagnostics
+-    /// برای هر API نشان می‌دهد توکن گرفته شد یا نه، Issuer توکن چیست، کد پاسخ، زمان و متن خطا.
+-    /// </summary>
+-    [HttpGet]
+-    public async Task<IActionResult> Diagnostics()
+-    {
+-        if (!IsSuperAdmin) return Forbid();
+-
+-        var userGuid = CurrentUserGuid;
+-        var positionGuid = await GetSelectedPositionGuidAsync();
+-        var ct = HttpContext.RequestAborted;
+-        ExternalApiConfiguration Cfg(string name) => configuration.GetSection($"ExternalApis:{name}").Get<ExternalApiConfiguration>() ?? new();
+-
+-        var probes = await Task.WhenAll(
+-            externalApiClient.ProbeAsync("AnnouncementApi", Cfg("AnnouncementApi"), HttpMethod.Post, "/api/Announcement/GetForDashboard", new { UserGuid = userGuid, Count = 5 }, ct),
+-            externalApiClient.ProbeAsync("MeetingApi", Cfg("MeetingApi"), HttpMethod.Get, $"/api/Meeting/GetFutureMeetings?userGuid={userGuid}&positionGuid={positionGuid}", null, ct),
+-            externalApiClient.ProbeAsync("SurveyApi", Cfg("SurveyApi"), HttpMethod.Get, $"/api/Survey/GetActiveSurveys?userGuid={userGuid}", null, ct),
+-            externalApiClient.ProbeAsync("FileManagementApi", Cfg("FileManagementApi"), HttpMethod.Post, "/api/Attachment/GetMetas", Array.Empty<Guid>(), ct));
+-
+-        return Json(new
+-        {
+-            identityServer = new
+-            {
+-                authority = configuration["IdentityServer:Authority"],
+-                issuerUri = configuration["IdentityServer:IssuerUri"],
+-                internalAuthority = configuration["IdentityServer:InternalAuthority"]
+-            },
+-            probes
+-        });
+-    }
+-
+-    // ════════════════════════════════════════════════════════════════════════
+-    //  اطلاعیه‌ها
+-    // ════════════════════════════════════════════════════════════════════════
+-    [HttpGet]
+-    public async Task<IActionResult> GetAnnouncementDetail(Guid guid)
+-    {
+-        var userGuid = CurrentUserGuid;
+-        var detail = await announcementApiService.GetDetailForUserAsync(guid, userGuid, HttpContext.RequestAborted);
+-        if (detail is null)
+-            return Json(new { success = false, message = "اطلاعیه یافت نشد." });
+-
+-        var files = await ResolveFilesAsync(detail.Files);
+-
+-        // ثبت خودکار خواندن فقط یک‌بار (قبلاً IsRead همیشه false بود و هر بار ثبت می‌شد)
+-        if (!detail.RequireReadConfirmation && !detail.IsRead)
+-        {
+-            if (await announcementApiService.ConfirmReadAsync(guid, userGuid, ClientIp, HttpContext.RequestAborted))
+-            {
+-                cache.Remove(AnnouncementsCacheKey(userGuid));
+-                detail.IsRead = true;
+-            }
+-        }
+-
+-        return Json(new
+-        {
+-            success = true,
+-            data = new
+-            {
+-                detail.Guid,
+-                detail.Title,
+-                detail.Body,
+-                detail.Type,
+-                detail.TypeLabel,
+-                detail.Date,
+-                detail.Priority,
+-                detail.PriorityLabel,
+-                detail.RequireReadConfirmation,
+-                detail.IsRead,
+-                Files = files
+-            }
+-        });
+-    }
+-
+-    [HttpPost]
+-    [ValidateAntiForgeryToken]
+-    public async Task<IActionResult> ConfirmAnnouncementRead([FromBody] ConfirmAnnouncementReadModel model)
+-    {
+-        var userGuid = CurrentUserGuid;
+-        var ok = await announcementApiService.ConfirmReadAsync(model.AnnouncementGuid, userGuid, ClientIp, HttpContext.RequestAborted);
+-        cache.Remove(AnnouncementsCacheKey(userGuid));
+-        return ok ? Json(new { success = true }) : StatusCode(StatusCodes.Status502BadGateway, new { success = false });
+-    }
+-
+-    [HttpGet]
+-    public IActionResult AnnouncementArchive() => View();
+-
+-    [HttpGet]
+-    public async Task<IActionResult> GetAnnouncementsArchive(int page = 1, int pageSize = 10, string? title = null, string? fromDate = null, string? toDate = null)
+-    {
+-        if (page < 1) page = 1;
+-        if (pageSize is < 1 or > 50) pageSize = 10;
+-
+-        DateTime? from = null, to = null;
+-        var pc = new PersianCalendar();
+-        if (TryParseJalaliDate(fromDate, pc, out var f)) from = f;
+-        if (TryParseJalaliDate(toDate, pc, out var t)) to = t.Date.AddDays(1).AddTicks(-1);
+-        if (from > to) (from, to) = (to, from);
+-
+-        var result = await announcementApiService.GetDashboardAnnouncementsArchiveAsync(
+-            CurrentUserGuid, page, pageSize, title?.Trim(), from, to, HttpContext.RequestAborted);
+-
+-        return Json(result ?? new AnnouncementDashboardPagedDto { Page = page, PageSize = pageSize });
+-    }
+-
+-    [HttpGet]
+-    public async Task<IActionResult> FileProxy(Guid guid, CancellationToken cancellationToken)
+-    {
+-        if (guid == Guid.Empty) return NotFound();
+-
+-        var userGuid = CurrentUserGuid;
+-        // فقط فایل‌های اطلاعیه‌ای که همین کاربر جزئیاتش را دیده است
+-        var allowed = cache.TryGet<HashSet<Guid>>(UserAllowedFilesKey(userGuid), out var set) && set!.Contains(guid);
+-        if (!allowed) return Forbid();
+-
+-        if (!fileCache.TryGet(guid, out var cached))
+-        {
+-            var meta = cache.TryGet<FileMeta>($"filemeta:{guid:N}", out var m) ? m : null;
+-            if (meta is not null)
+-                cached = await fileCache.GetOrDownloadAsync(guid, meta, cancellationToken);
+-        }
+-
+-        if (cached is not null)
+-        {
+-            Response.Headers[HeaderNames.CacheControl] = "private, max-age=604800, immutable";
+-            Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
+-            Response.Headers[HeaderNames.ContentDisposition] = $"inline; filename*=UTF-8''{Uri.EscapeDataString(cached.FileName)}";
+-            return PhysicalFile(cached.PhysicalPath, cached.ContentType, null, new EntityTagHeaderValue(cached.ETag), enableRangeProcessing: true);
+-        }
+-
+-        using var upstream = await announcementApiService.OpenFileAsync(guid, Request.Headers.Range.FirstOrDefault(), cancellationToken);
+-        if (upstream is null) return StatusCode(StatusCodes.Status502BadGateway);
+-        if (!upstream.IsSuccessStatusCode) return StatusCode((int)upstream.StatusCode);
+-
+-        Response.StatusCode = (int)upstream.StatusCode;
+-        Response.ContentType = upstream.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+-        if (upstream.Content.Headers.ContentLength is { } len) Response.ContentLength = len;
+-        if (upstream.Content.Headers.ContentRange is not null) Response.Headers[HeaderNames.ContentRange] = upstream.Content.Headers.ContentRange.ToString();
+-        if (upstream.Content.Headers.ContentDisposition is not null) Response.Headers[HeaderNames.ContentDisposition] = upstream.Content.Headers.ContentDisposition.ToString();
+-        Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
+-
+-        await using var stream = await upstream.Content.ReadAsStreamAsync(cancellationToken);
+-        await stream.CopyToAsync(Response.Body, cancellationToken);
+-        return new EmptyResult();
+-    }
+-
+-    [HttpGet]
+-    public async Task<IActionResult> AppIcon(int id)
+-    {
+-        var (bytes, contentType) = await windowsProgramService.GetIconAsync(id);
+-        if (bytes is null || bytes.Length == 0) return NotFound();
+-
+-        Response.Headers[HeaderNames.CacheControl] = "private, max-age=86400";
+-        return File(bytes, contentType);
+-    }
+-
+-    // ════════════════════════════════════════════════════════════════════════
+-    //  سمت، سوابق ورود، پروفایل کاربران
+-    // ════════════════════════════════════════════════════════════════════════
+-    [HttpPost]
+-    [ValidateAntiForgeryToken]
+-    public async Task<IActionResult> ChangePosition([FromBody] SelectPositionModel model)
+-    {
+-        var selection = await userPortalQueryFacade.GetPositionSelection(new PortalPositionSelectionSearchModel
+-        {
+-            UserGuid = CurrentUserGuid,
+-            PositionGuid = model.PositionGuid
+-        });
+-
+-        if (!selection.IsAllowed)
+-            return Json(new { success = false, message = "این سمت برای کاربر جاری مجاز نیست." });
+-
+-        if (User.Identity is not ClaimsIdentity identity)
+-            return Json(new { success = false, message = "نشست کاربر نامعتبر است." });
+-
+-        foreach (var type in new[] { "ActivatedPosition", "IsDelegate", "DelegationId" })
+-        {
+-            var existing = identity.FindFirst(type);
+-            if (existing is not null) identity.RemoveClaim(existing);
+-        }
+-
+-        identity.AddClaim(new Claim("ActivatedPosition", model.PositionGuid.ToString()));
+-        identity.AddClaim(new Claim("IsDelegate", selection.IsDelegated.ToString().ToLowerInvariant()));
+-        identity.AddClaim(new Claim("DelegationId", selection.DelegationId?.ToString() ?? string.Empty));
+-
+-        await HttpContext.SignInAsync(new ClaimsPrincipal(identity));
+-        return Json(new { success = true, message = "سمت با موفقیت تغییر یافت" });
+-    }
+-
+-    [HttpPost]
+-    [ValidateAntiForgeryToken]
+-    public async Task<IActionResult> Revoke(string clientId)
+-    {
+-        await interaction.RevokeUserConsentAsync(clientId);
+-        await events.RaiseAsync(new GrantsRevokedEvent(User.GetSubjectId(), clientId));
+-        return RedirectToAction("Index");
+-    }
+-
+-    [HttpGet]
+-    public async Task<IActionResult> GetSessions(string? fromDate = null, string? toDate = null)
+-    {
+-        var pc = new PersianCalendar();
+-        var from = TryParseJalaliDate(fromDate, pc, out var f) ? f : DateTime.Now.Date.AddMonths(-1);
+-        var to = TryParseJalaliDate(toDate, pc, out var t) ? t.Date.AddDays(1).AddTicks(-1) : DateTime.Now;
+-        if (from > to) (from, to) = (to, from);
+-
+-        var sessions = await userPortalQueryFacade.GetSessions(new PortalUserSessionSearchModel
+-        {
+-            UserGuid = CurrentUserGuid,
+-            FromDate = from,
+-            ToDate = to,
+-            Take = 500
+-        });
+-
+-        return Json(new { items = sessions, fromDate = ToJalali(from), toDate = ToJalali(to) });
+-    }
+-
+-    [HttpGet]
+-    public async Task<IActionResult> GetUsersForProfile(string? search = null, int page = 1, int pageSize = 20)
+-    {
+-        if (!await CanViewUserProfilesAsync()) return Forbid();
+-
+-        var result = await userPortalQueryFacade.SearchProfiles(new PortalProfileUserSearchModel
+-        {
+-            Search = search?.Trim(),
+-            Page = page,
+-            PageSize = pageSize
+-        });
+-
+-        return Json(new
+-        {
+-            items = result.Items.Select(x => new
+-            {
+-                guid = x.Guid,
+-                fullName = x.FullName,
+-                personnelCode = x.PersonnelCode,
+-                mainPosition = x.MainPosition,
+-                isSuperAdmin = x.IsSuperAdmin
+-            }),
+-            result.Total,
+-            result.Page,
+-            result.PageSize,
+-            result.HasMore
+-        });
+-    }
++using System.Globalization;
++using System.Security.Claims;
++using System.Text.Json;
++using Epc.Application.Setting;
++using EPC.SSO.Facades;
++using EPC.SSO.Infrastructure;
++using EPC.SSO.Services;
++using EPC.SSO.SettingModels;
++using IdentityServer8;
++using IdentityServer8.Events;
++using IdentityServer8.Extensions;
++using IdentityServer8.Services;
++using Microsoft.AspNetCore.Authentication;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.Net.Http.Headers;
++using UserManagement.Domain.PermissionAgg.Services;
++using UserManagement.Infrastructure.Query.Contract.UserPortal;
++
++namespace EPC.SSO.Quickstart.Grants;
++
++/// <summary>
++/// داشبورد پورتال.
++///
++/// اصلاحات:
++///  • همه‌ی کش‌ها از IAppCache (ضد Stampede + بازگشت به داده‌ی قبلی هنگام خطا).
++///  • خطای API دیگر به‌صورت «لیست خالی» برای چند دقیقه کش نمی‌شود.
++///  • 🔴 جزئیات اطلاعیه از endpoint اختصاصی کاربر (GetForUser) خوانده می‌شود، نه GetForEdit.
++///  • 🔴 IP کاربر از Connection.RemoteIpAddress (که ForwardedHeaders فقط برای پراکسی‌های مورد اعتماد
++///    اصلاحش می‌کند) — قبلاً X-Forwarded-For بدون بررسی پذیرفته می‌شد و محدودیت IP قابل جعل بود.
++///  • 🔴 ChangePosition محافظ AntiForgery دارد.
++///  • فایل‌های داشبورد از کش دیسکی محلی سرو می‌شوند.
++/// </summary>
++[SecurityHeaders]
++[Authorize]
++public class GrantsController(
++    IIdentityServerInteractionService interaction,
++    IEventService events,
++    IConfiguration configuration,
++    WindowsProgramService windowsProgramService,
++    IUserPortalQueryFacade userPortalQueryFacade,
++    AnnouncementApiService announcementApiService,
++    AnnouncementFileCache fileCache,
++    OtherProgramService otherProgramService,
++    DashboardDataService dashboardData,
++    IAppCache cache,
++    IIpAccessRestrictionService ipAccessRestrictionService,
++    ExternalApiClientService externalApiClient,
++    ILogger<GrantsController> logger)
++    : Controller
++{
++    private const string UserProfilePermissionCode = "SSO.ViewUserProfile";
++
++    // ════════════════════════════════════════════════════════════════════════
++    //  INDEX
++    // ════════════════════════════════════════════════════════════════════════
++    public async Task<IActionResult> Index()
++    {
++        var model = await BuildViewModelAsync();
++
++        ViewData["PositionsJson"] = JsonSerializer.Serialize(
++            model.Positions.Select(p => new { guid = p.Guid, title = p.Title, isDelegated = p.IsDelegated }));
++        ViewData["SelectedPositionGuid"] = model.SelectedPositionGuid?.ToString() ?? string.Empty;
++        ViewData["CanViewUserProfiles"] = await CanViewUserProfilesAsync();
++
++        return View("Index", model);
++    }
++
++    private async Task<GrantsViewModel> BuildViewModelAsync()
++    {
++        var userGuid = CurrentUserGuid;
++        var positionGuid = SelectedPositionFromClaim;
++        var isSuperAdmin = IsSuperAdmin;
++
++        var portal = await dashboardData.GetPortalAsync(userGuid, positionGuid, isSuperAdmin, HttpContext.RequestAborted);
++
++        return new GrantsViewModel
++        {
++            Grants = (portal?.Systems ?? []).Select(s => new GrantViewModel
++            {
++                ClientId = s.Guid.ToString(),
++                ClientName = s.Title,
++                ClientLogoUrl = LogoUrl(s.Guid, s.Image),
++                ClientUrl = s.Url ?? string.Empty,
++                Description = s.Description ?? string.Empty
++            }).ToList(),
++            Positions = (portal?.Positions ?? []).Select(p => new PositionModel
++            {
++                Guid = p.Guid,
++                Title = p.Title,
++                IsDelegated = p.IsDelegated,
++                DelegationId = p.DelegationId
++            }).ToList(),
++            SelectedPositionGuid = portal?.EffectivePositionGuid ?? positionGuid,
++            PersonnelCode = User.FindFirst("PersonnelCode")?.Value ?? "0"
++        };
++    }
++
++    // ════════════════════════════════════════════════════════════════════════
++    //  ویجت‌های داشبورد (AJAX)
++    // ════════════════════════════════════════════════════════════════════════
++    // هر ویجت endpoint مستقل دارد تا صفحه هر بخش را به محض آماده شدن نمایش دهد (نه پس از کندترین API).
++    // پاسخ‌ها خطا را با «null» (و نه لیست خالی) اعلام می‌کنند تا ویجت پیام «تلاش دوباره» نشان دهد.
++
++    [HttpGet]
++    public async Task<IActionResult> GetAnnouncements()
++        => Json(await Safe(() => dashboardData.GetAnnouncementsAsync(CurrentUserGuid, HttpContext.RequestAborted)));
++
++    [HttpGet]
++    public async Task<IActionResult> GetSurveys()
++        => Json(await Safe(() => dashboardData.GetSurveysAsync(CurrentUserGuid, HttpContext.RequestAborted)));
++
++    [HttpGet]
++    public async Task<IActionResult> GetMeetings()
++    {
++        var positionGuid = await GetSelectedPositionGuidAsync();
++        return Json(await Safe(() => dashboardData.GetMeetingsAsync(CurrentUserGuid, positionGuid, HttpContext.RequestAborted)));
++    }
++
++    [HttpGet]
++    public async Task<IActionResult> GetSuggestions()
++        => Json(await Safe(async () => (List<EPC.SSO.Services.TopSuggesterDto>?)await dashboardData.GetSuggestionsAsync()));
++
++    [HttpGet]
++    public async Task<IActionResult> GetWindowsApps()
++        => Json(await Safe(async () => (List<WindowsAppViewModel>?)await dashboardData.GetWindowsAppsAsync(User.FindFirst("PersonnelCode")?.Value)));
++
++    [HttpGet]
++    public async Task<IActionResult> GetOtherPrograms()
++        => Json(await Safe(async () => (List<OtherProgramViewModel>?)await dashboardData.GetOtherProgramsAsync()));
++
++    /// <summary>
++    /// همه‌ی ویجت‌ها در یک درخواست و به‌صورت موازی (هر بخش مستقل؛ خطای یکی بقیه را خراب نمی‌کند).
++    /// صفحه‌ی جدید داشبورد از این endpoint استفاده می‌کند.
++    /// </summary>
++    [HttpGet]
++    public async Task<IActionResult> GetDashboardData()
++    {
++        var userGuid = CurrentUserGuid;
++        var ct = HttpContext.RequestAborted;
++        var personnelCode = User.FindFirst("PersonnelCode")?.Value;
++        var positionGuid = await GetSelectedPositionGuidAsync();
++
++        var announcementsTask = Safe(() => dashboardData.GetAnnouncementsAsync(userGuid, ct));
++        var surveysTask = Safe(() => dashboardData.GetSurveysAsync(userGuid, ct));
++        var meetingsTask = Safe(() => dashboardData.GetMeetingsAsync(userGuid, positionGuid, ct));
++        var winAppsTask = Safe(async () => (List<WindowsAppViewModel>?)await dashboardData.GetWindowsAppsAsync(personnelCode));
++        var otherTask = Safe(async () => (List<OtherProgramViewModel>?)await dashboardData.GetOtherProgramsAsync());
++        var suggestionsTask = Safe(async () => (List<EPC.SSO.Services.TopSuggesterDto>?)await dashboardData.GetSuggestionsAsync());
++
++        await Task.WhenAll(announcementsTask, surveysTask, meetingsTask, winAppsTask, otherTask, suggestionsTask);
++
++        return Json(new
++        {
++            announcements = await announcementsTask,
++            surveys = await surveysTask,
++            meetings = await meetingsTask,
++            windowsApps = await winAppsTask,
++            otherPrograms = await otherTask,
++            suggestions = await suggestionsTask
++        });
++    }
++
++    /// <summary>
++    /// عیب‌یابی اتصال SSO به APIها (فقط سوپرادمین): /Grants/Diagnostics
++    /// برای هر API نشان می‌دهد توکن گرفته شد یا نه، Issuer توکن چیست، کد پاسخ، زمان و متن خطا.
++    /// </summary>
++    [HttpGet]
++    public async Task<IActionResult> Diagnostics()
++    {
++        if (!IsSuperAdmin) return Forbid();
++
++        var userGuid = CurrentUserGuid;
++        var positionGuid = await GetSelectedPositionGuidAsync();
++        var ct = HttpContext.RequestAborted;
++        ExternalApiConfiguration Cfg(string name) => configuration.GetSection($"ExternalApis:{name}").Get<ExternalApiConfiguration>() ?? new();
++
++        var probes = await Task.WhenAll(
++            externalApiClient.ProbeAsync("AnnouncementApi", Cfg("AnnouncementApi"), HttpMethod.Post, "/api/Announcement/GetForDashboard", new { UserGuid = userGuid, Count = 5 }, ct),
++            externalApiClient.ProbeAsync("MeetingApi", Cfg("MeetingApi"), HttpMethod.Get, $"/api/Meeting/GetFutureMeetings?userGuid={userGuid}&positionGuid={positionGuid}", null, ct),
++            externalApiClient.ProbeAsync("SurveyApi", Cfg("SurveyApi"), HttpMethod.Get, $"/api/Survey/GetActiveSurveys?userGuid={userGuid}", null, ct),
++            externalApiClient.ProbeAsync("FileManagementApi", Cfg("FileManagementApi"), HttpMethod.Post, "/api/Attachment/GetMetas", Array.Empty<Guid>(), ct));
++
++        return Json(new
++        {
++            identityServer = new
++            {
++                authority = configuration["IdentityServer:Authority"],
++                issuerUri = configuration["IdentityServer:IssuerUri"],
++                internalAuthority = configuration["IdentityServer:InternalAuthority"]
++            },
++            probes
++        });
++    }
++
++    // ════════════════════════════════════════════════════════════════════════
++    //  اطلاعیه‌ها
++    // ════════════════════════════════════════════════════════════════════════
++    [HttpGet]
++    public async Task<IActionResult> GetAnnouncementDetail(Guid guid)
++    {
++        var userGuid = CurrentUserGuid;
++        var detail = await announcementApiService.GetDetailForUserAsync(guid, userGuid, HttpContext.RequestAborted);
++        if (detail is null)
++            return Json(new { success = false, message = "اطلاعیه یافت نشد." });
++
++        var files = await ResolveFilesAsync(detail.Files);
++
++        // ثبت خودکار خواندن فقط یک‌بار (قبلاً IsRead همیشه false بود و هر بار ثبت می‌شد)
++        if (!detail.RequireReadConfirmation && !detail.IsRead)
++        {
++            if (await announcementApiService.ConfirmReadAsync(guid, userGuid, ClientIp, HttpContext.RequestAborted))
++            {
++                cache.Remove(DashboardDataService.AnnouncementsKey(userGuid));
++                detail.IsRead = true;
++            }
++        }
++
++        return Json(new
++        {
++            success = true,
++            data = new
++            {
++                detail.Guid,
++                detail.Title,
++                detail.Body,
++                detail.Type,
++                detail.TypeLabel,
++                detail.Date,
++                detail.Priority,
++                detail.PriorityLabel,
++                detail.RequireReadConfirmation,
++                detail.IsRead,
++                Files = files
++            }
++        });
++    }
++
++    [HttpPost]
++    [ValidateAntiForgeryToken]
++    public async Task<IActionResult> ConfirmAnnouncementRead([FromBody] ConfirmAnnouncementReadModel model)
++    {
++        var userGuid = CurrentUserGuid;
++        var ok = await announcementApiService.ConfirmReadAsync(model.AnnouncementGuid, userGuid, ClientIp, HttpContext.RequestAborted);
++        cache.Remove(DashboardDataService.AnnouncementsKey(userGuid));
++        return ok ? Json(new { success = true }) : StatusCode(StatusCodes.Status502BadGateway, new { success = false });
++    }
++
++    [HttpGet]
++    public IActionResult AnnouncementArchive() => View();
++
++    [HttpGet]
++    public async Task<IActionResult> GetAnnouncementsArchive(int page = 1, int pageSize = 10, string? title = null, string? fromDate = null, string? toDate = null)
++    {
++        if (page < 1) page = 1;
++        if (pageSize is < 1 or > 50) pageSize = 10;
++
++        DateTime? from = null, to = null;
++        var pc = new PersianCalendar();
++        if (TryParseJalaliDate(fromDate, pc, out var f)) from = f;
++        if (TryParseJalaliDate(toDate, pc, out var t)) to = t.Date.AddDays(1).AddTicks(-1);
++        if (from > to) (from, to) = (to, from);
++
++        var result = await announcementApiService.GetDashboardAnnouncementsArchiveAsync(
++            CurrentUserGuid, page, pageSize, title?.Trim(), from, to, HttpContext.RequestAborted);
++
++        return Json(result ?? new AnnouncementDashboardPagedDto { Page = page, PageSize = pageSize });
++    }
++
++    [HttpGet]
++    public async Task<IActionResult> FileProxy(Guid guid, CancellationToken cancellationToken)
++    {
++        if (guid == Guid.Empty) return NotFound();
++
++        var userGuid = CurrentUserGuid;
++        // فقط فایل‌های اطلاعیه‌ای که همین کاربر جزئیاتش را دیده است
++        var allowed = cache.TryGet<HashSet<Guid>>(UserAllowedFilesKey(userGuid), out var set) && set!.Contains(guid);
++        if (!allowed) return Forbid();
++
++        if (!fileCache.TryGet(guid, out var cached))
++        {
++            var meta = cache.TryGet<FileMeta>($"filemeta:{guid:N}", out var m) ? m : null;
++            if (meta is not null)
++                cached = await fileCache.GetOrDownloadAsync(guid, meta, cancellationToken);
++        }
++
++        if (cached is not null)
++        {
++            Response.Headers[HeaderNames.CacheControl] = "private, max-age=604800, immutable";
++            Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
++            Response.Headers[HeaderNames.ContentDisposition] = $"inline; filename*=UTF-8''{Uri.EscapeDataString(cached.FileName)}";
++            return PhysicalFile(cached.PhysicalPath, cached.ContentType, null, new EntityTagHeaderValue(cached.ETag), enableRangeProcessing: true);
++        }
++
++        using var upstream = await announcementApiService.OpenFileAsync(guid, Request.Headers.Range.FirstOrDefault(), cancellationToken);
++        if (upstream is null) return StatusCode(StatusCodes.Status502BadGateway);
++        if (!upstream.IsSuccessStatusCode) return StatusCode((int)upstream.StatusCode);
++
++        Response.StatusCode = (int)upstream.StatusCode;
++        Response.ContentType = upstream.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
++        if (upstream.Content.Headers.ContentLength is { } len) Response.ContentLength = len;
++        if (upstream.Content.Headers.ContentRange is not null) Response.Headers[HeaderNames.ContentRange] = upstream.Content.Headers.ContentRange.ToString();
++        if (upstream.Content.Headers.ContentDisposition is not null) Response.Headers[HeaderNames.ContentDisposition] = upstream.Content.Headers.ContentDisposition.ToString();
++        Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
++
++        await using var stream = await upstream.Content.ReadAsStreamAsync(cancellationToken);
++        await stream.CopyToAsync(Response.Body, cancellationToken);
++        return new EmptyResult();
++    }
++
++    [HttpGet]
++    public async Task<IActionResult> SystemLogo(Guid id, string? v)
++    {
++        if (!cache.TryGet<LogoEntry>($"syslogo:{id:N}", out var logo) || logo is null)
++        {
++            await BuildViewModelAsync(); // کش منقضی شده: داشبورد همین کاربر دوباره لوگوها را ثبت می‌کند
++            if (!cache.TryGet($"syslogo:{id:N}", out logo) || logo is null) return NotFound();
++        }
++
++        var comma = logo.DataUri.IndexOf(',');
++        var header = comma > 5 ? logo.DataUri[5..comma] : string.Empty; // image/png;base64
++        var contentType = header.Split(';')[0];
++        if (comma < 0 || !header.Contains("base64", StringComparison.OrdinalIgnoreCase)
++            || !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) || contentType.Contains("svg", StringComparison.OrdinalIgnoreCase))
++            return NotFound();
++
++        byte[] bytes;
++        try { bytes = Convert.FromBase64String(logo.DataUri[(comma + 1)..]); }
++        catch (FormatException) { return NotFound(); }
++
++        Response.Headers[HeaderNames.CacheControl] = v == logo.Version ? "private, max-age=2592000, immutable" : "private, max-age=300";
++        Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
++        return File(bytes, contentType, null, new EntityTagHeaderValue($"\"{logo.Version}\""));
++    }
++
++    [HttpGet]
++    public async Task<IActionResult> AppIcon(int id)
++    {
++        var (bytes, contentType) = await windowsProgramService.GetIconAsync(id);
++        if (bytes is null || bytes.Length == 0) return NotFound();
++
++        Response.Headers[HeaderNames.CacheControl] = "private, max-age=86400";
++        return File(bytes, contentType);
++    }
++
++    // ════════════════════════════════════════════════════════════════════════
++    //  سمت، سوابق ورود، پروفایل کاربران
++    // ════════════════════════════════════════════════════════════════════════
++    [HttpPost]
++    [ValidateAntiForgeryToken]
++    public async Task<IActionResult> ChangePosition([FromBody] SelectPositionModel model)
++    {
++        var selection = await userPortalQueryFacade.GetPositionSelection(new PortalPositionSelectionSearchModel
++        {
++            UserGuid = CurrentUserGuid,
++            PositionGuid = model.PositionGuid
++        });
++
++        if (!selection.IsAllowed)
++            return Json(new { success = false, message = "این سمت برای کاربر جاری مجاز نیست." });
++
++        if (User.Identity is not ClaimsIdentity identity)
++            return Json(new { success = false, message = "نشست کاربر نامعتبر است." });
++
++        foreach (var type in new[] { "ActivatedPosition", "IsDelegate", "DelegationId" })
++        {
++            var existing = identity.FindFirst(type);
++            if (existing is not null) identity.RemoveClaim(existing);
++        }
++
++        identity.AddClaim(new Claim("ActivatedPosition", model.PositionGuid.ToString()));
++        identity.AddClaim(new Claim("IsDelegate", selection.IsDelegated.ToString().ToLowerInvariant()));
++        identity.AddClaim(new Claim("DelegationId", selection.DelegationId?.ToString() ?? string.Empty));
++
++        await HttpContext.SignInAsync(new ClaimsPrincipal(identity));
++        return Json(new { success = true, message = "سمت با موفقیت تغییر یافت" });
++    }
++
++    [HttpPost]
++    [ValidateAntiForgeryToken]
++    public async Task<IActionResult> Revoke(string clientId)
++    {
++        await interaction.RevokeUserConsentAsync(clientId);
++        await events.RaiseAsync(new GrantsRevokedEvent(User.GetSubjectId(), clientId));
++        return RedirectToAction("Index");
++    }
++
++    [HttpGet]
++    public async Task<IActionResult> GetSessions(string? fromDate = null, string? toDate = null)
++    {
++        var pc = new PersianCalendar();
++        var from = TryParseJalaliDate(fromDate, pc, out var f) ? f : DateTime.Now.Date.AddMonths(-1);
++        var to = TryParseJalaliDate(toDate, pc, out var t) ? t.Date.AddDays(1).AddTicks(-1) : DateTime.Now;
++        if (from > to) (from, to) = (to, from);
++
++        var sessions = await userPortalQueryFacade.GetSessions(new PortalUserSessionSearchModel
++        {
++            UserGuid = CurrentUserGuid,
++            FromDate = from,
++            ToDate = to,
++            Take = 500
++        });
++
++        return Json(new { items = sessions, fromDate = ToJalali(from), toDate = ToJalali(to) });
++    }
++
++    [HttpGet]
++    public async Task<IActionResult> GetUsersForProfile(string? search = null, int page = 1, int pageSize = 20)
++    {
++        if (!await CanViewUserProfilesAsync()) return Forbid();
++
++        var result = await userPortalQueryFacade.SearchProfiles(new PortalProfileUserSearchModel
++        {
++            Search = search?.Trim(),
++            Page = page,
++            PageSize = pageSize
++        });
++
++        return Json(new
++        {
++            items = result.Items.Select(x => new
++            {
++                guid = x.Guid,
++                fullName = x.FullName,
++                personnelCode = x.PersonnelCode,
++                mainPosition = x.MainPosition,
++                isSuperAdmin = x.IsSuperAdmin
++            }),
++            result.Total,
++            result.Page,
++            result.PageSize,
++            result.HasMore
++        });
++    }
+     [HttpPost]
+     [ValidateAntiForgeryToken]
+     public async Task<IActionResult> LaunchOtherProgram([FromBody] LaunchOtherProgramModel model)
+@@ -454,213 +447,225 @@ public class GrantsController(
+         return Json(new { success = true, type = r.Type, url = r.Url });
+     }
+ 
+-    public class LaunchOtherProgramModel { public int Id { get; set; } }
+-    [HttpPost]
+-    [ValidateAntiForgeryToken]
+-    public async Task<IActionResult> ImpersonateUser([FromBody] ImpersonateUserModel model)
+-    {
+-        if (!await CanViewUserProfilesAsync()) return Forbid();
+-        if (model.UserGuid == Guid.Empty)
+-            return Json(new { success = false, message = "کاربر نامعتبر است." });
+-        if (User.FindFirst("ImpersonatedBy") is not null)
+-            return Json(new { success = false, message = "ابتدا از حالت ورود به‌جای کاربر دیگر خارج شوید." });
+-
+-        var adminGuid = CurrentUserGuid;
+-        if (model.UserGuid == adminGuid)
+-            return Json(new { success = false, message = "نمی‌توانید به‌جای خودتان وارد شوید." });
+-
+-        var target = await userPortalQueryFacade.GetIdentityUser(model.UserGuid);
+-        if (target is null)
+-            return Json(new { success = false, message = "کاربر یافت نشد." });
+-        if (target.IsSuperAdmin && !IsSuperAdmin)
+-            return Json(new { success = false, message = "امکان ورود به‌جای این کاربر وجود ندارد." });
+-
+-        logger.LogWarning("[Impersonation] {Admin} وارد حساب {Target} شد (IP: {Ip})", adminGuid, model.UserGuid, ClientIp);
+-        await SignInPortalIdentityAsync(target, adminGuid, User.FindFirst("PersonnelCode")?.Value ?? string.Empty);
+-
+-        return Json(new { success = true, redirectUrl = Url.Action("Index", "Grants") });
+-    }
+-
+-    [HttpPost]
+-    [ValidateAntiForgeryToken]
+-    public async Task<IActionResult> EndImpersonation()
+-    {
+-        if (!Guid.TryParse(User.FindFirst("ImpersonatedBy")?.Value, out var adminGuid))
+-            return RedirectToAction("Index");
+-
+-        var admin = await userPortalQueryFacade.GetIdentityUser(adminGuid);
+-        if (admin is null)
+-        {
+-            await HttpContext.SignOutAsync();
+-            return RedirectToAction("Login", "Account");
+-        }
+-
+-        await SignInPortalIdentityAsync(admin);
+-        return RedirectToAction("Index");
+-    }
+-
+-    // ════════════════════════════════════════════════════════════════════════
+-    //  Private
+-    // ════════════════════════════════════════════════════════════════════════
+-    private Guid CurrentUserGuid => Guid.TryParse(User.FindFirst("sub")?.Value, out var g) ? g : Guid.Empty;
+-
+-    private Guid SelectedPositionFromClaim => Guid.TryParse(User.FindFirst("ActivatedPosition")?.Value, out var g) ? g : Guid.Empty;
+-
+-    private bool IsSuperAdmin => bool.TryParse(User.FindFirst("IsSuperAdmin")?.Value, out var v) && v;
+-
+-    private string ClientIp
+-    {
+-        get
+-        {
+-            var ip = HttpContext.Connection.RemoteIpAddress;
+-            if (ip is { IsIPv4MappedToIPv6: true }) ip = ip.MapToIPv4();
+-            return ip?.ToString() ?? string.Empty;
+-        }
+-    }
+-
+-    private static string AnnouncementsCacheKey(Guid userGuid) => $"announcements:{userGuid:N}";
+-    private static string UserAllowedFilesKey(Guid userGuid) => $"ann-allowed-files:{userGuid:N}";
+-
+-    private Task<List<AnnouncementDashboardDto>?> GetDashboardAnnouncementsAsync(Guid userGuid)
+-    {
+-        var count = settingService.Fetch<AnnouncementSettingViewModel>().DashboardAnnouncementCount;
+-        if (count <= 0) count = 5;
+-
+-        return cache.GetOrCreateAsync(
+-            AnnouncementsCacheKey(userGuid),
+-            ct => announcementApiService.GetDashboardAnnouncementsAsync(userGuid, count, ct),
+-            TimeSpan.FromMinutes(2), StaleWindow, HttpContext.RequestAborted);
+-    }
+-
+-    private async Task<List<object>> ResolveFilesAsync(List<AnnouncementFileDto> files)
+-    {
+-        var guids = files.Where(f => f.FileGuid != Guid.Empty).Select(f => f.FileGuid).Distinct().ToList();
+-        if (guids.Count == 0) return [];
+-
+-        var userGuid = CurrentUserGuid;
+-        // کپی جدید (نه تغییر نمونه‌ی کش‌شده) تا درخواست‌های هم‌زمان یک کاربر تداخل نداشته باشند
+-        cache.TryGet<HashSet<Guid>>(UserAllowedFilesKey(userGuid), out var existing);
+-        var allowed = existing is null ? new HashSet<Guid>() : new HashSet<Guid>(existing);
+-        foreach (var g in guids) allowed.Add(g);
+-        cache.Set(UserAllowedFilesKey(userGuid), allowed, TimeSpan.FromMinutes(30));
+-
+-        var metas = new Dictionary<Guid, FileMeta>();
+-        var misses = new List<Guid>();
+-        foreach (var g in guids)
+-        {
+-            if (cache.TryGet<FileMeta>($"filemeta:{g:N}", out var m) && m is not null) metas[g] = m;
+-            else misses.Add(g);
+-        }
+-
+-        if (misses.Count > 0)
+-        {
+-            var fetched = await announcementApiService.GetFileMetasAsync(misses, HttpContext.RequestAborted) ?? [];
+-            foreach (var m in fetched)
+-            {
+-                metas[m.Guid] = m;
+-                cache.Set($"filemeta:{m.Guid:N}", m, TimeSpan.FromHours(6));
+-            }
+-        }
+-
+-        return files
+-            .Where(f => metas.ContainsKey(f.FileGuid))
+-            .Select(f =>
+-            {
+-                var m = metas[f.FileGuid];
+-                var vm = new AnnouncementFileViewModel
+-                {
+-                    FileGuid = f.FileGuid,
+-                    FileType = f.FileType,
+-                    FileName = m.FileName,
+-                    OriginalFileName = m.OriginalFileName,
+-                    ContentType = m.ContentType,
+-                    FileSize = m.FileSize,
+-                    FileUrl = $"/Grants/FileProxy?guid={f.FileGuid}"
+-                };
+-                return (object)new
+-                {
+-                    vm.FileGuid, vm.FileType, vm.DisplayName, vm.ContentType, vm.FileSize, vm.FileUrl, vm.IsImage, vm.IsPdf
+-                };
+-            })
+-            .ToList();
+-    }
+-
+-    private async Task<Guid> GetSelectedPositionGuidAsync()
+-    {
+-        var selected = SelectedPositionFromClaim;
+-        if (selected != Guid.Empty) return selected;
+-        var model = await BuildViewModelAsync();
+-        return model.SelectedPositionGuid ?? Guid.Empty;
+-    }
+-
+-    private async Task<bool> CanViewUserProfilesAsync()
+-    {
+-        var hasPermission = IsSuperAdmin || User.FindAll("Permissions")
+-            .SelectMany(c => c.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+-            .Contains(UserProfilePermissionCode, StringComparer.OrdinalIgnoreCase);
+-
+-        return hasPermission || await ipAccessRestrictionService.IsAllowedAsync(UserProfilePermissionCode, ClientIp);
+-    }
+-
+-    private async Task SignInPortalIdentityAsync(PortalIdentityUserViewModel user, Guid? impersonatedBy = null, string? impersonatedByPersonnelCode = null)
+-    {
+-        var claims = new List<Claim>
+-        {
+-            new("ActivatedPosition", user.ActivatedPositionGuid.ToString()),
+-            new("IsDelegate", "false"),
+-            new("DelegationId", string.Empty),
+-            new("FLName", user.FullName),
+-            new("PersonnelCode", user.PersonnelCode),
+-            new("PasswordExpired", user.PasswordExpired.ToString()),
+-            new("IsSuperAdmin", user.IsSuperAdmin.ToString())
+-        };
+-
+-        claims.AddRange(user.Permissions.Select(p => new Claim("Permissions", p)));
+-
+-        if (impersonatedBy.HasValue)
+-        {
+-            claims.Add(new Claim("ImpersonatedBy", impersonatedBy.Value.ToString()));
+-            claims.Add(new Claim("ImpersonatedByPersonnelCode", impersonatedByPersonnelCode ?? string.Empty));
+-        }
+-
+-        await HttpContext.SignInAsync(new IdentityServerUser(user.Guid.ToString())
+-        {
+-            DisplayName = user.PersonnelCode,
+-            AdditionalClaims = claims
+-        }, null);
+-    }
+-
+-    private async Task<T?> Safe<T>(Func<Task<T?>> action) where T : class
+-    {
+-        try { return await action(); }
+-        catch (OperationCanceledException) { throw; }
+-        catch (Exception ex)
+-        {
+-            logger.LogWarning(ex, "[Dashboard] یک بخش داشبورد خطا داد");
+-            return null;
+-        }
+-    }
+-
+-    private static string ToJalali(DateTime dt)
+-    {
+-        var pc = new PersianCalendar();
+-        return $"{pc.GetYear(dt):0000}/{pc.GetMonth(dt):00}/{pc.GetDayOfMonth(dt):00}";
+-    }
+-
+-    private static bool TryParseJalaliDate(string? value, PersianCalendar pc, out DateTime result)
+-    {
+-        result = default;
+-        if (string.IsNullOrWhiteSpace(value)) return false;
+-        var parts = value.Split('/', '-');
+-        if (parts.Length != 3 ||
+-            !int.TryParse(parts[0], out var y) || !int.TryParse(parts[1], out var m) || !int.TryParse(parts[2], out var d))
+-            return false;
+-        try { result = pc.ToDateTime(y, m, d, 0, 0, 0, 0); return true; }
+-        catch { return false; }
+-    }
+-}
+-
+-public class SelectPositionModel
+-{
+-    public Guid PositionGuid { get; set; }
+-}
++    public class LaunchOtherProgramModel { public int Id { get; set; } }
++    [HttpPost]
++    [ValidateAntiForgeryToken]
++    public async Task<IActionResult> ImpersonateUser([FromBody] ImpersonateUserModel model)
++    {
++        if (!await CanViewUserProfilesAsync()) return Forbid();
++        if (model.UserGuid == Guid.Empty)
++            return Json(new { success = false, message = "کاربر نامعتبر است." });
++        if (User.FindFirst("ImpersonatedBy") is not null)
++            return Json(new { success = false, message = "ابتدا از حالت ورود به‌جای کاربر دیگر خارج شوید." });
++
++        var adminGuid = CurrentUserGuid;
++        if (model.UserGuid == adminGuid)
++            return Json(new { success = false, message = "نمی‌توانید به‌جای خودتان وارد شوید." });
++
++        var target = await userPortalQueryFacade.GetIdentityUser(model.UserGuid);
++        if (target is null)
++            return Json(new { success = false, message = "کاربر یافت نشد." });
++        if (target.IsSuperAdmin && !IsSuperAdmin)
++            return Json(new { success = false, message = "امکان ورود به‌جای این کاربر وجود ندارد." });
++
++        logger.LogWarning("[Impersonation] {Admin} وارد حساب {Target} شد (IP: {Ip})", adminGuid, model.UserGuid, ClientIp);
++        await SignInPortalIdentityAsync(target, adminGuid, User.FindFirst("PersonnelCode")?.Value ?? string.Empty);
++
++        return Json(new { success = true, redirectUrl = Url.Action("Index", "Grants") });
++    }
++
++    [HttpPost]
++    [ValidateAntiForgeryToken]
++    public async Task<IActionResult> EndImpersonation()
++    {
++        if (!Guid.TryParse(User.FindFirst("ImpersonatedBy")?.Value, out var adminGuid))
++            return RedirectToAction("Index");
++
++        var admin = await userPortalQueryFacade.GetIdentityUser(adminGuid);
++        if (admin is null)
++        {
++            await HttpContext.SignOutAsync();
++            return RedirectToAction("Login", "Account");
++        }
++
++        await SignInPortalIdentityAsync(admin);
++        return RedirectToAction("Index");
++    }
++
++    // ════════════════════════════════════════════════════════════════════════
++    //  Private
++    // ════════════════════════════════════════════════════════════════════════
++    private Guid CurrentUserGuid => Guid.TryParse(User.FindFirst("sub")?.Value, out var g) ? g : Guid.Empty;
++
++    private Guid SelectedPositionFromClaim => Guid.TryParse(User.FindFirst("ActivatedPosition")?.Value, out var g) ? g : Guid.Empty;
++
++    private bool IsSuperAdmin => bool.TryParse(User.FindFirst("IsSuperAdmin")?.Value, out var v) && v;
++
++    private string ClientIp
++    {
++        get
++        {
++            var ip = HttpContext.Connection.RemoteIpAddress;
++            if (ip is { IsIPv4MappedToIPv6: true }) ip = ip.MapToIPv4();
++            return ip?.ToString() ?? string.Empty;
++        }
++    }
++
++    private static string UserAllowedFilesKey(Guid userGuid) => $"ann-allowed-files:{userGuid:N}";
++
++    private async Task<List<object>> ResolveFilesAsync(List<AnnouncementFileDto> files)
++    {
++        var guids = files.Where(f => f.FileGuid != Guid.Empty).Select(f => f.FileGuid).Distinct().ToList();
++        if (guids.Count == 0) return [];
++
++        var userGuid = CurrentUserGuid;
++        // کپی جدید (نه تغییر نمونه‌ی کش‌شده) تا درخواست‌های هم‌زمان یک کاربر تداخل نداشته باشند
++        cache.TryGet<HashSet<Guid>>(UserAllowedFilesKey(userGuid), out var existing);
++        var allowed = existing is null ? new HashSet<Guid>() : new HashSet<Guid>(existing);
++        foreach (var g in guids) allowed.Add(g);
++        cache.Set(UserAllowedFilesKey(userGuid), allowed, TimeSpan.FromMinutes(30));
++
++        var metas = new Dictionary<Guid, FileMeta>();
++        var misses = new List<Guid>();
++        foreach (var g in guids)
++        {
++            if (cache.TryGet<FileMeta>($"filemeta:{g:N}", out var m) && m is not null) metas[g] = m;
++            else misses.Add(g);
++        }
++
++        if (misses.Count > 0)
++        {
++            var fetched = await announcementApiService.GetFileMetasAsync(misses, HttpContext.RequestAborted) ?? [];
++            foreach (var m in fetched)
++            {
++                metas[m.Guid] = m;
++                cache.Set($"filemeta:{m.Guid:N}", m, TimeSpan.FromHours(6));
++            }
++        }
++
++        return files
++            .Where(f => metas.ContainsKey(f.FileGuid))
++            .Select(f =>
++            {
++                var m = metas[f.FileGuid];
++                var vm = new AnnouncementFileViewModel
++                {
++                    FileGuid = f.FileGuid,
++                    FileType = f.FileType,
++                    FileName = m.FileName,
++                    OriginalFileName = m.OriginalFileName,
++                    ContentType = m.ContentType,
++                    FileSize = m.FileSize,
++                    FileUrl = $"/Grants/FileProxy?guid={f.FileGuid}"
++                };
++                return (object)new
++                {
++                    vm.FileGuid, vm.FileType, vm.DisplayName, vm.ContentType, vm.FileSize, vm.FileUrl, vm.IsImage, vm.IsPdf
++                };
++            })
++            .ToList();
++    }
++
++    private async Task<Guid> GetSelectedPositionGuidAsync()
++    {
++        var selected = SelectedPositionFromClaim;
++        if (selected != Guid.Empty) return selected;
++        var model = await BuildViewModelAsync();
++        return model.SelectedPositionGuid ?? Guid.Empty;
++    }
++
++    private async Task<bool> CanViewUserProfilesAsync()
++    {
++        var hasPermission = IsSuperAdmin || User.FindAll("Permissions")
++            .SelectMany(c => c.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
++            .Contains(UserProfilePermissionCode, StringComparer.OrdinalIgnoreCase);
++        if (hasPermission) return true;
++
++        // قبلاً در هر بار باز شدن داشبورد یک Query به پایگاه داده‌ی UserManagement می‌زد
++        var ip = ClientIp;
++        var allowed = await cache.GetOrCreateAsync($"ipallow:{UserProfilePermissionCode}:{ip}",
++            async _ => new BoolBox(await ipAccessRestrictionService.IsAllowedAsync(UserProfilePermissionCode, ip)),
++            TimeSpan.FromMinutes(5), TimeSpan.Zero, HttpContext.RequestAborted);
++        return allowed?.Value ?? false;
++    }
++
++    private sealed record BoolBox(bool Value);
++
++    /// <summary>
++    /// لوگوی سامانه. تصویر Base64 داخل HTML هر بار باز شدن داشبورد دوباره ارسال می‌شد (صفحه‌ی سنگین و غیرقابل کش)؛
++    /// حالا با آدرس جدا و نسخه‌دار سرو می‌شود و مرورگر آن را کش می‌کند.
++    /// </summary>
++    private string? LogoUrl(Guid systemGuid, string? image)
++    {
++        if (string.IsNullOrWhiteSpace(image) || !image.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
++            return image;
++
++        var version = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(image)))[..12];
++        cache.Set($"syslogo:{systemGuid:N}", new LogoEntry(image, version), TimeSpan.FromHours(24));
++        return Url.Action(nameof(SystemLogo), new { id = systemGuid, v = version });
++    }
++
++    private sealed record LogoEntry(string DataUri, string Version);
++
++    private async Task SignInPortalIdentityAsync(PortalIdentityUserViewModel user, Guid? impersonatedBy = null, string? impersonatedByPersonnelCode = null)
++    {
++        var claims = new List<Claim>
++        {
++            new("ActivatedPosition", user.ActivatedPositionGuid.ToString()),
++            new("IsDelegate", "false"),
++            new("DelegationId", string.Empty),
++            new("FLName", user.FullName),
++            new("PersonnelCode", user.PersonnelCode),
++            new("PasswordExpired", user.PasswordExpired.ToString()),
++            new("IsSuperAdmin", user.IsSuperAdmin.ToString())
++        };
++
++        claims.AddRange(user.Permissions.Select(p => new Claim("Permissions", p)));
++
++        if (impersonatedBy.HasValue)
++        {
++            claims.Add(new Claim("ImpersonatedBy", impersonatedBy.Value.ToString()));
++            claims.Add(new Claim("ImpersonatedByPersonnelCode", impersonatedByPersonnelCode ?? string.Empty));
++        }
++
++        await HttpContext.SignInAsync(new IdentityServerUser(user.Guid.ToString())
++        {
++            DisplayName = user.PersonnelCode,
++            AdditionalClaims = claims
++        }, null);
++    }
++
++    private async Task<T?> Safe<T>(Func<Task<T?>> action) where T : class
++    {
++        try { return await action(); }
++        catch (OperationCanceledException) { throw; }
++        catch (Exception ex)
++        {
++            logger.LogWarning(ex, "[Dashboard] یک بخش داشبورد خطا داد");
++            return null;
++        }
++    }
++
++    private static string ToJalali(DateTime dt)
++    {
++        var pc = new PersianCalendar();
++        return $"{pc.GetYear(dt):0000}/{pc.GetMonth(dt):00}/{pc.GetDayOfMonth(dt):00}";
++    }
++
++    private static bool TryParseJalaliDate(string? value, PersianCalendar pc, out DateTime result)
++    {
++        result = default;
++        if (string.IsNullOrWhiteSpace(value)) return false;
++        var parts = value.Split('/', '-');
++        if (parts.Length != 3 ||
++            !int.TryParse(parts[0], out var y) || !int.TryParse(parts[1], out var m) || !int.TryParse(parts[2], out var d))
++            return false;
++        try { result = pc.ToDateTime(y, m, d, 0, 0, 0, 0); return true; }
++        catch { return false; }
++    }
++}
++
++public class SelectPositionModel
++{
++    public Guid PositionGuid { get; set; }
++}
 diff --git a/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs b/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs
 index 25463b5..0d3ed78 100644
 --- a/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs
@@ -241,11 +1688,358 @@ index 0000000..a4df42c
 +    private static string Truncate(string? value, int max) =>
 +        string.IsNullOrEmpty(value) ? string.Empty : value.Length <= max ? value : value[..max];
 +}
+diff --git a/EPC.SSO/Services/DashboardDataService.cs b/EPC.SSO/Services/DashboardDataService.cs
+new file mode 100644
+index 0000000..fd7d684
+--- /dev/null
++++ b/EPC.SSO/Services/DashboardDataService.cs
+@@ -0,0 +1,110 @@
++using EPC.SSO.Facades;
++using EPC.SSO.Infrastructure;
++using EPC.SSO.Quickstart.Grants;
++using EPC.SSO.SettingModels;
++using Epc.Application.Setting;
++using UserManagement.Infrastructure.Query.Contract.UserPortal;
++
++namespace EPC.SSO.Services;
++
++/// <summary>
++/// داده‌های ویجت‌های داشبورد با کلید کش یکسان برای کنترلر و پیش‌بارگذاری هنگام ورود.
++/// همه از IAppCache (single-flight + stale-while-revalidate) می‌گذرند؛ هر ویجت مستقل است و خطای یکی
++/// بقیه را خراب نمی‌کند.
++/// </summary>
++public sealed class DashboardDataService(
++    IAppCache cache,
++    IServiceScopeFactory scopeFactory,
++    ISettingService settingService,
++    SurveyApiService surveyApiService,
++    MeetingApiService meetingApiService,
++    AnnouncementApiService announcementApiService,
++    WindowsProgramService windowsProgramService,
++    OtherProgramService otherProgramService,
++    SuggestionService suggestionService,
++    EPC.SSO.Realtime.PortalCacheVersions cacheVersions)
++{
++    /// <summary>پس از تازگی، داده تا این مدت به‌عنوان پشتیبان (و پاسخ فوری) نگه داشته می‌شود</summary>
++    private static readonly TimeSpan StaleWindow = TimeSpan.FromHours(4);
++
++    public static string AnnouncementsKey(Guid userGuid) => $"announcements:{userGuid:N}";
++
++    public Task<PortalDashboardViewModel?> GetPortalAsync(Guid userGuid, Guid positionGuid, bool isSuperAdmin, CancellationToken ct = default)
++        => cache.GetOrCreateAsync(
++            $"portal:dashboard:{userGuid:N}:{positionGuid:N}",
++            async _ =>
++            {
++                // ممکن است پس از پایان درخواست (در پس‌زمینه) اجرا شود؛ Scope و DbContext خودش را دارد
++                await using var scope = scopeFactory.CreateAsyncScope();
++                return await scope.ServiceProvider.GetRequiredService<IUserPortalQueryFacade>()
++                    .GetDashboard(new PortalDashboardSearchModel
++                    {
++                        UserGuid = userGuid,
++                        SelectedPositionGuid = positionGuid,
++                        IsSuperAdmin = isSuperAdmin
++                    });
++            },
++            TimeSpan.FromMinutes(2), TimeSpan.FromHours(8), ct);
++
++    public Task<List<AnnouncementDashboardDto>?> GetAnnouncementsAsync(Guid userGuid, CancellationToken ct = default)
++    {
++        var count = settingService.Fetch<AnnouncementSettingViewModel>().DashboardAnnouncementCount;
++        if (count <= 0) count = 5;
++        return cache.GetOrCreateAsync(AnnouncementsKey(userGuid),
++            c => announcementApiService.GetDashboardAnnouncementsAsync(userGuid, count, c),
++            TimeSpan.FromMinutes(2), StaleWindow, ct);
++    }
++
++    public Task<List<MySurveyItemViewModel>?> GetSurveysAsync(Guid userGuid, CancellationToken ct = default)
++        => cache.GetOrCreateAsync($"surveys:{userGuid:N}",
++            c => surveyApiService.GetMySurveysAsync(userGuid, c),
++            TimeSpan.FromMinutes(3), StaleWindow, ct);
++
++    public Task<List<MeetingFutureDto>?> GetMeetingsAsync(Guid userGuid, Guid positionGuid, CancellationToken ct = default)
++        => cache.GetOrCreateAsync($"meetings:{userGuid:N}:{positionGuid:N}:{cacheVersions.Of(userGuid)}",
++            c => meetingApiService.GetMyMeetingsAsync(userGuid, positionGuid, c),
++            TimeSpan.FromMinutes(3), StaleWindow, ct);
++
++    public async Task<List<WindowsAppViewModel>> GetWindowsAppsAsync(string? personnelCode)
++        => string.IsNullOrWhiteSpace(personnelCode) ? [] : await windowsProgramService.GetAccessibleAppsAsync(personnelCode);
++
++    public Task<List<OtherProgramViewModel>> GetOtherProgramsAsync() => otherProgramService.GetAllAsync();
++
++    public Task<List<TopSuggesterDto>> GetSuggestionsAsync() => suggestionService.GetTopSuggestionsAsync(5);
++}
++
++/// <summary>
++/// پیش‌بارگذاری داشبورد بلافاصله پس از ورود موفق (در پس‌زمینه)؛ تا کاربر به داشبورد برسد
++/// داده‌ها معمولاً در کش آماده‌اند و صفحه بدون انتظار برای APIها نمایش داده می‌شود.
++/// </summary>
++public sealed class DashboardPrefetcher(IServiceScopeFactory scopeFactory, ILogger<DashboardPrefetcher> logger)
++{
++    public void Prefetch(Guid userGuid, Guid positionGuid, bool isSuperAdmin, string? personnelCode)
++    {
++        if (userGuid == Guid.Empty) return;
++
++        _ = Task.Run(async () =>
++        {
++            try
++            {
++                await using var scope = scopeFactory.CreateAsyncScope();
++                var data = scope.ServiceProvider.GetRequiredService<DashboardDataService>();
++
++                var portal = await data.GetPortalAsync(userGuid, positionGuid, isSuperAdmin);
++                var effectivePosition = portal?.EffectivePositionGuid ?? positionGuid;
++
++                await Task.WhenAll(
++                    data.GetAnnouncementsAsync(userGuid),
++                    data.GetSurveysAsync(userGuid),
++                    data.GetMeetingsAsync(userGuid, effectivePosition),
++                    data.GetWindowsAppsAsync(personnelCode),
++                    data.GetOtherProgramsAsync(),
++                    data.GetSuggestionsAsync());
++            }
++            catch (Exception ex)
++            {
++                logger.LogDebug(ex, "[Prefetch] پیش‌بارگذاری داشبورد برای {User} کامل نشد", userGuid);
++            }
++        });
++    }
++}
+diff --git a/EPC.SSO/Services/ExternalApiWarmupService.cs b/EPC.SSO/Services/ExternalApiWarmupService.cs
+index 74fe3f5..a7f2caa 100644
+--- a/EPC.SSO/Services/ExternalApiWarmupService.cs
++++ b/EPC.SSO/Services/ExternalApiWarmupService.cs
+@@ -14,6 +14,7 @@ namespace EPC.SSO.Services;
+ /// </summary>
+ public sealed class ExternalApiWarmupService(
+     S2STokenProvider tokenProvider,
++    IServiceScopeFactory scopeFactory,
+     IConfiguration configuration,
+     ILogger<ExternalApiWarmupService> logger) : BackgroundService
+ {
+@@ -45,7 +46,8 @@ public sealed class ExternalApiWarmupService(
+                 PingSqlAsync("PortalDB", configuration.GetConnectionString("Portal"), ct),
+                 PingSqlAsync("ApplicationDB", DecodeIfNeeded(configuration.GetConnectionString("Application")), ct),
+                 PingSqlAsync("SuggestionDB", configuration.GetConnectionString("SuggestionSystem"), ct),
+-                WarmUpTokensAsync(ct));
++                WarmUpTokensAsync(ct),
++                WarmUpSharedDashboardDataAsync());
+         }
+         catch (OperationCanceledException) when (ct.IsCancellationRequested)
+         {
+@@ -56,6 +58,24 @@ public sealed class ExternalApiWarmupService(
+         }
+     }
+ 
++    /// <summary>
++    /// داده‌های مشترک همه‌ی کاربران (برترین پیشنهاددهندگان با Query سنگین، سایر برنامه‌ها) پیش از اولین
++    /// کاربر بارگذاری و مرتب تازه می‌شوند؛ هیچ کاربری منتظر این Queryها نمی‌ماند.
++    /// </summary>
++    private async Task WarmUpSharedDashboardDataAsync()
++    {
++        try
++        {
++            await using var scope = scopeFactory.CreateAsyncScope();
++            var data = scope.ServiceProvider.GetRequiredService<DashboardDataService>();
++            await Task.WhenAll(data.GetSuggestionsAsync(), data.GetOtherProgramsAsync());
++        }
++        catch (Exception ex)
++        {
++            logger.LogWarning(ex, "[Warmup] بارگذاری داده‌های مشترک داشبورد ناموفق بود");
++        }
++    }
++
+     private async Task PingSqlAsync(string name, string? connectionString, CancellationToken ct)
+     {
+         if (string.IsNullOrWhiteSpace(connectionString)) return;
+diff --git a/EPC.SSO/Services/OtherProgramService.cs b/EPC.SSO/Services/OtherProgramService.cs
+index 8b531f6..b34572e 100644
+--- a/EPC.SSO/Services/OtherProgramService.cs
++++ b/EPC.SSO/Services/OtherProgramService.cs
+@@ -9,7 +9,7 @@ namespace EPC.SSO.Services;
+ 
+ public class OtherProgramService(
+     IDbContextFactory<PortalDbContext> ctxFactory,
+-    IMemoryCache memoryCache,
++    EPC.SSO.Infrastructure.IAppCache cache,
+     ILogger<OtherProgramService> logger)
+ {
+     private const string CacheKey = "portal_other_programs_v2";   // v2: شکل مدل عوض شد
+@@ -22,17 +22,18 @@ public class OtherProgramService(
+     }
+ 
+     public async Task<List<OtherProgramViewModel>> GetAllAsync()
+-    {
+-        if (memoryCache.TryGetValue(CacheKey, out List<OtherProgramViewModel>? cached)) return cached!;
++        => await cache.GetOrCreateAsync(CacheKey, LoadAsync, TimeSpan.FromMinutes(30), TimeSpan.FromHours(24)) ?? [];
+ 
+-        await using var ctx = await ctxFactory.CreateDbContextAsync();
++    private async Task<List<OtherProgramViewModel>?> LoadAsync(CancellationToken ct)
++    {
++        await using var ctx = await ctxFactory.CreateDbContextAsync(ct);
+         var rows = await ctx.OtherPrograms
+             .AsNoTracking()
+             .OrderBy(x => x.Level)
+             .Select(x => new { x.PK_OtherProgram, x.OtherProgramName, x.OtherProgramAddress, x.Level, x.IsFirst, x.IsSSO })
+-            .ToListAsync();
++            .ToListAsync(ct);
+ 
+-        var result = rows.Select(x => new OtherProgramViewModel
++        return rows.Select(x => new OtherProgramViewModel
+         {
+             Id = x.PK_OtherProgram,
+             Name = x.OtherProgramName ?? "بدون نام",
+@@ -40,13 +41,6 @@ public class OtherProgramService(
+             IsFirst = x.IsFirst ?? false,
+             Kind = Classify(x.OtherProgramAddress, x.IsSSO)
+         }).ToList();
+-
+-        memoryCache.Set(CacheKey, result, new MemoryCacheEntryOptions
+-        {
+-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30),
+-            Size = 1
+-        });
+-        return result;
+     }
+ 
+     /// آماده‌سازی اجرا: نوع را از DB تشخیص می‌دهد (نه از کلاینت)، برای SSO بلیط می‌سازد و ذخیره می‌کند.
+diff --git a/EPC.SSO/Services/SuggestionService.cs b/EPC.SSO/Services/SuggestionService.cs
+index 278945c..eee74ad 100644
+--- a/EPC.SSO/Services/SuggestionService.cs
++++ b/EPC.SSO/Services/SuggestionService.cs
+@@ -17,7 +17,7 @@ public class TopSuggesterDto
+ 
+ public class SuggestionService(
+     IConfiguration configuration,
+-    IMemoryCache memoryCache,
++    EPC.SSO.Infrastructure.IAppCache cache,
+     ILogger<SuggestionService> logger)
+ {
+     private readonly string _connectionString =
+@@ -30,35 +30,16 @@ public class SuggestionService(
+         configuration["ExternalApis:FileManagementApi:BaseUrl"]?.TrimEnd('/')
+         ?? throw new InvalidOperationException("SuggestionSystem:AvatarBaseUrl تعریف نشده.");
+ 
++    /// <summary>
++    /// برترین پیشنهاددهندگان (برای همه‌ی کاربران یکسان). Query سنگین است؛ پس داده ۱۵ دقیقه تازه و تا ۱۲ ساعت
++    /// به‌عنوان پشتیبان نگه داشته می‌شود و به‌روزرسانی در پس‌زمینه انجام می‌شود (کاربر هرگز منتظر Query نمی‌ماند،
++    /// جز اولین بار که سرویس پس‌زمینه‌ی گرم‌کردن هم آن را از قبل پر می‌کند). خطا دیگر «لیست خالی» کش نمی‌شود.
++    /// </summary>
+     public async Task<List<TopSuggesterDto>> GetTopSuggestionsAsync(int count)
+-    {
+-        var cacheKey = $"top_suggesters_{count}";
+-        var swTotal = Stopwatch.StartNew();
+-
+-        if (memoryCache.TryGetValue(cacheKey, out List<TopSuggesterDto>? cached))
+-        {
+-            logger.LogInformation("[Suggestions] Cache HIT در {Ms}ms برای Count={Count}",
+-                swTotal.ElapsedMilliseconds, count);
+-            return cached!;
+-        }
+-
+-        logger.LogInformation("[Suggestions] Cache MISS — شروع لود از DB برای Count={Count}", count);
+-
+-        var result = await LoadTopSuggestionsAsync(count);
+-
+-        memoryCache.Set(cacheKey, result, new MemoryCacheEntryOptions
+-        {
+-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(15),
+-            Size = 1
+-        });
+-
+-        logger.LogInformation("[Suggestions] کل عملیات (Cache Miss) در {Ms}ms — {Count} نفر",
+-            swTotal.ElapsedMilliseconds, result.Count);
+-
+-        return result;
+-    }
++        => await cache.GetOrCreateAsync($"top_suggesters_{count}", _ => LoadTopSuggestionsAsync(count),
++               TimeSpan.FromMinutes(15), TimeSpan.FromHours(12)) ?? [];
+ 
+-    private async Task<List<TopSuggesterDto>> LoadTopSuggestionsAsync(int count)
++    private async Task<List<TopSuggesterDto>?> LoadTopSuggestionsAsync(int count)
+     {
+         // ✅ سال شمسی جاری یک‌بار در متغیر محاسبه می‌شود؛ قبلاً dbo.shamsidate(GETDATE())
+         // داخل WHERE بود که چون در دل یک اسکالر UDF پیچیده شده بود، بهینه‌ساز
+@@ -95,7 +76,7 @@ ORDER BY COUNT(PK_DocHdr) DESC;";
+             logger.LogInformation("[Suggestions] SqlConnection.OpenAsync در {Ms}ms", sw.ElapsedMilliseconds);
+ 
+             var swQuery = Stopwatch.StartNew();
+-            var rows = await conn.QueryAsync<TopSuggesterDto>(sql, new { Count = count });
++            var rows = await conn.QueryAsync<TopSuggesterDto>(new CommandDefinition(sql, new { Count = count }, commandTimeout: 60));
+             result = rows.ToList();
+             logger.LogInformation("[Suggestions] اجرای Query (Dapper) در {Ms}ms — {Count} ردیف",
+                 swQuery.ElapsedMilliseconds, result.Count);
+@@ -103,7 +84,7 @@ ORDER BY COUNT(PK_DocHdr) DESC;";
+         catch (Exception ex)
+         {
+             logger.LogError(ex, "[Suggestions] خطا در اجرای Query برای Count={Count}", count);
+-            return [];
++            return null; // null = خطا؛ نسخه‌ی قبلی کش حفظ می‌شود
+         }
+ 
+         // ✅ ساخت آدرس تصویر بر اساس کد پرسنلی — نیازی به کوئری یا API اضافه نیست
+diff --git a/EPC.SSO/Services/WindowsProgramService.cs b/EPC.SSO/Services/WindowsProgramService.cs
+index 0e4438d..94aa7eb 100644
+--- a/EPC.SSO/Services/WindowsProgramService.cs
++++ b/EPC.SSO/Services/WindowsProgramService.cs
+@@ -9,40 +9,20 @@ namespace EPC.SSO.Services;
+ public class WindowsProgramService(
+     IConfiguration configuration,
+     IMemoryCache memoryCache,
++    EPC.SSO.Infrastructure.IAppCache cache,
+     ILogger<WindowsProgramService> logger)
+ {
+     private readonly string _connStr =
+         configuration.GetConnectionString("Portal")
+         ?? throw new InvalidOperationException("ConnectionStrings:Portal تعریف نشده.");
+ 
++    /// <summary>برنامه‌های ویندوزی مجاز کاربر: ۳۰ دقیقه تازه، تا ۱۲ ساعت پشتیبان؛ به‌روزرسانی در پس‌زمینه</summary>
+     public async Task<List<WindowsAppViewModel>> GetAccessibleAppsAsync(string personnelCode)
+     {
+         if (string.IsNullOrWhiteSpace(personnelCode)) return [];
+-
+-        var cacheKey = $"winapps_list_{personnelCode}";
+-        var swTotal = Stopwatch.StartNew();
+-
+-        if (memoryCache.TryGetValue(cacheKey, out List<WindowsAppViewModel>? cached))
+-        {
+-            logger.LogInformation("[WindowsApps] Cache HIT در {Ms}ms برای {Code}",
+-                swTotal.ElapsedMilliseconds, personnelCode);
+-            return cached!;
+-        }
+-
+-        logger.LogInformation("[WindowsApps] Cache MISS — شروع لود از DB برای {Code}", personnelCode);
+-
+-        var apps = await LoadAccessibleAppsAsync(personnelCode);
+-
+-        memoryCache.Set(cacheKey, apps, new MemoryCacheEntryOptions
+-        {
+-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30),
+-            Size = 1
+-        });
+-
+-        logger.LogInformation("[WindowsApps] کل عملیات (Cache Miss) در {Ms}ms — {Count} برنامه",
+-            swTotal.ElapsedMilliseconds, apps.Count);
+-
+-        return apps;
++        return await cache.GetOrCreateAsync($"winapps_list_{personnelCode}",
++                   async _ => (List<WindowsAppViewModel>?)await LoadAccessibleAppsAsync(personnelCode),
++                   TimeSpan.FromMinutes(30), TimeSpan.FromHours(12)) ?? [];
+     }
+ 
+     private async Task<List<WindowsAppViewModel>> LoadAccessibleAppsAsync(string personnelCode)
 diff --git a/EPC.SSO/Startup.cs b/EPC.SSO/Startup.cs
-index 9ce3ea0..551ea04 100644
+index 9ce3ea0..f57203f 100644
 --- a/EPC.SSO/Startup.cs
 +++ b/EPC.SSO/Startup.cs
-@@ -155,6 +155,10 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
+@@ -149,12 +149,18 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
+         services.AddScoped<SuggestionService>();
+         services.AddScoped<OtherProgramService>();
+         services.AddScoped<WindowsProgramService>();
++        services.AddScoped<DashboardDataService>();
++        services.AddSingleton<DashboardPrefetcher>();
+ 
+         services.AddSingleton<AnnouncementFileCache>();
+         services.AddSingleton<LoginAnnouncementStore>();
          services.AddHostedService<LoginAnnouncementRefreshService>();
          services.AddHostedService<ExternalApiWarmupService>();
  
@@ -256,7 +2050,7 @@ index 9ce3ea0..551ea04 100644
          if (environment.IsDevelopment())
              services.AddDatabaseDeveloperPageExceptionFilter();
      }
-@@ -217,6 +221,7 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
+@@ -217,6 +223,7 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
          {
              endpoints.MapHealthChecks("/health");
              endpoints.MapControllers();
@@ -277,9 +2071,18 @@ index 9a76af2..12ede6a 100644
 +    <script src="~/js/portal-realtime.js" asp-append-version="true"></script>
  }
 diff --git a/EPC.SSO/wwwroot/js/dashboard.js b/EPC.SSO/wwwroot/js/dashboard.js
-index 8f009e3..e551d47 100644
+index 8f009e3..df91c31 100644
 --- a/EPC.SSO/wwwroot/js/dashboard.js
 +++ b/EPC.SSO/wwwroot/js/dashboard.js
+@@ -2,7 +2,7 @@
+    EPC Portal — Dashboard  (dashboard.js)
+    وابستگی‌ها: site-header.js، announcement-common.js (escHtml/escAttr/ANN_TYPE/openAnnouncementDetail)،
+                jalali-picker.js، page-tour.js، bootstrap (vendor.min.js)
+-   همه‌ی داده‌ها با یک درخواست (/Grants/GetDashboardData) و به‌صورت موازی سمت سرور گرفته می‌شوند.
++   هر ویجت مستقل بارگذاری و به محض آماده شدن نمایش داده می‌شود (داده‌ی نشست قبلی بی‌درنگ نمایش داده می‌شود).
+    ═══════════════════════════════════════════════════════════════════════ */
+ (function () {
+     'use strict';
 @@ -183,7 +183,7 @@
      const MEETING_STATUS = {
          1: { label: 'پیش رو', color: '#0ea5e9' },
@@ -289,10 +2092,12 @@ index 8f009e3..e551d47 100644
      };
  
      function renderMeetings(list) {
-@@ -489,6 +489,16 @@
+@@ -489,20 +489,59 @@
  
      document.addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(); });
  
+-    load();
+-    async function load() {
 +    // با رسیدن اعلان لحظه‌ای سامانه جلسات (portal-realtime.js)، فقط ویجت جلسات دوباره خوانده می‌شود
 +    let meetingsReloadTimer;
 +    window.addEventListener('portal:notification', e => {
@@ -303,9 +2108,62 @@ index 8f009e3..e551d47 100644
 +        }, 500);
 +    });
 +
-     load();
-     async function load() {
++    /*  بارگذاری تدریجی
++        ─────────────────────────────────────────────────────────────────────
++        • آخرین داده‌ی دیده‌شده (sessionStorage، فقط برای همین کاربر و همین نشست مرورگر) بی‌درنگ نمایش داده می‌شود.
++        • هر ویجت درخواست مستقل دارد و به محض رسیدن پاسخش به‌روز می‌شود؛ قبلاً کل داشبورد منتظر کندترین API
++          (تا ۱۰ ثانیه) می‌ماند.
++        • خطای یک ویجت فقط همان ویجت را «تلاش دوباره» نشان می‌دهد و داده‌ی قبلی (اگر بود) حفظ می‌شود. */
++    const CACHE_PREFIX = `epc-dash:${personnelCode}:`;
++    const readCache = key => { try { return JSON.parse(sessionStorage.getItem(CACHE_PREFIX + key) || 'null'); } catch { return null; } };
++    const writeCache = (key, value) => { try { sessionStorage.setItem(CACHE_PREFIX + key, JSON.stringify(value)); } catch { /* حجم/حالت خصوصی */ } };
++
++    const WIDGETS = [
++        { key: 'meetings', url: '/Grants/GetMeetings', render: renderMeetings },
++        { key: 'announcements', url: '/Grants/GetAnnouncements', render: renderAnnouncements, after: startForceRead },
++        { key: 'surveys', url: '/Grants/GetSurveys', render: renderSurveys },
++        { key: 'windowsApps', url: '/Grants/GetWindowsApps', render: renderWindowsApps },
++        { key: 'otherPrograms', url: '/Grants/GetOtherPrograms', render: renderOtherPrograms },
++        { key: 'suggestions', url: '/Grants/GetSuggestions', render: renderSuggesters },
++    ];
++
++    function paint(widget, data) {
++        try { widget.render(data); } catch (e) { console.error('[dashboard]', widget.key, e); }
++        $$('.p-scroll').forEach(el => { if (!el.dataset.watched) { el.dataset.watched = '1'; watchScroll(el); } });
++    }
++
++    async function loadWidget(widget) {
++        const cached = readCache(widget.key);
          try {
+-            const d = await getJson('/Grants/GetDashboardData');
+-            renderMeetings(d.meetings);
+-            renderAnnouncements(d.announcements);
+-            renderSurveys(d.surveys);
+-            renderSuggesters(d.suggestions);
+-            renderWindowsApps(d.windowsApps);
+-            renderOtherPrograms(d.otherPrograms);
+-            startForceRead(d.announcements);
+-            $$('.p-scroll').forEach(watchScroll);
++            const data = await getJson(widget.url);
++            if (data === null && cached) return; // منبع در دسترس نیست؛ همان داده‌ی قبلی می‌ماند
++            if (data !== null) writeCache(widget.key, data);
++            paint(widget, data);
++            if (data !== null) widget.after?.(data);
+         } catch {
+-            renderMeetings(null); renderAnnouncements(null); renderSurveys(null); renderSuggesters(null);
++            if (!cached) paint(widget, null);
+         }
+     }
++
++    function load() {
++        // نمایش فوری از نشست قبلی (بدون انتظار برای شبکه)
++        WIDGETS.forEach(w => { const c = readCache(w.key); if (c) paint(w, c); });
++        // همه با هم و مستقل
++        WIDGETS.forEach(loadWidget);
++    }
++
++    load();
+ })();
 diff --git a/EPC.SSO/wwwroot/js/portal-realtime.js b/EPC.SSO/wwwroot/js/portal-realtime.js
 new file mode 100644
 index 0000000..e8be301
@@ -362,6 +2220,15 @@ index 0000000..e8be301
 +    connection.onclose(() => start(5000));
 +    start();
 +})();
+diff --git a/EPC.SSO/wwwroot/js/signalr.min.js b/EPC.SSO/wwwroot/js/signalr.min.js
+new file mode 100644
+index 0000000..849396c
+--- /dev/null
++++ b/EPC.SSO/wwwroot/js/signalr.min.js
+@@ -0,0 +1,2 @@
++var t,e;t=self,e=()=>(()=>{var t={d:(e,s)=>{for(var i in s)t.o(s,i)&&!t.o(e,i)&&Object.defineProperty(e,i,{enumerable:!0,get:s[i]})}};t.g=function(){if("object"==typeof globalThis)return globalThis;try{return this||new Function("return this")()}catch(t){if("object"==typeof window)return window}}(),t.o=(t,e)=>Object.prototype.hasOwnProperty.call(t,e),t.r=t=>{"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(t,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(t,"t",{value:!0})};var e,s={};t.r(s),t.d(s,{AbortError:()=>r,DefaultHttpClient:()=>H,HttpClient:()=>d,HttpError:()=>i,HttpResponse:()=>u,HttpTransportType:()=>F,HubConnection:()=>q,HubConnectionBuilder:()=>tt,HubConnectionState:()=>A,JsonHubProtocol:()=>Y,LogLevel:()=>e,MessageType:()=>x,NullLogger:()=>f,Subject:()=>U,TimeoutError:()=>n,TransferFormat:()=>B,VERSION:()=>p});class i extends Error{constructor(t,e){const s=new.target.prototype;super(`${t}: Status code '${e}'`),this.statusCode=e,this.__proto__=s}}class n extends Error{constructor(t="A timeout occurred."){const e=new.target.prototype;super(t),this.__proto__=e}}class r extends Error{constructor(t="An abort occurred."){const e=new.target.prototype;super(t),this.__proto__=e}}class o extends Error{constructor(t,e){const s=new.target.prototype;super(t),this.transport=e,this.errorType="UnsupportedTransportError",this.__proto__=s}}class h extends Error{constructor(t,e){const s=new.target.prototype;super(t),this.transport=e,this.errorType="DisabledTransportError",this.__proto__=s}}class c extends Error{constructor(t,e){const s=new.target.prototype;super(t),this.transport=e,this.errorType="FailedToStartTransportError",this.__proto__=s}}class a extends Error{constructor(t){const e=new.target.prototype;super(t),this.errorType="FailedToNegotiateWithServerError",this.__proto__=e}}class l extends Error{constructor(t,e){const s=new.target.prototype;super(t),this.innerErrors=e,this.__proto__=s}}class u{constructor(t,e,s){this.statusCode=t,this.statusText=e,this.content=s}}class d{get(t,e){return this.send({...e,method:"GET",url:t})}post(t,e){return this.send({...e,method:"POST",url:t})}delete(t,e){return this.send({...e,method:"DELETE",url:t})}getCookieString(t){return""}}!function(t){t[t.Trace=0]="Trace",t[t.Debug=1]="Debug",t[t.Information=2]="Information",t[t.Warning=3]="Warning",t[t.Error=4]="Error",t[t.Critical=5]="Critical",t[t.None=6]="None"}(e||(e={}));class f{constructor(){}log(t,e){}}f.instance=new f;const p="8.0.29";class w{static isRequired(t,e){if(null==t)throw new Error(`The '${e}' argument is required.`)}static isNotEmpty(t,e){if(!t||t.match(/^\s*$/))throw new Error(`The '${e}' argument should not be empty.`)}static isIn(t,e,s){if(!(t in e))throw new Error(`Unknown ${s} value: ${t}.`)}}class g{static get isBrowser(){return!g.isNode&&"object"==typeof window&&"object"==typeof window.document}static get isWebWorker(){return!g.isNode&&"object"==typeof self&&"importScripts"in self}static get isReactNative(){return!g.isNode&&"object"==typeof window&&void 0===window.document}static get isNode(){return"undefined"!=typeof process&&process.release&&"node"===process.release.name}}function m(t,e){let s="";return y(t)?(s=`Binary data of length ${t.byteLength}`,e&&(s+=`. Content: '${function(t){const e=new Uint8Array(t);let s="";return e.forEach(t=>{s+=`0x${t<16?"0":""}${t.toString(16)} `}),s.substr(0,s.length-1)}(t)}'`)):"string"==typeof t&&(s=`String data of length ${t.length}`,e&&(s+=`. Content: '${t}'`)),s}function y(t){return t&&"undefined"!=typeof ArrayBuffer&&(t instanceof ArrayBuffer||t.constructor&&"ArrayBuffer"===t.constructor.name)}async function b(t,s,i,n,r,o){const h={},[c,a]=$();h[c]=a,t.log(e.Trace,`(${s} transport) sending data. ${m(r,o.logMessageContent)}.`);const l=y(r)?"arraybuffer":"text",u=await i.post(n,{content:r,headers:{...h,...o.headers},responseType:l,timeout:o.timeout,withCredentials:o.withCredentials});t.log(e.Trace,`(${s} transport) request complete. Response status: ${u.statusCode}.`)}class v{constructor(t,e){this.i=t,this.h=e}dispose(){const t=this.i.observers.indexOf(this.h);t>-1&&this.i.observers.splice(t,1),0===this.i.observers.length&&this.i.cancelCallback&&this.i.cancelCallback().catch(t=>{})}}class E{constructor(t){this.l=t,this.out=console}log(t,s){if(t>=this.l){const i=`[${(new Date).toISOString()}] ${e[t]}: ${s}`;switch(t){case e.Critical:case e.Error:this.out.error(i);break;case e.Warning:this.out.warn(i);break;case e.Information:this.out.info(i);break;default:this.out.log(i)}}}}function $(){let t="X-SignalR-User-Agent";return g.isNode&&(t="User-Agent"),[t,C(p,S(),g.isNode?"NodeJS":"Browser",k())]}function C(t,e,s,i){let n="Microsoft SignalR/";const r=t.split(".");return n+=`${r[0]}.${r[1]}`,n+=` (${t}; `,n+=e&&""!==e?`${e}; `:"Unknown OS; ",n+=`${s}`,n+=i?`; ${i}`:"; Unknown Runtime Version",n+=")",n}function S(){if(!g.isNode)return"";switch(process.platform){case"win32":return"Windows NT";case"darwin":return"macOS";case"linux":return"Linux";default:return process.platform}}function k(){if(g.isNode)return process.versions.node}function P(t){return t.stack?t.stack:t.message?t.message:`${t}`}class T extends d{constructor(e){if(super(),this.u=e,"undefined"==typeof fetch||g.isNode){const t=require;this.p=new(t("tough-cookie").CookieJar),"undefined"==typeof fetch?this.m=t("node-fetch"):this.m=fetch,this.m=t("fetch-cookie")(this.m,this.p)}else this.m=fetch.bind(function(){if("undefined"!=typeof globalThis)return globalThis;if("undefined"!=typeof self)return self;if("undefined"!=typeof window)return window;if(void 0!==t.g)return t.g;throw new Error("could not find global")}());if("undefined"==typeof AbortController){const t=require;this.v=t("abort-controller")}else this.v=AbortController}async send(t){if(t.abortSignal&&t.abortSignal.aborted)throw new r;if(!t.method)throw new Error("No method defined.");if(!t.url)throw new Error("No url defined.");const s=new this.v;let o;t.abortSignal&&(t.abortSignal.onabort=()=>{s.abort(),o=new r});let h,c=null;if(t.timeout){const i=t.timeout;c=setTimeout(()=>{s.abort(),this.u.log(e.Warning,"Timeout from HTTP request."),o=new n},i)}""===t.content&&(t.content=void 0),t.content&&(t.headers=t.headers||{},y(t.content)?t.headers["Content-Type"]="application/octet-stream":t.headers["Content-Type"]="text/plain;charset=UTF-8");try{h=await this.m(t.url,{body:t.content,cache:"no-cache",credentials:!0===t.withCredentials?"include":"same-origin",headers:{"X-Requested-With":"XMLHttpRequest",...t.headers},method:t.method,mode:"cors",redirect:"follow",signal:s.signal})}catch(t){if(o)throw o;throw this.u.log(e.Warning,`Error from HTTP request. ${t}.`),t}finally{c&&clearTimeout(c),t.abortSignal&&(t.abortSignal.onabort=null)}if(!h.ok){const t=await I(h,"text");throw new i(t||h.statusText,h.status)}const a=I(h,t.responseType),l=await a;return new u(h.status,h.statusText,l)}getCookieString(t){let e="";return g.isNode&&this.p&&this.p.getCookies(t,(t,s)=>e=s.join("; ")),e}}function I(t,e){let s;switch(e){case"arraybuffer":s=t.arrayBuffer();break;case"text":default:s=t.text();break;case"blob":case"document":case"json":throw new Error(`${e} is not supported.`)}return s}class _ extends d{constructor(t){super(),this.u=t}send(t){return t.abortSignal&&t.abortSignal.aborted?Promise.reject(new r):t.method?t.url?new Promise((s,o)=>{const h=new XMLHttpRequest;h.open(t.method,t.url,!0),h.withCredentials=void 0===t.withCredentials||t.withCredentials,h.setRequestHeader("X-Requested-With","XMLHttpRequest"),""===t.content&&(t.content=void 0),t.content&&(y(t.content)?h.setRequestHeader("Content-Type","application/octet-stream"):h.setRequestHeader("Content-Type","text/plain;charset=UTF-8"));const c=t.headers;c&&Object.keys(c).forEach(t=>{h.setRequestHeader(t,c[t])}),t.responseType&&(h.responseType=t.responseType),t.abortSignal&&(t.abortSignal.onabort=()=>{h.abort(),o(new r)}),t.timeout&&(h.timeout=t.timeout),h.onload=()=>{t.abortSignal&&(t.abortSignal.onabort=null),h.status>=200&&h.status<300?s(new u(h.status,h.statusText,h.response||h.responseText)):o(new i(h.response||h.responseText||h.statusText,h.status))},h.onerror=()=>{this.u.log(e.Warning,`Error from HTTP request. ${h.status}: ${h.statusText}.`),o(new i(h.statusText,h.status))},h.ontimeout=()=>{this.u.log(e.Warning,"Timeout from HTTP request."),o(new n)},h.send(t.content)}):Promise.reject(new Error("No url defined.")):Promise.reject(new Error("No method defined."))}}class H extends d{constructor(t){if(super(),"undefined"!=typeof fetch||g.isNode)this.$=new T(t);else{if("undefined"==typeof XMLHttpRequest)throw new Error("No usable HttpClient found.");this.$=new _(t)}}send(t){return t.abortSignal&&t.abortSignal.aborted?Promise.reject(new r):t.method?t.url?this.$.send(t):Promise.reject(new Error("No url defined.")):Promise.reject(new Error("No method defined."))}getCookieString(t){return this.$.getCookieString(t)}}class D{static write(t){return`${t}${D.RecordSeparator}`}static parse(t){if(t[t.length-1]!==D.RecordSeparator)throw new Error("Message is incomplete.");const e=t.split(D.RecordSeparator);return e.pop(),e}}D.RecordSeparatorCode=30,D.RecordSeparator=String.fromCharCode(D.RecordSeparatorCode);class R{writeHandshakeRequest(t){return D.write(JSON.stringify(t))}parseHandshakeResponse(t){let e,s;if(y(t)){const i=new Uint8Array(t),n=i.indexOf(D.RecordSeparatorCode);if(-1===n)throw new Error("Message is incomplete.");const r=n+1;e=String.fromCharCode.apply(null,Array.prototype.slice.call(i.slice(0,r))),s=i.byteLength>r?i.slice(r).buffer:null}else{const i=t,n=i.indexOf(D.RecordSeparator);if(-1===n)throw new Error("Message is incomplete.");const r=n+1;e=i.substring(0,r),s=i.length>r?i.substring(r):null}const i=D.parse(e),n=JSON.parse(i[0]);if(n.type)throw new Error("Expected a handshake response from the server.");return[s,n]}}var x,A;!function(t){t[t.Invocation=1]="Invocation",t[t.StreamItem=2]="StreamItem",t[t.Completion=3]="Completion",t[t.StreamInvocation=4]="StreamInvocation",t[t.CancelInvocation=5]="CancelInvocation",t[t.Ping=6]="Ping",t[t.Close=7]="Close",t[t.Ack=8]="Ack",t[t.Sequence=9]="Sequence"}(x||(x={}));class U{constructor(){this.observers=[]}next(t){for(const e of this.observers)e.next(t)}error(t){for(const e of this.observers)e.error&&e.error(t)}complete(){for(const t of this.observers)t.complete&&t.complete()}subscribe(t){return this.observers.push(t),new v(this,t)}}class L{constructor(t,e,s){this.C=1e5,this.S=[],this.k=0,this.P=!1,this.T=1,this.I=0,this._=0,this.H=!1,this.D=t,this.R=e,this.C=s}async A(t){const e=this.D.writeMessage(t);let s=Promise.resolve();if(this.U(t)){this.k++;let t=()=>{},i=()=>{};y(e)?this._+=e.byteLength:this._+=e.length,this._>=this.C&&(s=new Promise((e,s)=>{t=e,i=s})),this.S.push(new N(e,this.k,t,i))}try{this.H||await this.R.send(e)}catch{this.L()}await s}N(t){let e=-1;for(let s=0;s<this.S.length;s++){const i=this.S[s];if(i.q<=t.sequenceId)e=s,y(i.M)?this._-=i.M.byteLength:this._-=i.M.length,i.j();else{if(!(this._<this.C))break;i.j()}}-1!==e&&(this.S=this.S.slice(e+1))}W(t){if(this.P)return t.type===x.Sequence&&(this.P=!1,!0);if(!this.U(t))return!0;const e=this.T;return this.T++,e<=this.I?(e===this.I&&this.O(),!1):(this.I=e,this.O(),!0)}F(t){t.sequenceId>this.T?this.R.stop(new Error("Sequence ID greater than amount of messages we've received.")):this.T=t.sequenceId}L(){this.H=!0,this.P=!0}async B(){const t=0!==this.S.length?this.S[0].q:this.k+1;await this.R.send(this.D.writeMessage({type:x.Sequence,sequenceId:t}));const e=this.S;for(const t of e)await this.R.send(t.M);this.H=!1}X(t){null!=t||(t=new Error("Unable to reconnect to server."));for(const e of this.S)e.J(t)}U(t){switch(t.type){case x.Invocation:case x.StreamItem:case x.Completion:case x.StreamInvocation:case x.CancelInvocation:return!0;case x.Close:case x.Sequence:case x.Ping:case x.Ack:return!1}}O(){void 0===this.V&&(this.V=setTimeout(async()=>{try{this.H||await this.R.send(this.D.writeMessage({type:x.Ack,sequenceId:this.I}))}catch{}clearTimeout(this.V),this.V=void 0},1e3))}}class N{constructor(t,e,s,i){this.M=t,this.q=e,this.j=s,this.J=i}}!function(t){t.Disconnected="Disconnected",t.Connecting="Connecting",t.Connected="Connected",t.Disconnecting="Disconnecting",t.Reconnecting="Reconnecting"}(A||(A={}));class q{static create(t,e,s,i,n,r,o){return new q(t,e,s,i,n,r,o)}constructor(t,s,i,n,r,o,h){this.K=0,this.G=()=>{this.u.log(e.Warning,"The page is being frozen, this will likely lead to the connection being closed and messages being lost. For more information see the docs at https://learn.microsoft.com/aspnet/core/signalr/javascript-client#bsleep")},w.isRequired(t,"connection"),w.isRequired(s,"logger"),w.isRequired(i,"protocol"),this.serverTimeoutInMilliseconds=null!=r?r:3e4,this.keepAliveIntervalInMilliseconds=null!=o?o:15e3,this.Y=null!=h?h:1e5,this.u=s,this.D=i,this.connection=t,this.Z=n,this.tt=new R,this.connection.onreceive=t=>this.et(t),this.connection.onclose=t=>this.st(t),this.it={},this.nt={},this.rt=[],this.ot=[],this.ht=[],this.ct=0,this.lt=!1,this.ut=A.Disconnected,this.dt=!1,this.ft=this.D.writeMessage({type:x.Ping})}get state(){return this.ut}get connectionId(){return this.connection&&this.connection.connectionId||null}get baseUrl(){return this.connection.baseUrl||""}set baseUrl(t){if(this.ut!==A.Disconnected&&this.ut!==A.Reconnecting)throw new Error("The HubConnection must be in the Disconnected or Reconnecting state to change the url.");if(!t)throw new Error("The HubConnection url must be a valid url.");this.connection.baseUrl=t}start(){return this.wt=this.gt(),this.wt}async gt(){if(this.ut!==A.Disconnected)return Promise.reject(new Error("Cannot start a HubConnection that is not in the 'Disconnected' state."));this.ut=A.Connecting,this.u.log(e.Debug,"Starting HubConnection.");try{await this.yt(),g.isBrowser&&window.document.addEventListener("freeze",this.G),this.ut=A.Connected,this.dt=!0,this.u.log(e.Debug,"HubConnection connected successfully.")}catch(t){return this.ut=A.Disconnected,this.u.log(e.Debug,`HubConnection failed to start successfully because of error '${t}'.`),Promise.reject(t)}}async yt(){this.bt=void 0,this.lt=!1;const t=new Promise((t,e)=>{this.vt=t,this.Et=e});await this.connection.start(this.D.transferFormat);try{let s=this.D.version;this.connection.features.reconnect||(s=1);const i={protocol:this.D.name,version:s};if(this.u.log(e.Debug,"Sending handshake request."),await this.$t(this.tt.writeHandshakeRequest(i)),this.u.log(e.Information,`Using HubProtocol '${this.D.name}'.`),this.Ct(),this.St(),this.kt(),await t,this.bt)throw this.bt;!!this.connection.features.reconnect&&(this.Pt=new L(this.D,this.connection,this.Y),this.connection.features.disconnected=this.Pt.L.bind(this.Pt),this.connection.features.resend=()=>{if(this.Pt)return this.Pt.B()}),this.connection.features.inherentKeepAlive||await this.$t(this.ft)}catch(t){throw this.u.log(e.Debug,`Hub handshake failed with error '${t}' during start(). Stopping HubConnection.`),this.Ct(),this.Tt(),await this.connection.stop(t),t}}async stop(){const t=this.wt;this.connection.features.reconnect=!1,this.It=this._t(),await this.It;try{await t}catch(t){}}_t(t){if(this.ut===A.Disconnected)return this.u.log(e.Debug,`Call to HubConnection.stop(${t}) ignored because it is already in the disconnected state.`),Promise.resolve();if(this.ut===A.Disconnecting)return this.u.log(e.Debug,`Call to HttpConnection.stop(${t}) ignored because the connection is already in the disconnecting state.`),this.It;const s=this.ut;return this.ut=A.Disconnecting,this.u.log(e.Debug,"Stopping HubConnection."),this.Ht?(this.u.log(e.Debug,"Connection stopped during reconnect delay. Done reconnecting."),clearTimeout(this.Ht),this.Ht=void 0,this.Dt(),Promise.resolve()):(s===A.Connected&&this.Rt(),this.Ct(),this.Tt(),this.bt=t||new r("The connection was stopped before the hub handshake could complete."),this.connection.stop(t))}async Rt(){try{await this.xt(this.At())}catch{}}stream(t,...e){const[s,i]=this.Ut(e),n=this.Lt(t,e,i);let r;const o=new U;return o.cancelCallback=()=>{const t=this.Nt(n.invocationId);return delete this.it[n.invocationId],r.then(()=>this.xt(t))},this.it[n.invocationId]=(t,e)=>{e?o.error(e):t&&(t.type===x.Completion?t.error?o.error(new Error(t.error)):o.complete():o.next(t.item))},r=this.xt(n).catch(t=>{o.error(t),delete this.it[n.invocationId]}),this.qt(s,r),o}$t(t){return this.kt(),this.connection.send(t)}xt(t){return this.Pt?this.Pt.A(t):this.$t(this.D.writeMessage(t))}send(t,...e){const[s,i]=this.Ut(e),n=this.xt(this.Mt(t,e,!0,i));return this.qt(s,n),n}invoke(t,...e){const[s,i]=this.Ut(e),n=this.Mt(t,e,!1,i);return new Promise((t,e)=>{this.it[n.invocationId]=(s,i)=>{i?e(i):s&&(s.type===x.Completion?s.error?e(new Error(s.error)):t(s.result):e(new Error(`Unexpected message type: ${s.type}`)))};const i=this.xt(n).catch(t=>{e(t),delete this.it[n.invocationId]});this.qt(s,i)})}on(t,e){t&&e&&(t=t.toLowerCase(),this.nt[t]||(this.nt[t]=[]),-1===this.nt[t].indexOf(e)&&this.nt[t].push(e))}off(t,e){if(!t)return;t=t.toLowerCase();const s=this.nt[t];if(s)if(e){const i=s.indexOf(e);-1!==i&&(s.splice(i,1),0===s.length&&delete this.nt[t])}else delete this.nt[t]}onclose(t){t&&this.rt.push(t)}onreconnecting(t){t&&this.ot.push(t)}onreconnected(t){t&&this.ht.push(t)}et(t){if(this.Ct(),this.lt||(t=this.jt(t),this.lt=!0),t){const s=this.D.parseMessages(t,this.u);for(const t of s)if(!this.Pt||this.Pt.W(t))switch(t.type){case x.Invocation:this.Wt(t).catch(t=>{this.u.log(e.Error,`Invoke client method threw error: ${P(t)}`)});break;case x.StreamItem:case x.Completion:{const s=this.it[t.invocationId];if(s){t.type===x.Completion&&delete this.it[t.invocationId];try{s(t)}catch(t){this.u.log(e.Error,`Stream callback threw error: ${P(t)}`)}}break}case x.Ping:break;case x.Close:{this.u.log(e.Information,"Close message received from server.");const s=t.error?new Error("Server returned an error on close: "+t.error):void 0;!0===t.allowReconnect?this.connection.stop(s):this.It=this._t(s);break}case x.Ack:this.Pt&&this.Pt.N(t);break;case x.Sequence:this.Pt&&this.Pt.F(t);break;default:this.u.log(e.Warning,`Invalid message type: ${t.type}.`)}}this.St()}jt(t){let s,i;try{[i,s]=this.tt.parseHandshakeResponse(t)}catch(t){const s="Error parsing handshake response: "+t;this.u.log(e.Error,s);const i=new Error(s);throw this.Et(i),i}if(s.error){const t="Server returned handshake error: "+s.error;this.u.log(e.Error,t);const i=new Error(t);throw this.Et(i),i}return this.u.log(e.Debug,"Server handshake complete."),this.vt(),i}kt(){this.connection.features.inherentKeepAlive||(this.K=(new Date).getTime()+this.keepAliveIntervalInMilliseconds,this.Tt())}St(){if(!(this.connection.features&&this.connection.features.inherentKeepAlive||(this.Ot=setTimeout(()=>this.serverTimeout(),this.serverTimeoutInMilliseconds),void 0!==this.Ft))){let t=this.K-(new Date).getTime();t<0&&(t=0),this.Ft=setTimeout(async()=>{if(this.ut===A.Connected)try{await this.$t(this.ft)}catch{this.Tt()}},t)}}serverTimeout(){this.connection.stop(new Error("Server timeout elapsed without receiving a message from the server."))}async Wt(t){const s=t.target.toLowerCase(),i=this.nt[s];if(!i)return this.u.log(e.Warning,`No client method with the name '${s}' found.`),void(t.invocationId&&(this.u.log(e.Warning,`No result given for '${s}' method and invocation ID '${t.invocationId}'.`),await this.xt(this.Bt(t.invocationId,"Client didn't provide a result.",null))));const n=i.slice(),r=!!t.invocationId;let o,h,c;for(const i of n)try{const n=o;o=await i.apply(this,t.arguments),r&&o&&n&&(this.u.log(e.Error,`Multiple results provided for '${s}'. Sending error to server.`),c=this.Bt(t.invocationId,"Client provided multiple results.",null)),h=void 0}catch(t){h=t,this.u.log(e.Error,`A callback for the method '${s}' threw error '${t}'.`)}c?await this.xt(c):r?(h?c=this.Bt(t.invocationId,`${h}`,null):void 0!==o?c=this.Bt(t.invocationId,null,o):(this.u.log(e.Warning,`No result given for '${s}' method and invocation ID '${t.invocationId}'.`),c=this.Bt(t.invocationId,"Client didn't provide a result.",null)),await this.xt(c)):o&&this.u.log(e.Error,`Result given for '${s}' method but server is not expecting a result.`)}st(t){this.u.log(e.Debug,`HubConnection.connectionClosed(${t}) called while in state ${this.ut}.`),this.bt=this.bt||t||new r("The underlying connection was closed before the hub handshake could complete."),this.vt&&this.vt(),this.Xt(t||new Error("Invocation canceled due to the underlying connection being closed.")),this.Ct(),this.Tt(),this.ut===A.Disconnecting?this.Dt(t):this.ut===A.Connected&&this.Z?this.Jt(t):this.ut===A.Connected&&this.Dt(t)}Dt(t){if(this.dt){this.ut=A.Disconnected,this.dt=!1,this.Pt&&(this.Pt.X(null!=t?t:new Error("Connection closed.")),this.Pt=void 0),g.isBrowser&&window.document.removeEventListener("freeze",this.G);try{this.rt.forEach(e=>e.apply(this,[t]))}catch(s){this.u.log(e.Error,`An onclose callback called with error '${t}' threw error '${s}'.`)}}}async Jt(t){const s=Date.now();let i=0,n=void 0!==t?t:new Error("Attempting to reconnect due to a unknown error."),r=this.zt(i++,0,n);if(null===r)return this.u.log(e.Debug,"Connection not reconnecting because the IRetryPolicy returned null on the first reconnect attempt."),void this.Dt(t);if(this.ut=A.Reconnecting,t?this.u.log(e.Information,`Connection reconnecting because of error '${t}'.`):this.u.log(e.Information,"Connection reconnecting."),0!==this.ot.length){try{this.ot.forEach(e=>e.apply(this,[t]))}catch(s){this.u.log(e.Error,`An onreconnecting callback called with error '${t}' threw error '${s}'.`)}if(this.ut!==A.Reconnecting)return void this.u.log(e.Debug,"Connection left the reconnecting state in onreconnecting callback. Done reconnecting.")}for(;null!==r;){if(this.u.log(e.Information,`Reconnect attempt number ${i} will start in ${r} ms.`),await new Promise(t=>{this.Ht=setTimeout(t,r)}),this.Ht=void 0,this.ut!==A.Reconnecting)return void this.u.log(e.Debug,"Connection left the reconnecting state during reconnect delay. Done reconnecting.");try{if(await this.yt(),this.ut=A.Connected,this.u.log(e.Information,"HubConnection reconnected successfully."),0!==this.ht.length)try{this.ht.forEach(t=>t.apply(this,[this.connection.connectionId]))}catch(t){this.u.log(e.Error,`An onreconnected callback called with connectionId '${this.connection.connectionId}; threw error '${t}'.`)}return}catch(t){if(this.u.log(e.Information,`Reconnect attempt failed because of error '${t}'.`),this.ut!==A.Reconnecting)return this.u.log(e.Debug,`Connection moved to the '${this.ut}' from the reconnecting state during reconnect attempt. Done reconnecting.`),void(this.ut===A.Disconnecting&&this.Dt());n=t instanceof Error?t:new Error(t.toString()),r=this.zt(i++,Date.now()-s,n)}}this.u.log(e.Information,`Reconnect retries have been exhausted after ${Date.now()-s} ms and ${i} failed attempts. Connection disconnecting.`),this.Dt()}zt(t,s,i){try{return this.Z.nextRetryDelayInMilliseconds({elapsedMilliseconds:s,previousRetryCount:t,retryReason:i})}catch(i){return this.u.log(e.Error,`IRetryPolicy.nextRetryDelayInMilliseconds(${t}, ${s}) threw error '${i}'.`),null}}Xt(t){const s=this.it;this.it={},Object.keys(s).forEach(i=>{const n=s[i];try{n(null,t)}catch(s){this.u.log(e.Error,`Stream 'error' callback called with '${t}' threw error: ${P(s)}`)}})}Tt(){this.Ft&&(clearTimeout(this.Ft),this.Ft=void 0)}Ct(){this.Ot&&clearTimeout(this.Ot)}Mt(t,e,s,i){if(s)return 0!==i.length?{arguments:e,streamIds:i,target:t,type:x.Invocation}:{arguments:e,target:t,type:x.Invocation};{const s=this.ct;return this.ct++,0!==i.length?{arguments:e,invocationId:s.toString(),streamIds:i,target:t,type:x.Invocation}:{arguments:e,invocationId:s.toString(),target:t,type:x.Invocation}}}qt(t,e){if(0!==t.length){e||(e=Promise.resolve());for(const s in t)t[s].subscribe({complete:()=>{e=e.then(()=>this.xt(this.Bt(s)))},error:t=>{let i;i=t instanceof Error?t.message:t&&t.toString?t.toString():"Unknown error",e=e.then(()=>this.xt(this.Bt(s,i)))},next:t=>{e=e.then(()=>this.xt(this.Vt(s,t)))}})}}Ut(t){const e=[],s=[];for(let i=0;i<t.length;i++){const n=t[i];if(this.Kt(n)){const r=this.ct;this.ct++,e[r]=n,s.push(r.toString()),t.splice(i,1)}}return[e,s]}Kt(t){return t&&t.subscribe&&"function"==typeof t.subscribe}Lt(t,e,s){const i=this.ct;return this.ct++,0!==s.length?{arguments:e,invocationId:i.toString(),streamIds:s,target:t,type:x.StreamInvocation}:{arguments:e,invocationId:i.toString(),target:t,type:x.StreamInvocation}}Nt(t){return{invocationId:t,type:x.CancelInvocation}}Vt(t,e){return{invocationId:t,item:e,type:x.StreamItem}}Bt(t,e,s){return e?{error:e,invocationId:t,type:x.Completion}:{invocationId:t,result:s,type:x.Completion}}At(){return{type:x.Close}}}const M=[0,2e3,1e4,3e4,null];class j{constructor(t){this.Gt=void 0!==t?[...t,null]:M}nextRetryDelayInMilliseconds(t){return this.Gt[t.previousRetryCount]}}class W{}W.Authorization="Authorization",W.Cookie="Cookie";class O extends d{constructor(t,e){super(),this.Qt=t,this.Yt=e}async send(t){let e=!0;this.Yt&&(!this.Zt||t.url&&t.url.indexOf("/negotiate?")>0)&&(e=!1,this.Zt=await this.Yt()),this.te(t);const s=await this.Qt.send(t);return e&&401===s.statusCode&&this.Yt?(this.Zt=await this.Yt(),this.te(t),await this.Qt.send(t)):s}te(t){t.headers||(t.headers={}),this.Zt?t.headers[W.Authorization]=`Bearer ${this.Zt}`:this.Yt&&t.headers[W.Authorization]&&delete t.headers[W.Authorization]}getCookieString(t){return this.Qt.getCookieString(t)}}var F,B;!function(t){t[t.None=0]="None",t[t.WebSockets=1]="WebSockets",t[t.ServerSentEvents=2]="ServerSentEvents",t[t.LongPolling=4]="LongPolling"}(F||(F={})),function(t){t[t.Text=1]="Text",t[t.Binary=2]="Binary"}(B||(B={}));class X{constructor(){this.ee=!1,this.onabort=null}abort(){this.ee||(this.ee=!0,this.onabort&&this.onabort())}get signal(){return this}get aborted(){return this.ee}}class J{get pollAborted(){return this.se.aborted}constructor(t,e,s){this.$=t,this.u=e,this.se=new X,this.ie=s,this.ne=!1,this.onreceive=null,this.onclose=null}async connect(t,s){if(w.isRequired(t,"url"),w.isRequired(s,"transferFormat"),w.isIn(s,B,"transferFormat"),this.re=t,this.u.log(e.Trace,"(LongPolling transport) Connecting."),s===B.Binary&&"undefined"!=typeof XMLHttpRequest&&"string"!=typeof(new XMLHttpRequest).responseType)throw new Error("Binary protocols over XmlHttpRequest not implementing advanced features are not supported.");const[n,r]=$(),o={[n]:r,...this.ie.headers},h={abortSignal:this.se.signal,headers:o,timeout:1e5,withCredentials:this.ie.withCredentials};s===B.Binary&&(h.responseType="arraybuffer");const c=`${t}&_=${Date.now()}`;this.u.log(e.Trace,`(LongPolling transport) polling: ${c}.`);const a=await this.$.get(c,h);200!==a.statusCode?(this.u.log(e.Error,`(LongPolling transport) Unexpected response code: ${a.statusCode}.`),this.oe=new i(a.statusText||"",a.statusCode),this.ne=!1):this.ne=!0,this.he=this.ce(this.re,h)}async ce(t,s){try{for(;this.ne;)try{const n=`${t}&_=${Date.now()}`;this.u.log(e.Trace,`(LongPolling transport) polling: ${n}.`);const r=await this.$.get(n,s);204===r.statusCode?(this.u.log(e.Information,"(LongPolling transport) Poll terminated by server."),this.ne=!1):200!==r.statusCode?(this.u.log(e.Error,`(LongPolling transport) Unexpected response code: ${r.statusCode}.`),this.oe=new i(r.statusText||"",r.statusCode),this.ne=!1):r.content?(this.u.log(e.Trace,`(LongPolling transport) data received. ${m(r.content,this.ie.logMessageContent)}.`),this.onreceive&&this.onreceive(r.content)):this.u.log(e.Trace,"(LongPolling transport) Poll timed out, reissuing.")}catch(t){this.ne?t instanceof n?this.u.log(e.Trace,"(LongPolling transport) Poll timed out, reissuing."):(this.oe=t,this.ne=!1):this.u.log(e.Trace,`(LongPolling transport) Poll errored after shutdown: ${t.message}`)}}finally{this.u.log(e.Trace,"(LongPolling transport) Polling complete."),this.pollAborted||this.ae()}}async send(t){return this.ne?b(this.u,"LongPolling",this.$,this.re,t,this.ie):Promise.reject(new Error("Cannot send until the transport is connected"))}async stop(){this.u.log(e.Trace,"(LongPolling transport) Stopping polling."),this.ne=!1,this.se.abort();try{await this.he,this.u.log(e.Trace,`(LongPolling transport) sending DELETE request to ${this.re}.`);const t={},[s,n]=$();t[s]=n;const r={headers:{...t,...this.ie.headers},timeout:this.ie.timeout,withCredentials:this.ie.withCredentials};let o;try{await this.$.delete(this.re,r)}catch(t){o=t}o?o instanceof i&&(404===o.statusCode?this.u.log(e.Trace,"(LongPolling transport) A 404 response was returned from sending a DELETE request."):this.u.log(e.Trace,`(LongPolling transport) Error sending a DELETE request: ${o}`)):this.u.log(e.Trace,"(LongPolling transport) DELETE request accepted.")}finally{this.u.log(e.Trace,"(LongPolling transport) Stop finished."),this.ae()}}ae(){if(this.onclose){let t="(LongPolling transport) Firing onclose event.";this.oe&&(t+=" Error: "+this.oe),this.u.log(e.Trace,t),this.onclose(this.oe)}}}class z{constructor(t,e,s,i){this.$=t,this.Zt=e,this.u=s,this.ie=i,this.onreceive=null,this.onclose=null}async connect(t,s){return w.isRequired(t,"url"),w.isRequired(s,"transferFormat"),w.isIn(s,B,"transferFormat"),this.u.log(e.Trace,"(SSE transport) Connecting."),this.re=t,this.Zt&&(t+=(t.indexOf("?")<0?"?":"&")+`access_token=${encodeURIComponent(this.Zt)}`),new Promise((i,n)=>{let r,o=!1;if(s===B.Text){if(g.isBrowser||g.isWebWorker)r=new this.ie.EventSource(t,{withCredentials:this.ie.withCredentials});else{const e=this.$.getCookieString(t),s={};s.Cookie=e;const[i,n]=$();s[i]=n,r=new this.ie.EventSource(t,{withCredentials:this.ie.withCredentials,headers:{...s,...this.ie.headers}})}try{r.onmessage=t=>{if(this.onreceive)try{this.u.log(e.Trace,`(SSE transport) data received. ${m(t.data,this.ie.logMessageContent)}.`),this.onreceive(t.data)}catch(t){return void this.le(t)}},r.onerror=t=>{o?this.le():n(new Error("EventSource failed to connect. The connection could not be found on the server, either the connection ID is not present on the server, or a proxy is refusing/buffering the connection. If you have multiple servers check that sticky sessions are enabled."))},r.onopen=()=>{this.u.log(e.Information,`SSE connected to ${this.re}`),this.ue=r,o=!0,i()}}catch(t){return void n(t)}}else n(new Error("The Server-Sent Events transport only supports the 'Text' transfer format"))})}async send(t){return this.ue?b(this.u,"SSE",this.$,this.re,t,this.ie):Promise.reject(new Error("Cannot send until the transport is connected"))}stop(){return this.le(),Promise.resolve()}le(t){this.ue&&(this.ue.close(),this.ue=void 0,this.onclose&&this.onclose(t))}}class V{constructor(t,e,s,i,n,r){this.u=s,this.Yt=e,this.de=i,this.fe=n,this.$=t,this.onreceive=null,this.onclose=null,this.pe=r}async connect(t,s){let i;return w.isRequired(t,"url"),w.isRequired(s,"transferFormat"),w.isIn(s,B,"transferFormat"),this.u.log(e.Trace,"(WebSockets transport) Connecting."),this.Yt&&(i=await this.Yt()),new Promise((n,r)=>{let o;t=t.replace(/^http/,"ws");const h=this.$.getCookieString(t);let c=!1;if(g.isNode||g.isReactNative){const e={},[s,n]=$();e[s]=n,i&&(e[W.Authorization]=`Bearer ${i}`),h&&(e[W.Cookie]=h),o=new this.fe(t,void 0,{headers:{...e,...this.pe}})}else i&&(t+=(t.indexOf("?")<0?"?":"&")+`access_token=${encodeURIComponent(i)}`);o||(o=new this.fe(t)),s===B.Binary&&(o.binaryType="arraybuffer"),o.onopen=s=>{this.u.log(e.Information,`WebSocket connected to ${t}.`),this.we=o,c=!0,n()},o.onerror=t=>{let s=null;s="undefined"!=typeof ErrorEvent&&t instanceof ErrorEvent?t.error:"There was an error with the transport",this.u.log(e.Information,`(WebSockets transport) ${s}.`)},o.onmessage=t=>{if(this.u.log(e.Trace,`(WebSockets transport) data received. ${m(t.data,this.de)}.`),this.onreceive)try{this.onreceive(t.data)}catch(t){return void this.le(t)}},o.onclose=t=>{if(c)this.le(t);else{let e=null;e="undefined"!=typeof ErrorEvent&&t instanceof ErrorEvent?t.error:"WebSocket failed to connect. The connection could not be found on the server, either the endpoint may not be a SignalR endpoint, the connection ID is not present on the server, or there is a proxy blocking WebSockets. If you have multiple servers check that sticky sessions are enabled.",r(new Error(e))}}})}send(t){return this.we&&this.we.readyState===this.fe.OPEN?(this.u.log(e.Trace,`(WebSockets transport) sending data. ${m(t,this.de)}.`),this.we.send(t),Promise.resolve()):Promise.reject("WebSocket is not in the OPEN state")}stop(){return this.we&&this.le(void 0),Promise.resolve()}le(t){this.we&&(this.we.onclose=()=>{},this.we.onmessage=()=>{},this.we.onerror=()=>{},this.we.close(),this.we=void 0),this.u.log(e.Trace,"(WebSockets transport) socket closed."),this.onclose&&(!this.ge(t)||!1!==t.wasClean&&1e3===t.code?t instanceof Error?this.onclose(t):this.onclose():this.onclose(new Error(`WebSocket closed with status code: ${t.code} (${t.reason||"no reason given"}).`)))}ge(t){return t&&"boolean"==typeof t.wasClean&&"number"==typeof t.code}}class K{constructor(t,s={}){var i;if(this.me=()=>{},this.features={},this.ye=1,w.isRequired(t,"url"),this.u=void 0===(i=s.logger)?new E(e.Information):null===i?f.instance:void 0!==i.log?i:new E(i),this.baseUrl=this.be(t),(s=s||{}).logMessageContent=void 0!==s.logMessageContent&&s.logMessageContent,"boolean"!=typeof s.withCredentials&&void 0!==s.withCredentials)throw new Error("withCredentials option was not a 'boolean' or 'undefined' value");s.withCredentials=void 0===s.withCredentials||s.withCredentials,s.timeout=void 0===s.timeout?1e5:s.timeout;let n=null,r=null;if(g.isNode){const t=require;n=t("ws"),r=t("eventsource")}g.isNode||"undefined"==typeof WebSocket||s.WebSocket?g.isNode&&!s.WebSocket&&n&&(s.WebSocket=n):s.WebSocket=WebSocket,g.isNode||"undefined"==typeof EventSource||s.EventSource?g.isNode&&!s.EventSource&&void 0!==r&&(s.EventSource=r):s.EventSource=EventSource,this.$=new O(s.httpClient||new H(this.u),s.accessTokenFactory),this.ut="Disconnected",this.dt=!1,this.ie=s,this.onreceive=null,this.onclose=null}async start(t){if(t=t||B.Binary,w.isIn(t,B,"transferFormat"),this.u.log(e.Debug,`Starting connection with transfer format '${B[t]}'.`),"Disconnected"!==this.ut)return Promise.reject(new Error("Cannot start an HttpConnection that is not in the 'Disconnected' state."));if(this.ut="Connecting",this.ve=this.yt(t),await this.ve,"Disconnecting"===this.ut){const t="Failed to start the HttpConnection before stop() was called.";return this.u.log(e.Error,t),await this.It,Promise.reject(new r(t))}if("Connected"!==this.ut){const t="HttpConnection.startInternal completed gracefully but didn't enter the connection into the connected state!";return this.u.log(e.Error,t),Promise.reject(new r(t))}this.dt=!0}send(t){return"Connected"!==this.ut?Promise.reject(new Error("Cannot send data if the connection is not in the 'Connected' State.")):(this.Ee||(this.Ee=new G(this.transport)),this.Ee.send(t))}async stop(t){return"Disconnected"===this.ut?(this.u.log(e.Debug,`Call to HttpConnection.stop(${t}) ignored because the connection is already in the disconnected state.`),Promise.resolve()):"Disconnecting"===this.ut?(this.u.log(e.Debug,`Call to HttpConnection.stop(${t}) ignored because the connection is already in the disconnecting state.`),this.It):(this.ut="Disconnecting",this.It=new Promise(t=>{this.me=t}),await this._t(t),void await this.It)}async _t(t){this.$e=t;try{await this.ve}catch(t){}if(this.transport){try{await this.transport.stop()}catch(t){this.u.log(e.Error,`HttpConnection.transport.stop() threw error '${t}'.`),this.Ce()}this.transport=void 0}else this.u.log(e.Debug,"HttpConnection.transport is undefined in HttpConnection.stop() because start() failed.")}async yt(t){let s=this.baseUrl;this.Yt=this.ie.accessTokenFactory,this.$.Yt=this.Yt;try{if(this.ie.skipNegotiation){if(this.ie.transport!==F.WebSockets)throw new Error("Negotiation can only be skipped when using the WebSocket transport directly.");this.transport=this.Se(F.WebSockets),await this.ke(s,t)}else{let e=null,i=0;do{if(e=await this.Pe(s),"Disconnecting"===this.ut||"Disconnected"===this.ut)throw new r("The connection was stopped during negotiation.");if(e.error)throw new Error(e.error);if(e.ProtocolVersion)throw new Error("Detected a connection attempt to an ASP.NET SignalR Server. This client only supports connecting to an ASP.NET Core SignalR Server. See https://aka.ms/signalr-core-differences for details.");if(e.url&&(s=e.url),e.accessToken){const t=e.accessToken;this.Yt=()=>t,this.$.Zt=t,this.$.Yt=void 0}i++}while(e.url&&i<100);if(100===i&&e.url)throw new Error("Negotiate redirection limit exceeded.");await this.Te(s,this.ie.transport,e,t)}this.transport instanceof J&&(this.features.inherentKeepAlive=!0),"Connecting"===this.ut&&(this.u.log(e.Debug,"The HttpConnection connected successfully."),this.ut="Connected")}catch(t){return this.u.log(e.Error,"Failed to start the connection: "+t),this.ut="Disconnected",this.transport=void 0,this.me(),Promise.reject(t)}}async Pe(t){const s={},[n,r]=$();s[n]=r;const o=this.Ie(t);this.u.log(e.Debug,`Sending negotiation request: ${o}.`);try{const t=await this.$.post(o,{content:"",headers:{...s,...this.ie.headers},timeout:this.ie.timeout,withCredentials:this.ie.withCredentials});if(200!==t.statusCode)return Promise.reject(new Error(`Unexpected status code returned from negotiate '${t.statusCode}'`));const e=JSON.parse(t.content);return(!e.negotiateVersion||e.negotiateVersion<1)&&(e.connectionToken=e.connectionId),e.useStatefulReconnect&&!0!==this.ie._e?Promise.reject(new a("Client didn't negotiate Stateful Reconnect but the server did.")):e}catch(t){let s="Failed to complete negotiation with the server: "+t;return t instanceof i&&404===t.statusCode&&(s+=" Either this is not a SignalR endpoint or there is a proxy blocking the connection."),this.u.log(e.Error,s),Promise.reject(new a(s))}}He(t,e){return e?t+(-1===t.indexOf("?")?"?":"&")+`id=${e}`:t}async Te(t,s,i,n){let o=this.He(t,i.connectionToken);if(this.De(s))return this.u.log(e.Debug,"Connection was provided an instance of ITransport, using that directly."),this.transport=s,await this.ke(o,n),void(this.connectionId=i.connectionId);const h=[],a=i.availableTransports||[];let u=i;for(const i of a){const a=this.Re(i,s,n,!0===(null==u?void 0:u.useStatefulReconnect));if(a instanceof Error)h.push(`${i.transport} failed:`),h.push(a);else if(this.De(a)){if(this.transport=a,!u){try{u=await this.Pe(t)}catch(t){return Promise.reject(t)}o=this.He(t,u.connectionToken)}try{return await this.ke(o,n),void(this.connectionId=u.connectionId)}catch(t){if(this.u.log(e.Error,`Failed to start the transport '${i.transport}': ${t}`),u=void 0,h.push(new c(`${i.transport} failed: ${t}`,F[i.transport])),"Connecting"!==this.ut){const t="Failed to select transport before stop() was called.";return this.u.log(e.Debug,t),Promise.reject(new r(t))}}}}return h.length>0?Promise.reject(new l(`Unable to connect to the server with any of the available transports. ${h.join(" ")}`,h)):Promise.reject(new Error("None of the transports supported by the client are supported by the server."))}Se(t){switch(t){case F.WebSockets:if(!this.ie.WebSocket)throw new Error("'WebSocket' is not supported in your environment.");return new V(this.$,this.Yt,this.u,this.ie.logMessageContent,this.ie.WebSocket,this.ie.headers||{});case F.ServerSentEvents:if(!this.ie.EventSource)throw new Error("'EventSource' is not supported in your environment.");return new z(this.$,this.$.Zt,this.u,this.ie);case F.LongPolling:return new J(this.$,this.u,this.ie);default:throw new Error(`Unknown transport: ${t}.`)}}ke(t,e){return this.transport.onreceive=this.onreceive,this.features.reconnect?this.transport.onclose=async s=>{let i=!1;if(this.features.reconnect){try{this.features.disconnected(),await this.transport.connect(t,e),await this.features.resend()}catch{i=!0}i&&this.Ce(s)}else this.Ce(s)}:this.transport.onclose=t=>this.Ce(t),this.transport.connect(t,e)}Re(t,s,i,n){const r=F[t.transport];if(null==r)return this.u.log(e.Debug,`Skipping transport '${t.transport}' because it is not supported by this client.`),new Error(`Skipping transport '${t.transport}' because it is not supported by this client.`);if(!function(t,e){return!t||0!==(e&t)}(s,r))return this.u.log(e.Debug,`Skipping transport '${F[r]}' because it was disabled by the client.`),new h(`'${F[r]}' is disabled by the client.`,r);if(!(t.transferFormats.map(t=>B[t]).indexOf(i)>=0))return this.u.log(e.Debug,`Skipping transport '${F[r]}' because it does not support the requested transfer format '${B[i]}'.`),new Error(`'${F[r]}' does not support ${B[i]}.`);if(r===F.WebSockets&&!this.ie.WebSocket||r===F.ServerSentEvents&&!this.ie.EventSource)return this.u.log(e.Debug,`Skipping transport '${F[r]}' because it is not supported in your environment.'`),new o(`'${F[r]}' is not supported in your environment.`,r);this.u.log(e.Debug,`Selecting transport '${F[r]}'.`);try{return this.features.reconnect=r===F.WebSockets?n:void 0,this.Se(r)}catch(t){return t}}De(t){return t&&"object"==typeof t&&"connect"in t}Ce(t){if(this.u.log(e.Debug,`HttpConnection.stopConnection(${t}) called while in state ${this.ut}.`),this.transport=void 0,t=this.$e||t,this.$e=void 0,"Disconnected"!==this.ut){if("Connecting"===this.ut)throw this.u.log(e.Warning,`Call to HttpConnection.stopConnection(${t}) was ignored because the connection is still in the connecting state.`),new Error(`HttpConnection.stopConnection(${t}) was called while the connection is still in the connecting state.`);if("Disconnecting"===this.ut&&this.me(),t?this.u.log(e.Error,`Connection disconnected with error '${t}'.`):this.u.log(e.Information,"Connection disconnected."),this.Ee&&(this.Ee.stop().catch(t=>{this.u.log(e.Error,`TransportSendQueue.stop() threw error '${t}'.`)}),this.Ee=void 0),this.connectionId=void 0,this.ut="Disconnected",this.dt){this.dt=!1;try{this.onclose&&this.onclose(t)}catch(s){this.u.log(e.Error,`HttpConnection.onclose(${t}) threw error '${s}'.`)}}}else this.u.log(e.Debug,`Call to HttpConnection.stopConnection(${t}) was ignored because the connection is already in the disconnected state.`)}be(t){if(0===t.lastIndexOf("https://",0)||0===t.lastIndexOf("http://",0))return t;if(!g.isBrowser)throw new Error(`Cannot resolve '${t}'.`);const s=window.document.createElement("a");return s.href=t,this.u.log(e.Information,`Normalizing '${t}' to '${s.href}'.`),s.href}Ie(t){const e=new URL(t);e.pathname.endsWith("/")?e.pathname+="negotiate":e.pathname+="/negotiate";const s=new URLSearchParams(e.searchParams);return s.has("negotiateVersion")||s.append("negotiateVersion",this.ye.toString()),s.has("useStatefulReconnect")?"true"===s.get("useStatefulReconnect")&&(this.ie._e=!0):!0===this.ie._e&&s.append("useStatefulReconnect","true"),e.search=s.toString(),e.toString()}}class G{constructor(t){this.xe=t,this.Ae=[],this.Ue=!0,this.Le=new Q,this.Ne=new Q,this.qe=this.Me()}send(t){return this.je(t),this.Ne||(this.Ne=new Q),this.Ne.promise}stop(){return this.Ue=!1,this.Le.resolve(),this.qe}je(t){if(this.Ae.length&&typeof this.Ae[0]!=typeof t)throw new Error(`Expected data to be of type ${typeof this.Ae} but was of type ${typeof t}`);this.Ae.push(t),this.Le.resolve()}async Me(){for(;;){if(await this.Le.promise,!this.Ue){this.Ne&&this.Ne.reject("Connection stopped.");break}this.Le=new Q;const t=this.Ne;this.Ne=void 0;const e="string"==typeof this.Ae[0]?this.Ae.join(""):G.We(this.Ae);this.Ae.length=0;try{await this.xe.send(e),t.resolve()}catch(e){t.reject(e)}}}static We(t){const e=t.map(t=>t.byteLength).reduce((t,e)=>t+e),s=new Uint8Array(e);let i=0;for(const e of t)s.set(new Uint8Array(e),i),i+=e.byteLength;return s.buffer}}class Q{constructor(){this.promise=new Promise((t,e)=>[this.j,this.Oe]=[t,e])}resolve(){this.j()}reject(t){this.Oe(t)}}class Y{constructor(){this.name="json",this.version=2,this.transferFormat=B.Text}parseMessages(t,s){if("string"!=typeof t)throw new Error("Invalid input for JSON hub protocol. Expected a string.");if(!t)return[];null===s&&(s=f.instance);const i=D.parse(t),n=[];for(const t of i){const i=JSON.parse(t);if("number"!=typeof i.type)throw new Error("Invalid payload.");switch(i.type){case x.Invocation:this.U(i);break;case x.StreamItem:this.Fe(i);break;case x.Completion:this.Be(i);break;case x.Ping:case x.Close:break;case x.Ack:this.Xe(i);break;case x.Sequence:this.Je(i);break;default:s.log(e.Information,"Unknown message type '"+i.type+"' ignored.");continue}n.push(i)}return n}writeMessage(t){return D.write(JSON.stringify(t))}U(t){this.ze(t.target,"Invalid payload for Invocation message."),void 0!==t.invocationId&&this.ze(t.invocationId,"Invalid payload for Invocation message.")}Fe(t){if(this.ze(t.invocationId,"Invalid payload for StreamItem message."),void 0===t.item)throw new Error("Invalid payload for StreamItem message.")}Be(t){if(t.result&&t.error)throw new Error("Invalid payload for Completion message.");!t.result&&t.error&&this.ze(t.error,"Invalid payload for Completion message."),this.ze(t.invocationId,"Invalid payload for Completion message.")}Xe(t){if("number"!=typeof t.sequenceId)throw new Error("Invalid SequenceId for Ack message.")}Je(t){if("number"!=typeof t.sequenceId)throw new Error("Invalid SequenceId for Sequence message.")}ze(t,e){if("string"!=typeof t||""===t)throw new Error(e)}}const Z={trace:e.Trace,debug:e.Debug,info:e.Information,information:e.Information,warn:e.Warning,warning:e.Warning,error:e.Error,critical:e.Critical,none:e.None};class tt{configureLogging(t){if(w.isRequired(t,"logging"),void 0!==t.log)this.logger=t;else if("string"==typeof t){const e=function(t){const e=Z[t.toLowerCase()];if(void 0!==e)return e;throw new Error(`Unknown log level: ${t}`)}(t);this.logger=new E(e)}else this.logger=new E(t);return this}withUrl(t,e){return w.isRequired(t,"url"),w.isNotEmpty(t,"url"),this.url=t,this.httpConnectionOptions="object"==typeof e?{...this.httpConnectionOptions,...e}:{...this.httpConnectionOptions,transport:e},this}withHubProtocol(t){return w.isRequired(t,"protocol"),this.protocol=t,this}withAutomaticReconnect(t){if(this.reconnectPolicy)throw new Error("A reconnectPolicy has already been set.");return t?Array.isArray(t)?this.reconnectPolicy=new j(t):this.reconnectPolicy=t:this.reconnectPolicy=new j,this}withServerTimeout(t){return w.isRequired(t,"milliseconds"),this.Ve=t,this}withKeepAliveInterval(t){return w.isRequired(t,"milliseconds"),this.Ke=t,this}withStatefulReconnect(t){return void 0===this.httpConnectionOptions&&(this.httpConnectionOptions={}),this.httpConnectionOptions._e=!0,this.Y=null==t?void 0:t.bufferSize,this}build(){const t=this.httpConnectionOptions||{};if(void 0===t.logger&&(t.logger=this.logger),!this.url)throw new Error("The 'HubConnectionBuilder.withUrl' method must be called before building the connection.");const e=new K(this.url,t);return q.create(e,this.logger||f.instance,this.protocol||new Y,this.reconnectPolicy,this.Ve,this.Ke,this.Y)}}return Uint8Array.prototype.indexOf||Object.defineProperty(Uint8Array.prototype,"indexOf",{value:Array.prototype.indexOf,writable:!0}),Uint8Array.prototype.slice||Object.defineProperty(Uint8Array.prototype,"slice",{value:function(t,e){return new Uint8Array(Array.prototype.slice.call(this,t,e))},writable:!0}),Uint8Array.prototype.forEach||Object.defineProperty(Uint8Array.prototype,"forEach",{value:Array.prototype.forEach,writable:!0}),s})(),"object"==typeof exports&&"object"==typeof module?module.exports=e():"function"==typeof define&&define.amd?define([],e):"object"==typeof exports?exports.signalR=e():t.signalR=e();
++//# sourceMappingURL=signalr.min.js.map
+\ No newline at end of file
 diff --git a/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs b/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs
 index b536773..05cc6d9 100644
 --- a/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs

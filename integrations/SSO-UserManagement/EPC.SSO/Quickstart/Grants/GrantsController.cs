@@ -38,23 +38,18 @@ public class GrantsController(
     IEventService events,
     IConfiguration configuration,
     WindowsProgramService windowsProgramService,
-    ISettingService settingService,
-    SurveyApiService surveyApiService,
     IUserPortalQueryFacade userPortalQueryFacade,
-    MeetingApiService meetingApiService,
     AnnouncementApiService announcementApiService,
     AnnouncementFileCache fileCache,
-    SuggestionService suggestionService,
     OtherProgramService otherProgramService,
+    DashboardDataService dashboardData,
     IAppCache cache,
     IIpAccessRestrictionService ipAccessRestrictionService,
     ExternalApiClientService externalApiClient,
-    EPC.SSO.Realtime.PortalCacheVersions cacheVersions,
     ILogger<GrantsController> logger)
     : Controller
 {
     private const string UserProfilePermissionCode = "SSO.ViewUserProfile";
-    private static readonly TimeSpan StaleWindow = TimeSpan.FromMinutes(30);
 
     // ════════════════════════════════════════════════════════════════════════
     //  INDEX
@@ -77,15 +72,7 @@ public class GrantsController(
         var positionGuid = SelectedPositionFromClaim;
         var isSuperAdmin = IsSuperAdmin;
 
-        var portal = await cache.GetOrCreateAsync(
-            $"portal:dashboard:{userGuid:N}:{positionGuid:N}",
-            _ => userPortalQueryFacade.GetDashboard(new PortalDashboardSearchModel
-            {
-                UserGuid = userGuid,
-                SelectedPositionGuid = positionGuid,
-                IsSuperAdmin = isSuperAdmin
-            })!,
-            TimeSpan.FromMinutes(2), StaleWindow, HttpContext.RequestAborted);
+        var portal = await dashboardData.GetPortalAsync(userGuid, positionGuid, isSuperAdmin, HttpContext.RequestAborted);
 
         return new GrantsViewModel
         {
@@ -93,7 +80,7 @@ public class GrantsController(
             {
                 ClientId = s.Guid.ToString(),
                 ClientName = s.Title,
-                ClientLogoUrl = s.Image,
+                ClientLogoUrl = LogoUrl(s.Guid, s.Image),
                 ClientUrl = s.Url ?? string.Empty,
                 Description = s.Description ?? string.Empty
             }).ToList(),
@@ -112,51 +99,35 @@ public class GrantsController(
     // ════════════════════════════════════════════════════════════════════════
     //  ویجت‌های داشبورد (AJAX)
     // ════════════════════════════════════════════════════════════════════════
+    // هر ویجت endpoint مستقل دارد تا صفحه هر بخش را به محض آماده شدن نمایش دهد (نه پس از کندترین API).
+    // پاسخ‌ها خطا را با «null» (و نه لیست خالی) اعلام می‌کنند تا ویجت پیام «تلاش دوباره» نشان دهد.
+
     [HttpGet]
     public async Task<IActionResult> GetAnnouncements()
-    {
-        var list = await GetDashboardAnnouncementsAsync(CurrentUserGuid);
-        return Json(list ?? []);
-    }
+        => Json(await Safe(() => dashboardData.GetAnnouncementsAsync(CurrentUserGuid, HttpContext.RequestAborted)));
 
     [HttpGet]
     public async Task<IActionResult> GetSurveys()
-    {
-        var userGuid = CurrentUserGuid;
-        var surveys = await cache.GetOrCreateAsync(
-            $"surveys:{userGuid:N}",
-            ct => surveyApiService.GetMySurveysAsync(userGuid, ct),
-            TimeSpan.FromMinutes(3), StaleWindow, HttpContext.RequestAborted);
-        return Json(surveys ?? []);
-    }
+        => Json(await Safe(() => dashboardData.GetSurveysAsync(CurrentUserGuid, HttpContext.RequestAborted)));
 
     [HttpGet]
     public async Task<IActionResult> GetMeetings()
     {
-        var userGuid = CurrentUserGuid;
         var positionGuid = await GetSelectedPositionGuidAsync();
-        var meetings = await cache.GetOrCreateAsync(
-            $"meetings:{userGuid:N}:{positionGuid:N}:{cacheVersions.Of(userGuid)}",
-            ct => meetingApiService.GetMyMeetingsAsync(userGuid, positionGuid, ct),
-            TimeSpan.FromMinutes(3), StaleWindow, HttpContext.RequestAborted);
-        return Json(meetings ?? []);
+        return Json(await Safe(() => dashboardData.GetMeetingsAsync(CurrentUserGuid, positionGuid, HttpContext.RequestAborted)));
     }
 
     [HttpGet]
     public async Task<IActionResult> GetSuggestions()
-        => Json(await suggestionService.GetTopSuggestionsAsync(5));
+        => Json(await Safe(async () => (List<EPC.SSO.Services.TopSuggesterDto>?)await dashboardData.GetSuggestionsAsync()));
 
     [HttpGet]
     public async Task<IActionResult> GetWindowsApps()
-    {
-        var personnelCode = User.FindFirst("PersonnelCode")?.Value;
-        if (string.IsNullOrWhiteSpace(personnelCode)) return Json(Array.Empty<WindowsAppViewModel>());
-        return Json(await windowsProgramService.GetAccessibleAppsAsync(personnelCode));
-    }
+        => Json(await Safe(async () => (List<WindowsAppViewModel>?)await dashboardData.GetWindowsAppsAsync(User.FindFirst("PersonnelCode")?.Value)));
 
     [HttpGet]
     public async Task<IActionResult> GetOtherPrograms()
-        => Json(await otherProgramService.GetAllAsync());
+        => Json(await Safe(async () => (List<OtherProgramViewModel>?)await dashboardData.GetOtherProgramsAsync()));
 
     /// <summary>
     /// همه‌ی ویجت‌ها در یک درخواست و به‌صورت موازی (هر بخش مستقل؛ خطای یکی بقیه را خراب نمی‌کند).
@@ -170,16 +141,12 @@ public class GrantsController(
         var personnelCode = User.FindFirst("PersonnelCode")?.Value;
         var positionGuid = await GetSelectedPositionGuidAsync();
 
-        var announcementsTask = Safe(() => GetDashboardAnnouncementsAsync(userGuid));
-        var surveysTask = Safe(() => cache.GetOrCreateAsync($"surveys:{userGuid:N}",
-            c => surveyApiService.GetMySurveysAsync(userGuid, c), TimeSpan.FromMinutes(3), StaleWindow, ct));
-        var meetingsTask = Safe(() => cache.GetOrCreateAsync($"meetings:{userGuid:N}:{positionGuid:N}:{cacheVersions.Of(userGuid)}",
-            c => meetingApiService.GetMyMeetingsAsync(userGuid, positionGuid, c), TimeSpan.FromMinutes(3), StaleWindow, ct));
-        var winAppsTask = Safe(async () => string.IsNullOrWhiteSpace(personnelCode)
-            ? []
-            : await windowsProgramService.GetAccessibleAppsAsync(personnelCode));
-        var otherTask = Safe(() => otherProgramService.GetAllAsync()!);
-        var suggestionsTask = Safe(() => suggestionService.GetTopSuggestionsAsync(5)!);
+        var announcementsTask = Safe(() => dashboardData.GetAnnouncementsAsync(userGuid, ct));
+        var surveysTask = Safe(() => dashboardData.GetSurveysAsync(userGuid, ct));
+        var meetingsTask = Safe(() => dashboardData.GetMeetingsAsync(userGuid, positionGuid, ct));
+        var winAppsTask = Safe(async () => (List<WindowsAppViewModel>?)await dashboardData.GetWindowsAppsAsync(personnelCode));
+        var otherTask = Safe(async () => (List<OtherProgramViewModel>?)await dashboardData.GetOtherProgramsAsync());
+        var suggestionsTask = Safe(async () => (List<EPC.SSO.Services.TopSuggesterDto>?)await dashboardData.GetSuggestionsAsync());
 
         await Task.WhenAll(announcementsTask, surveysTask, meetingsTask, winAppsTask, otherTask, suggestionsTask);
 
@@ -244,7 +211,7 @@ public class GrantsController(
         {
             if (await announcementApiService.ConfirmReadAsync(guid, userGuid, ClientIp, HttpContext.RequestAborted))
             {
-                cache.Remove(AnnouncementsCacheKey(userGuid));
+                cache.Remove(DashboardDataService.AnnouncementsKey(userGuid));
                 detail.IsRead = true;
             }
         }
@@ -275,7 +242,7 @@ public class GrantsController(
     {
         var userGuid = CurrentUserGuid;
         var ok = await announcementApiService.ConfirmReadAsync(model.AnnouncementGuid, userGuid, ClientIp, HttpContext.RequestAborted);
-        cache.Remove(AnnouncementsCacheKey(userGuid));
+        cache.Remove(DashboardDataService.AnnouncementsKey(userGuid));
         return ok ? Json(new { success = true }) : StatusCode(StatusCodes.Status502BadGateway, new { success = false });
     }
 
@@ -339,6 +306,31 @@ public class GrantsController(
         await using var stream = await upstream.Content.ReadAsStreamAsync(cancellationToken);
         await stream.CopyToAsync(Response.Body, cancellationToken);
         return new EmptyResult();
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> SystemLogo(Guid id, string? v)
+    {
+        if (!cache.TryGet<LogoEntry>($"syslogo:{id:N}", out var logo) || logo is null)
+        {
+            await BuildViewModelAsync(); // کش منقضی شده: داشبورد همین کاربر دوباره لوگوها را ثبت می‌کند
+            if (!cache.TryGet($"syslogo:{id:N}", out logo) || logo is null) return NotFound();
+        }
+
+        var comma = logo.DataUri.IndexOf(',');
+        var header = comma > 5 ? logo.DataUri[5..comma] : string.Empty; // image/png;base64
+        var contentType = header.Split(';')[0];
+        if (comma < 0 || !header.Contains("base64", StringComparison.OrdinalIgnoreCase)
+            || !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) || contentType.Contains("svg", StringComparison.OrdinalIgnoreCase))
+            return NotFound();
+
+        byte[] bytes;
+        try { bytes = Convert.FromBase64String(logo.DataUri[(comma + 1)..]); }
+        catch (FormatException) { return NotFound(); }
+
+        Response.Headers[HeaderNames.CacheControl] = v == logo.Version ? "private, max-age=2592000, immutable" : "private, max-age=300";
+        Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
+        return File(bytes, contentType, null, new EntityTagHeaderValue($"\"{logo.Version}\""));
     }
 
     [HttpGet]
@@ -519,19 +511,7 @@ public class GrantsController(
         }
     }
 
-    private static string AnnouncementsCacheKey(Guid userGuid) => $"announcements:{userGuid:N}";
     private static string UserAllowedFilesKey(Guid userGuid) => $"ann-allowed-files:{userGuid:N}";
-
-    private Task<List<AnnouncementDashboardDto>?> GetDashboardAnnouncementsAsync(Guid userGuid)
-    {
-        var count = settingService.Fetch<AnnouncementSettingViewModel>().DashboardAnnouncementCount;
-        if (count <= 0) count = 5;
-
-        return cache.GetOrCreateAsync(
-            AnnouncementsCacheKey(userGuid),
-            ct => announcementApiService.GetDashboardAnnouncementsAsync(userGuid, count, ct),
-            TimeSpan.FromMinutes(2), StaleWindow, HttpContext.RequestAborted);
-    }
 
     private async Task<List<object>> ResolveFilesAsync(List<AnnouncementFileDto> files)
     {
@@ -599,9 +579,33 @@ public class GrantsController(
         var hasPermission = IsSuperAdmin || User.FindAll("Permissions")
             .SelectMany(c => c.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Contains(UserProfilePermissionCode, StringComparer.OrdinalIgnoreCase);
+        if (hasPermission) return true;
 
-        return hasPermission || await ipAccessRestrictionService.IsAllowedAsync(UserProfilePermissionCode, ClientIp);
+        // قبلاً در هر بار باز شدن داشبورد یک Query به پایگاه داده‌ی UserManagement می‌زد
+        var ip = ClientIp;
+        var allowed = await cache.GetOrCreateAsync($"ipallow:{UserProfilePermissionCode}:{ip}",
+            async _ => new BoolBox(await ipAccessRestrictionService.IsAllowedAsync(UserProfilePermissionCode, ip)),
+            TimeSpan.FromMinutes(5), TimeSpan.Zero, HttpContext.RequestAborted);
+        return allowed?.Value ?? false;
     }
+
+    private sealed record BoolBox(bool Value);
+
+    /// <summary>
+    /// لوگوی سامانه. تصویر Base64 داخل HTML هر بار باز شدن داشبورد دوباره ارسال می‌شد (صفحه‌ی سنگین و غیرقابل کش)؛
+    /// حالا با آدرس جدا و نسخه‌دار سرو می‌شود و مرورگر آن را کش می‌کند.
+    /// </summary>
+    private string? LogoUrl(Guid systemGuid, string? image)
+    {
+        if (string.IsNullOrWhiteSpace(image) || !image.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            return image;
+
+        var version = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(image)))[..12];
+        cache.Set($"syslogo:{systemGuid:N}", new LogoEntry(image, version), TimeSpan.FromHours(24));
+        return Url.Action(nameof(SystemLogo), new { id = systemGuid, v = version });
+    }
+
+    private sealed record LogoEntry(string DataUri, string Version);
 
     private async Task SignInPortalIdentityAsync(PortalIdentityUserViewModel user, Guid? impersonatedBy = null, string? impersonatedByPersonnelCode = null)
     {
