@@ -9,7 +9,8 @@ public class SurveyParticipant
     {
         SurveyId = surveyId;
         UserGuid = userGuid;
-        ParticipatedAt = DateTime.Now;
+        // فقط تاریخ (بدون ساعت): زمان دقیق با زمان تکمیل پاسخ قابل تطبیق بود و ناشناس‌بودن را از بین می‌برد
+        ParticipatedAt = DateTime.Today;
     }
 
     public long SurveyId { get; private set; }

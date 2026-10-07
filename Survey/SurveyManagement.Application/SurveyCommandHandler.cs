@@ -7,6 +7,7 @@ using SurveyManagement.Common;
 using SurveyManagement.Common.Extensions;
 using SurveyManagement.Domain.QuestionAgg;
 using SurveyManagement.Domain.ResponseAgg;
+using SurveyManagement.Domain.Shared.Access;
 using SurveyManagement.Domain.SurveyAccessAgg;
 using SurveyManagement.Domain.SurveyAgg;
 using SurveyManagement.Domain.SurveyAgg.Services;
@@ -24,6 +25,7 @@ public class SurveyCommandHandler(
     ISurveyCriterionRepository criterionRepository, // ✅ جدید
     IResponseAnswerRepository responseAnswerRepository, // ✅ جدید
     ISurveyService service,
+    ISurveyAccessService access,
     IClaimHelper claimHelper) :
     ICommandHandlerAsync<CreateOrEditSurveyDto, Result<Guid>>,
     ICommandHandlerAsync<DeleteSurveyDto, Result<bool>>,
@@ -51,7 +53,7 @@ public class SurveyCommandHandler(
             if (survey == null)
                 return Result<Guid>.Failure(Guid.Empty, "نظرسنجی یافت نشد.");
 
-            if (survey.CreatedBy != currentUserId)
+            if (!(await access.GetAsync(survey.Id))?.CanManage ?? true)
                 return Result<Guid>.Failure(Guid.Empty, "شما مجاز به ویرایش این نظرسنجی نیستید.");
 
             if (survey.Status == SurveyStatus.Archived)
@@ -74,6 +76,8 @@ public class SurveyCommandHandler(
         }
         else
         {
+            if (!await CanCreateAsync())
+                return Result<Guid>.Failure(Guid.Empty, "شما مجاز به ایجاد نظرسنجی نیستید.");
             await service.ThrowWhenDuplicated(command.Title);
 
             var survey = new Survey(
@@ -98,7 +102,7 @@ public class SurveyCommandHandler(
 
         if (survey == null)
             return Result<bool>.Failure(false, "نظرسنجی یافت نشد.");
-        if (survey.CreatedBy != currentUserId)
+        if (!((await access.GetAsync(survey.Id))?.CanDelete ?? false))
             return Result<bool>.Failure(false, "شما مجاز به حذف این نظرسنجی نیستید.");
         if (survey.Status != SurveyStatus.Draft)
             return Result<bool>.Failure(false, "فقط نظرسنجی‌های پیش‌نویس قابل حذف هستند.");
@@ -116,7 +120,7 @@ public class SurveyCommandHandler(
 
         if (survey == null)
             return Result<bool>.Failure(false, "نظرسنجی یافت نشد.");
-        if (survey.CreatedBy != currentUserId)
+        if (!((await access.GetAsync(survey.Id))?.CanManage ?? false))
             return Result<bool>.Failure(false, "شما مجاز به انتشار این نظرسنجی نیستید.");
         if (survey.Status != SurveyStatus.Draft)
             return Result<bool>.Failure(false, "نظرسنجی قبلاً منتشر شده است.");
@@ -136,6 +140,8 @@ public class SurveyCommandHandler(
 
         if (survey == null)
             return Result<bool>.Failure(false, "نظرسنجی یافت نشد.");
+        if (!await CanManageAsync(survey))
+            return Result<bool>.Failure(false, "شما مجاز به تغییر وضعیت این نظرسنجی نیستید.");
         if (survey.Status != SurveyStatus.Published && survey.Status != SurveyStatus.Paused)
             return Result<bool>.Failure(false, "فقط نظرسنجی‌های منتشر شده یا متوقف شده قابل فعال‌سازی هستند.");
 
@@ -152,6 +158,10 @@ public class SurveyCommandHandler(
 
         if (survey == null)
             return Result<bool>.Failure(false, "نظرسنجی یافت نشد.");
+        if (!await CanManageAsync(survey))
+            return Result<bool>.Failure(false, "شما مجاز به تغییر وضعیت این نظرسنجی نیستید.");
+        if (survey.Status is not (SurveyStatus.Active or SurveyStatus.Paused or SurveyStatus.Published))
+            return Result<bool>.Failure(false, "فقط نظرسنجی منتشرشده، فعال یا متوقف‌شده را می‌توان بست.");
 
         survey.Close(currentUserId);
         repository.Update(survey);
@@ -166,6 +176,8 @@ public class SurveyCommandHandler(
 
         if (survey == null)
             return Result<bool>.Failure(false, "نظرسنجی یافت نشد.");
+        if (!await CanManageAsync(survey))
+            return Result<bool>.Failure(false, "شما مجاز به تغییر وضعیت این نظرسنجی نیستید.");
         if (survey.Status != SurveyStatus.Active)
             return Result<bool>.Failure(false, "فقط نظرسنجی‌های فعال قابل متوقف کردن هستند.");
 
@@ -182,6 +194,12 @@ public class SurveyCommandHandler(
 
         if (survey == null)
             return Result<bool>.Failure(false, "نظرسنجی یافت نشد.");
+        if (!await CanManageAsync(survey))
+            return Result<bool>.Failure(false, "شما مجاز به تغییر وضعیت این نظرسنجی نیستید.");
+        if (survey.Status == SurveyStatus.Archived)
+            return Result<bool>.Failure(false, "نظرسنجی قبلاً آرشیو شده است.");
+        if (survey.Status == SurveyStatus.Active)
+            return Result<bool>.Failure(false, "نظرسنجی در حال اجرا را ابتدا ببندید یا متوقف کنید.");
 
         survey.Archive(currentUserId);
         repository.Update(survey);
@@ -190,6 +208,42 @@ public class SurveyCommandHandler(
     }
 
     #endregion
+
+    private async Task<bool> CanCreateAsync() =>
+        (await access.IdentityAsync()).HasAnyPermission([Common.Security.SurveyPermissions.SurveysCreate, "SV_Survey_CreateOrEditWithQuestions", "SV_Survey_CreateOrEdit"]);
+
+    private async Task<bool> CanManageAsync(Survey survey) =>
+        (await access.GetAsync(survey.Id))?.CanManage ?? false;
+
+    /// <summary>پیام خطا اگر سوال یا گزینه‌ی حذف‌شده‌ای پاسخ ثبت‌شده داشته باشد</summary>
+    private async Task<string?> FindRemovalsWithAnswersAsync(Survey survey, List<QuestionDto>? incoming)
+    {
+        var byGuid = survey.Questions.ToDictionary(q => q.Guid);
+        foreach (var dto in incoming ?? new())
+        {
+            if (!dto.Guid.HasValue || !byGuid.TryGetValue(dto.Guid.Value, out var question)) continue;
+
+            var removedOptions = (dto.Options ?? new()).Where(o => o.Guid.HasValue && o.IsRemoved).Select(o => o.Guid!.Value).ToList();
+            if (!dto.IsRemoved && removedOptions.Count == 0) continue;
+
+            var answers = await responseAnswerRepository.GetByQuestionIdAsync(question.Id);
+            var answered = answers.Where(a => !a.IsSkipped).ToList();
+            if (answered.Count == 0) continue;
+
+            if (dto.IsRemoved)
+                return $"سوال «{question.QuestionText}» پاسخ ثبت‌شده دارد و حذف آن پاسخ‌ها را از بین می‌برد. به جای حذف، متن آن را اصلاح کنید.";
+
+            var options = (await questionOptionRepository.GetByQuestionIdAsync(question.Id))
+                .Where(o => removedOptions.Contains(o.Guid));
+            foreach (var option in options)
+            {
+                var id = option.Id.ToString();
+                if (answered.Any(a => a.SelectedOptionId == option.Id || (a.SelectedOptionIds != null && a.SelectedOptionIds.Contains(id))))
+                    return $"گزینه‌ی «{option.OptionText}» از سوال «{question.QuestionText}» پاسخ ثبت‌شده دارد و قابل حذف نیست.";
+            }
+        }
+        return null;
+    }
 
     #region CreateSurveyWithQuestionsDto (Wizard — ایجاد/ویرایش کامل)
 
@@ -213,16 +267,18 @@ public class SurveyCommandHandler(
         {
             survey = await repository.LoadAsync(
                 command.Survey.Guid.Value,"Questions");
-            var claims = claimHelper.GetCurrentUserPermissions();    
-            var canEdit = survey.CreatedBy == currentUserId
-                          || claimHelper.HasPermission("MT_Surveys_Create");
             if (survey == null)
                 return Result<CreateSurveyWithQuestionsResponse>.Failure(null, "نظرسنجی یافت نشد.");
 
-            if (!canEdit)
+            // مالک، مدیر سامانه یا دارنده‌ی «ویرایش» در فهرست دسترسی همین نظرسنجی
+            // (قبلاً هر دارنده‌ی MT_Surveys_Create می‌توانست نظرسنجی و فهرست دسترسی دیگران را تغییر دهد)
+            if (!await CanManageAsync(survey))
                 return Result<CreateSurveyWithQuestionsResponse>.Failure(null, "شما مجاز به ویرایش این نظرسنجی نیستید.");
-            if (survey.Status == SurveyStatus.Published&& !claimHelper.HasPermission("SV_Surveys_Edit"))
-                return Result<CreateSurveyWithQuestionsResponse>.Failure(null, "نظرسنجی منتشر شده را نمی‌توان ویرایش کرد.");
+
+            // حذف سوال یا گزینه‌ای که پاسخ ثبت‌شده دارد، پاسخ‌های جمع‌آوری‌شده را بی‌صدا پاک می‌کرد
+            var blocked = await FindRemovalsWithAnswersAsync(survey, command.Questions);
+            if (blocked is not null)
+                return Result<CreateSurveyWithQuestionsResponse>.Failure(null, blocked);
             // ✅ محدودیت «فقط پیش‌نویس قابل ویرایش است» برداشته شد
             if (survey.Status == SurveyStatus.Archived)
                 return Result<CreateSurveyWithQuestionsResponse>.Failure(null, "نظرسنجی آرشیو شده را نمی‌توان ویرایش کرد.");
@@ -243,6 +299,8 @@ public class SurveyCommandHandler(
         }
         else
         {
+            if (!await CanCreateAsync())
+                return Result<CreateSurveyWithQuestionsResponse>.Failure(null, "شما مجاز به ایجاد نظرسنجی نیستید.");
             await service.ThrowWhenDuplicated(command.Survey.Title);
 
             survey = new Survey(

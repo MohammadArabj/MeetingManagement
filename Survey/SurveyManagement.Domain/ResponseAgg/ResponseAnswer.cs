@@ -204,4 +204,12 @@ public class ResponseAnswer
     {
         IsSkipped = true;
     }
+
+    /// <summary>فقط گزینه‌ی «سایر» (بدون انتخاب گزینه‌ی ثابت)</summary>
+    public void SetOtherAnswer(string otherAnswer, int? timeSpentSeconds = null)
+    {
+        OtherAnswer = otherAnswer;
+        TimeSpentSeconds = timeSpentSeconds;
+        IsSkipped = false;
+    }
 }
