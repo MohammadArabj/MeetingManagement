@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using QRCoder;
 using SurveyManagement.Common;
 using SurveyManagement.Common.Extensions;
+using SurveyManagement.Domain.Shared.Access;
 using SurveyManagement.Domain.Shared.Acls.UserManagement;
 using SurveyManagement.Infrastructure.Persistence;
 using SurveyManagement.Infrastructure.Persistence.Views;
@@ -17,7 +18,9 @@ namespace SurveyManagement.Infrastructure.Query;
 public class SurveyQueryHandler(
     SurveyManagementQueryContext context,
     IUserManagementAclService userManagementAclService,
-    IConfiguration configuration) :
+    IConfiguration configuration,
+    ISurveyAccessService access,
+    IResponseDraftKeys draftKeys) :
     IQueryHandlerAsync<Result<List<SurveyListDto>>, SurveySearchRequest>,
     IQueryHandlerAsync<Result<SurveyDetailDto>, Guid>,
     IQueryHandlerAsync<Result<List<SurveyComboDto>>>,
@@ -33,13 +36,20 @@ public class SurveyQueryHandler(
     /// ✅ هم‌راستا با ResponseQueryHandler — حداقل تعداد نفرات لازم برای نمایش یک دستهٔ دموگرافیک
     /// </summary>
     private const int K_ANONYMITY_THRESHOLD = 5;
+    private const int MaxPageSize = 200;
+
+    private const string NoAccess = "شما به این نظرسنجی دسترسی ندارید.";
 
     /// <summary>
     /// جستجوی نظرسنجی‌ها با فیلتر
     /// </summary>
     public async Task<Result<List<SurveyListDto>>> Handle(SurveySearchRequest request)
     {
-        var query = context.Surveys
+        // فقط نظرسنجی‌هایی که کاربر مالک، مدیر یا دارنده‌ی دسترسی مدیریت/نتایج آن‌هاست (مدیر سامانه: همه)
+        var manageable = await access.ManageableSurveyIdsAsync();
+
+        var query = context.Surveys.AsNoTracking()
+            .WhereIf(manageable is not null, s => manageable!.Contains(s.Id))
             .WhereIf(!string.IsNullOrEmpty(request.Title), s => s.Title.Contains(request.Title))
             .WhereIf(request.Status.HasValue, s => s.Status == request.Status.Value)
             .WhereIf(request.AccessType.HasValue, s => s.AccessType == request.AccessType.Value)
@@ -71,10 +81,13 @@ public class SurveyQueryHandler(
             query = query.Where(s => s.EndDate <= endDate);
         }
 
+        var pageSize = Math.Clamp(request.PageSize, 1, MaxPageSize);
+        var pageNumber = Math.Max(1, request.PageNumber);
+
         var surveys = await query
             .OrderByDescending(s => s.Created)
-            .Skip((request.PageNumber - 1) * request.PageSize)
-            .Take(request.PageSize)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(s => new
             {
                 s.Guid,
@@ -126,10 +139,13 @@ public class SurveyQueryHandler(
         var survey = await context.Surveys
             .Include(s => s.Questions)
             .Include(x=>x.Criteria)
+            .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Guid == guid && !s.IsRemoved);
 
         if (survey == null)
             return Result<SurveyDetailDto>.Failure(null, "نظرسنجی یافت نشد.");
+        if (!((await access.GetAsync(survey.Id))?.CanView ?? false))
+            return Result<SurveyDetailDto>.Failure(null, NoAccess);
 
         var user = await userManagementAclService.GetUserByAsync(survey.CreatedBy);
         var publishedUser = survey.PublishedBy.HasValue
@@ -187,8 +203,10 @@ public class SurveyQueryHandler(
     /// </summary>
     public async Task<Result<List<SurveyComboDto>>> Handle()
     {
-        var surveys = await context.Surveys
+        var manageable = await access.ManageableSurveyIdsAsync();
+        var surveys = await context.Surveys.AsNoTracking()
             .Where(s => !s.IsRemoved && s.IsActive == 1)
+            .WhereIf(manageable is not null, s => manageable!.Contains(s.Id))
             .OrderByDescending(s => s.Created)
             .Select(s => new SurveyComboDto
             {
@@ -210,13 +228,16 @@ public class SurveyQueryHandler(
     {
         var survey = await context.Surveys
             .Include(s => s.Questions)
-            .Include(s => s.Responses)
+            .Include(s => s.Responses.Where(r => r.Status == ResponseStatus.Completed))
+            .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Guid == request.SurveyId && !s.IsRemoved);
 
         if (survey == null)
             return Result<SurveyStatisticsDto>.Failure(null, "نظرسنجی یافت نشد.");
+        if (!((await access.GetAsync(survey.Id))?.CanViewResults ?? false))
+            return Result<SurveyStatisticsDto>.Failure(null, NoAccess);
 
-        // ⚠️ همه‌ی survey.Responses الان یعنی «تکمیل‌شده» — Draft/InProgress دیگه وجود نداره
+        // فقط پاسخ‌های تکمیل‌شده (پیش‌نویس‌ها در آمار نمی‌آیند)
         var responses = survey.Responses.ToList();
         var total = responses.Count;
 
@@ -293,9 +314,11 @@ public class SurveyQueryHandler(
     /// </summary>
     public async Task<Result<List<SurveyChangeLogDto>>> Handle(GetSurveyChangeLogsRequest request)
     {
-        var survey = await context.Surveys.FirstOrDefaultAsync(s => s.Guid == request.SurveyId);
+        var survey = await context.Surveys.AsNoTracking().FirstOrDefaultAsync(s => s.Guid == request.SurveyId);
         if (survey == null)
             return Result<List<SurveyChangeLogDto>>.Failure(null, "نظرسنجی یافت نشد.");
+        if (!((await access.GetAsync(survey.Id))?.CanManage ?? false))
+            return Result<List<SurveyChangeLogDto>>.Failure(null, NoAccess);
 
         var logs = await context.SurveyChangeLogs
             .Where(l => l.SurveyId == survey.Id)
@@ -345,6 +368,9 @@ public class SurveyQueryHandler(
 
         if (survey == null)
             return Result<GetSurveyWithQuestionsResponse>.Failure(null, "نظرسنجی یافت نشد.");
+        // شامل فهرست دسترسی‌ها و تنظیمات کامل؛ فقط برای کسی که حق ویرایش دارد
+        if (!((await access.GetAsync(survey.Id))?.CanManage ?? false))
+            return Result<GetSurveyWithQuestionsResponse>.Failure(null, NoAccess);
 
         var surveyDto = new SurveyForEditDto
         {
@@ -483,12 +509,19 @@ public class SurveyQueryHandler(
         if (survey == null)
             return Result<PublicSurveyDto>.Failure(null, "نظرسنجی یافت نشد.");
 
-        if (survey.Status != SurveyStatus.Active)
+        // همان قواعد ثبت پاسخ (منتشرشده یا در حال اجرا؛ روز آخر هم قابل پاسخ است)
+        if (survey.Status != SurveyStatus.Active && survey.Status != SurveyStatus.Published)
             return Result<PublicSurveyDto>.Failure(null, "این نظرسنجی فعال نیست.");
 
-        var now = DateTime.Now;
-        if (now < survey.StartDate || now > survey.EndDate)
+        var today = DateTime.Now.Date;
+        if (today < survey.StartDate.Date || today > survey.EndDate.Date)
             return Result<PublicSurveyDto>.Failure(null, "این نظرسنجی خارج از بازه زمانی مجاز است.");
+
+        var identity = await access.IdentityAsync();
+        if (identity.IsAuthenticated
+                ? !((await access.GetAsync(survey.Id))?.CanRespond ?? false)
+                : survey.RequireLogin || survey.AccessType != AccessType.Public)
+            return Result<PublicSurveyDto>.Failure(null, identity.IsAuthenticated ? NoAccess : "برای پاسخ به این نظرسنجی باید وارد سامانه شوید.");
 
         var isFull = survey.MaxResponses.HasValue && survey.TotalResponses >= survey.MaxResponses.Value;
 
@@ -513,8 +546,8 @@ public class SurveyQueryHandler(
             TotalResponses = survey.TotalResponses,
             StartDate = survey.StartDate.ToString("yyyy/MM/dd"),
             EndDate = survey.EndDate.ToString("yyyy/MM/dd"),
-            IsActive = survey.Status == SurveyStatus.Active,
-            IsExpired = now > survey.EndDate,
+            IsActive = survey.Status is SurveyStatus.Active or SurveyStatus.Published,
+            IsExpired = today > survey.EndDate.Date,
             IsFull = isFull,
             Questions = survey.Questions.Select(q => new PublicQuestionDto
             {
@@ -569,13 +602,16 @@ public class SurveyQueryHandler(
     /// </summary>
     public async Task<Result<SurveyPublicLinkDto>> Handle(GetSurveyPublicLinkRequest request)
     {
-        var survey = await context.Surveys
+        var survey = await context.Surveys.AsNoTracking()
             .FirstOrDefaultAsync(s => s.Guid == request.SurveyGuid && !s.IsRemoved);
 
         if (survey == null)
             return Result<SurveyPublicLinkDto>.Failure(null, "نظرسنجی یافت نشد.");
+        if (!((await access.GetAsync(survey.Id))?.CanManage ?? false))
+            return Result<SurveyPublicLinkDto>.Failure(null, NoAccess);
 
-        var publicUrl = $"{configuration["EndPoint"]}/#/survey/take/{survey.Guid}";
+        // فرانت مسیر معمولی (بدون #) دارد؛ قبلاً لینک با /#/ به داشبورد می‌رسید
+        var publicUrl = $"{configuration["EndPoint"]?.TrimEnd('/')}/survey/take/{survey.Guid}";
         var qrCodeBase64 = GenerateQRCode(publicUrl);
 
         var result = new SurveyPublicLinkDto
@@ -584,7 +620,7 @@ public class SurveyQueryHandler(
             Title = survey.Title,
             PublicUrl = publicUrl,
             QRCodeBase64 = qrCodeBase64,
-            IsActive = survey.Status == SurveyStatus.Active,
+            IsActive = survey.Status is SurveyStatus.Active or SurveyStatus.Published,
             Status = survey.Status.GetDisplayName(),
             StartDate = survey.StartDate.ToString("yyyy/MM/dd"),
             EndDate = survey.EndDate.ToString("yyyy/MM/dd")
@@ -611,8 +647,9 @@ public class SurveyQueryHandler(
     }
 
     /// <summary>
-    /// ✅ نظرسنجی‌های قابل دسترس برای کاربر با وضعیت شرکت — بازنویسی کامل بر پایهٔ SurveyParticipant
-    /// دیگه هیچ Draft/InProgress/Progress وجود نداره — فقط «شرکت کرده» یا «شرکت نکرده».
+    /// نظرسنجی‌های قابل پاسخ برای کاربر جاری (کاربر فقط از توکن؛ UserGuid درخواست نادیده گرفته می‌شود).
+    /// دسترسی: فهرست دسترسی (کاربر / سمت / واحد / نقش، با انقضا) + نظرسنجی‌های عمومی.
+    /// وضعیت: تکمیل (SurveyParticipant) / در حال پاسخ (پیش‌نویس) / شروع نشده / منقضی.
     /// </summary>
     public async Task<Result<List<MySurveyListDto>>> Handle(GetMySurveysRequest request) =>
         await BuildMySurveys(request.UserGuid, request.Filter);
@@ -623,25 +660,22 @@ public class SurveyQueryHandler(
     /// <summary>
     /// منطق مشترک بین دو overload بالا — قبلاً کاملاً تکراری بود، اینجا یکپارچه شد
     /// </summary>
-    private async Task<Result<List<MySurveyListDto>>> BuildMySurveys(Guid? userGuid, MySurveyFilter? filter)
+    private async Task<Result<List<MySurveyListDto>>> BuildMySurveys(Guid? requestedUserGuid, MySurveyFilter? filter)
     {
         var now = DateTime.Now;
 
-        // ===== مرحله ۱: نظرسنجی‌هایی که این کاربر بهشون دسترسی داره =====
-        var accessibleSurveyIds = await context.SurveyAccess
-            .Where(a => a.TargetGuid == userGuid
-                      && a.IsActive == 1
-                      && a.CanRespond)
-            .Select(a => a.SurveyId)
-            .Distinct()
-            .ToListAsync();
-
-        if (!accessibleSurveyIds.Any())
+        var identity = await access.IdentityAsync();
+        if (!identity.IsAuthenticated)
             return Result<List<MySurveyListDto>>.Success(new List<MySurveyListDto>());
+        Guid? userGuid = identity.UserGuid;
 
-        // ===== مرحله ۲: بارگذاری نظرسنجی‌ها (فعال + منتشرشده) =====
+        // ===== مرحله ۱: نظرسنجی‌هایی که این کاربر بهشون دسترسی داره =====
+        var accessibleSurveyIds = (await access.RespondableSurveyIdsAsync()).ToList();
+
+        // ===== مرحله ۲: بارگذاری نظرسنجی‌ها (فعال + منتشرشده؛ دسترسی‌دار یا عمومی) =====
         var surveys = await context.Surveys
-            .Where(s => accessibleSurveyIds.Contains(s.Id)
+            .AsNoTracking()
+            .Where(s => (accessibleSurveyIds.Contains(s.Id) || s.AccessType == AccessType.Public)
                       && !s.IsRemoved
                       && (s.Status == SurveyStatus.Published || s.Status == SurveyStatus.Active))
             .Include(s => s.Questions)
@@ -663,6 +697,23 @@ public class SurveyQueryHandler(
                 .ToHashSet()
             : new HashSet<long>();
 
+        // ===== مرحله ۳-ب: پیش‌نویس‌ها (کلید HMAC؛ بدون ستون کاربر) =====
+        var draftKeyBySurvey = surveys.ToDictionary(s => draftKeys.For(s.Id, userGuid.Value), s => s.Id);
+        var draftKeyList = draftKeyBySurvey.Keys.ToList();
+        var drafts = await context.Responses.AsNoTracking()
+            .Where(r => draftKeyList.Contains(r.Guid) && r.Status == ResponseStatus.InProgress)
+            .Select(r => new
+            {
+                r.Guid,
+                r.SurveyId,
+                Answered = r.Answers.Count(a => !a.IsSkipped),
+                Last = r.Answers.Max(a => (DateTime?)a.AnsweredAt) ?? r.StartedAt
+            })
+            .ToListAsync();
+        var draftBySurvey = drafts
+            .Where(d => draftKeyBySurvey.TryGetValue(d.Guid, out var sid) && sid == d.SurveyId)
+            .ToDictionary(d => d.SurveyId);
+
         // ===== مرحله ۴: نام ایجادکنندگان =====
         var creatorGuids = surveys.Select(s => (Guid?)s.CreatedBy).Distinct().ToList();
         var users = await userManagementAclService.GetUsersByGuidsAsync(creatorGuids);
@@ -679,17 +730,21 @@ public class SurveyQueryHandler(
             var daysRemaining = isExpired ? 0 : (survey.EndDate.Date - now.Date).Days;
 
             var hasParticipated = participatedSurveyIds.Contains(survey.Id);
+            draftBySurvey.TryGetValue(survey.Id, out var draft);
+            var totalQuestions = survey.Questions.Count(q => !q.IsRemoved);
 
-            MyResponseStatus responseStatus = hasParticipated
+            MyResponseStatus responseStatus = hasParticipated && !(survey.AllowMultipleResponses && draft is not null)
                 ? MyResponseStatus.Completed
-                : (isExpired ? MyResponseStatus.Expired : MyResponseStatus.NotStarted);
+                : isExpired ? MyResponseStatus.Expired
+                : draft is not null ? MyResponseStatus.InProgress
+                : MyResponseStatus.NotStarted;
 
-            // اعمال فیلتر (InProgress دیگه هرگز match نمی‌شه چون Draft نداریم)
             if (filter.HasValue && filter != MySurveyFilter.All)
             {
                 var matchesFilter = filter switch
                 {
                     MySurveyFilter.NotStarted => responseStatus == MyResponseStatus.NotStarted,
+                    MySurveyFilter.InProgress => responseStatus == MyResponseStatus.InProgress,
                     MySurveyFilter.Completed => responseStatus == MyResponseStatus.Completed,
                     MySurveyFilter.Expired => responseStatus == MyResponseStatus.Expired,
                     _ => true
@@ -700,10 +755,15 @@ public class SurveyQueryHandler(
             var responseStatusText = responseStatus switch
             {
                 MyResponseStatus.NotStarted => "شروع نشده",
+                MyResponseStatus.InProgress => "در حال پاسخ‌دهی",
                 MyResponseStatus.Completed => "تکمیل شده",
                 MyResponseStatus.Expired => "منقضی شده",
                 _ => "نامشخص"
             };
+
+            var progress = responseStatus == MyResponseStatus.Completed ? 100
+                : draft is not null && totalQuestions > 0 ? (int)Math.Round(draft.Answered * 100.0 / totalQuestions)
+                : 0;
 
             result.Add(new MySurveyListDto
             {
@@ -714,22 +774,22 @@ public class SurveyQueryHandler(
                     : survey.Description,
                 StartDate = survey.StartDate.ToString("yyyy/MM/dd"),
                 EndDate = survey.EndDate.ToString("yyyy/MM/dd"),
-                TotalQuestions = survey.Questions.Count(q => !q.IsRemoved),
+                TotalQuestions = totalQuestions,
                 SurveyStatus = survey.Status.GetDisplayName(),
                 IsActive = survey.Status == SurveyStatus.Active || survey.Status == SurveyStatus.Published,
                 IsExpired = isExpired,
                 ThemeColor = survey.ThemeColor,
                 LogoGuid = survey.LogoGuid,
                 AllowAnonymous = survey.AllowAnonymous,
-                AllowSaveDraft = false, // ⚠️ پایین توضیح داده شده — دیگه اصلاً پیش‌نویس معنی نداره
+                AllowSaveDraft = true, // پاسخ‌های کاربر واردشده همیشه خودکار ذخیره می‌شود
                 MaxResponses = survey.MaxResponses,
                 TotalResponses = survey.TotalResponses,
                 IsFull = isFull,
                 ResponseStatus = responseStatus,
                 ResponseStatusText = responseStatusText,
-                ProgressPercentage = hasParticipated ? 100 : 0, // چون فقط دو حالته
-                ExistingResponseGuid = null, // ⚠️ دیگه در دسترس نیست — پایین توضیح داده شده
-                LastActivityDate = null,      // ⚠️ همین‌طور
+                ProgressPercentage = progress,
+                ExistingResponseGuid = null, // پیش‌نویس از روی کاربر (توکن) پیدا می‌شود؛ شناسه‌ای به کلاینت داده نمی‌شود
+                LastActivityDate = draft?.Last.ToString("yyyy/MM/dd HH:mm"),
                 CreatedBy = userDict.TryGetValue(survey.CreatedBy, out var name) ? name : "نامشخص",
                 DaysRemaining = daysRemaining
             });
@@ -738,10 +798,11 @@ public class SurveyQueryHandler(
         result = result
             .OrderBy(x => x.ResponseStatus switch
             {
-                MyResponseStatus.NotStarted => 0,
-                MyResponseStatus.Completed => 1,
-                MyResponseStatus.Expired => 2,
-                _ => 3
+                MyResponseStatus.InProgress => 0,
+                MyResponseStatus.NotStarted => 1,
+                MyResponseStatus.Completed => 2,
+                MyResponseStatus.Expired => 3,
+                _ => 4
             })
             .ThenByDescending(x => x.DaysRemaining == 0 ? int.MaxValue : x.DaysRemaining)
             .ToList();

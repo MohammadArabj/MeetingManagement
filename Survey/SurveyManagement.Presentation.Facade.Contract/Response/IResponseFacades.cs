@@ -9,6 +9,8 @@ namespace SurveyManagement.Presentation.Facade.Contract.Response;
 public interface IResponseCommandFacade
 {
     Task<Result<Guid>> Submit(SubmitResponseDto command);
+    Task<Result<ResponseDraftSavedDto>> SaveDraft(SaveResponseDraftDto command);
+    Task<Result<bool>> DiscardDraft(DiscardResponseDraftDto command);
     Task<Result<bool>> Delete(DeleteResponseDto command);
     Task<Result<bool>> AddNote(AddResponseNoteDto command);
 }

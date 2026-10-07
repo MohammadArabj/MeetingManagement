@@ -14,6 +14,7 @@ public class AccessControlCommandHandler(
     ISurveySystemRoleRepository roleRepository,
     IUserSurveyRoleRepository userRoleRepository,
     ISurveyRepository surveyRepository,
+    SurveyManagement.Domain.Shared.Access.ISurveyAccessService surveyAccess,
     IClaimHelper claimHelper) :
     ICommandHandlerAsync<SetSurveyAccessDto, Result<bool>>,
     ICommandHandlerAsync<RemoveSurveyAccessDto, Result<bool>>,
@@ -23,6 +24,12 @@ public class AccessControlCommandHandler(
     ICommandHandlerAsync<EditRoleDto, Result<bool>>,
     ICommandHandlerAsync<DeleteRoleDto, Result<bool>>
 {
+    private async Task<bool> CanManageRolesAsync() =>
+        (await surveyAccess.IdentityAsync()).HasAnyPermission([
+            SurveyManagement.Common.Security.SurveyPermissions.AccessControl,
+            SurveyManagement.Common.Security.SurveyPermissions.AccessControlAssignRole,
+            SurveyManagement.Common.Security.SurveyPermissions.AccessControlCreateRole]);
+
     public async Task<Result<bool>> Handle(SetSurveyAccessDto command)
     {
         var currentUserId = claimHelper.GetCurrentUserGuid();
@@ -35,7 +42,7 @@ public class AccessControlCommandHandler(
         if (survey == null)
             return Result<bool>.Failure(false, "نظرسنجی یافت نشد.");
 
-        if (survey.CreatedBy != currentUserId)
+        if (!((await surveyAccess.GetAsync(survey.Id))?.CanManage ?? false))
             return Result<bool>.Failure(false, "شما مجاز به تنظیم دسترسی‌های این نظرسنجی نیستید.");
 
         // پردازش دسترسی‌ها
@@ -129,7 +136,7 @@ public class AccessControlCommandHandler(
         if (access == null)
             return Result<bool>.Failure(false, "دسترسی یافت نشد.");
 
-        if (access.Survey.CreatedBy != currentUserId)
+        if (!((await surveyAccess.GetAsync(access.SurveyId))?.CanManage ?? false))
             return Result<bool>.Failure(false, "شما مجاز به حذف این دسترسی نیستید.");
 
         access.Deactivate();
@@ -143,7 +150,9 @@ public class AccessControlCommandHandler(
     {
         var currentUserId = claimHelper.GetCurrentUserGuid();
 
-        // TODO: بررسی دسترسی مدیریتی
+        // نقش‌های سامانه برای همه‌ی نظرسنجی‌ها اعمال می‌شوند؛ فقط مدیر سامانه یا دارنده‌ی مجوز مربوط
+        if (!await CanManageRolesAsync())
+            return Result<bool>.Failure(false, "شما مجاز به مدیریت نقش‌های سامانه نظرسنجی نیستید.");
 
         // بررسی نقش
         var role = await roleRepository.LoadAsync(command.RoleId);
@@ -181,7 +190,9 @@ public class AccessControlCommandHandler(
     {
         var currentUserId = claimHelper.GetCurrentUserGuid();
 
-        // TODO: بررسی دسترسی مدیریتی
+        // نقش‌های سامانه برای همه‌ی نظرسنجی‌ها اعمال می‌شوند؛ فقط مدیر سامانه یا دارنده‌ی مجوز مربوط
+        if (!await CanManageRolesAsync())
+            return Result<bool>.Failure(false, "شما مجاز به مدیریت نقش‌های سامانه نظرسنجی نیستید.");
 
         var userRoleId = await userRoleRepository.GetIdByAsync(command.Guid);
         if (userRoleId == 0)
@@ -201,7 +212,9 @@ public class AccessControlCommandHandler(
     {
         var currentUserId = claimHelper.GetCurrentUserGuid();
 
-        // TODO: بررسی دسترسی مدیریتی
+        // نقش‌های سامانه برای همه‌ی نظرسنجی‌ها اعمال می‌شوند؛ فقط مدیر سامانه یا دارنده‌ی مجوز مربوط
+        if (!await CanManageRolesAsync())
+            return Result<int>.Failure(0, "شما مجاز به مدیریت نقش‌های سامانه نظرسنجی نیستید.");
 
         // بررسی تکراری بودن نام
         var exists = await roleRepository.ExistsAsync(x => x.RoleName == command.RoleName);
@@ -227,7 +240,9 @@ public class AccessControlCommandHandler(
     {
         var currentUserId = claimHelper.GetCurrentUserGuid();
 
-        // TODO: بررسی دسترسی مدیریتی
+        // نقش‌های سامانه برای همه‌ی نظرسنجی‌ها اعمال می‌شوند؛ فقط مدیر سامانه یا دارنده‌ی مجوز مربوط
+        if (!await CanManageRolesAsync())
+            return Result<bool>.Failure(false, "شما مجاز به مدیریت نقش‌های سامانه نظرسنجی نیستید.");
 
         var role = await roleRepository.LoadAsync(command.Id);
         if (role == null)
@@ -255,7 +270,9 @@ public class AccessControlCommandHandler(
     {
         var currentUserId = claimHelper.GetCurrentUserGuid();
 
-        // TODO: بررسی دسترسی مدیریتی
+        // نقش‌های سامانه برای همه‌ی نظرسنجی‌ها اعمال می‌شوند؛ فقط مدیر سامانه یا دارنده‌ی مجوز مربوط
+        if (!await CanManageRolesAsync())
+            return Result<bool>.Failure(false, "شما مجاز به مدیریت نقش‌های سامانه نظرسنجی نیستید.");
 
         var role = await roleRepository.LoadAsync(command.Id);
         if (role == null)

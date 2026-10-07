@@ -3,6 +3,7 @@ using Epc.Company.Query;
 using Microsoft.EntityFrameworkCore;
 using SurveyManagement.Common;
 using SurveyManagement.Common.Extensions;
+using SurveyManagement.Domain.Shared.Access;
 using SurveyManagement.Infrastructure.Persistence;
 using SurveyManagement.Infrastructure.Query.Contract.Question;
 using System.Text.Json;
@@ -15,21 +16,29 @@ public class QuestionQueryHandler :
     IQueryHandlerAsync<Result<List<QuestionDetailDto>>, GetQuestionsForResponseRequest>,
     IQueryHandlerAsync<Result<QuestionStatisticsDto>, GetQuestionStatisticsRequest>
 {
-    private readonly SurveyManagementQueryContext _context;
+    private const string NoAccess = "شما به این نظرسنجی دسترسی ندارید.";
 
-    public QuestionQueryHandler(SurveyManagementQueryContext context)
+    private readonly SurveyManagementQueryContext _context;
+    private readonly ISurveyAccessService _access;
+
+    public QuestionQueryHandler(SurveyManagementQueryContext context, ISurveyAccessService access)
     {
         _context = context;
+        _access = access;
     }
+
+    private async Task<SurveyAccessInfo?> AccessAsync(long surveyId) => await _access.GetAsync(surveyId);
 
     /// <summary>
     /// لیست ساده سوالات یک نظرسنجی
     /// </summary>
     public async Task<Result<List<QuestionListDto>>> Handle(GetQuestionListRequest request)
     {
-        var survey = await _context.Surveys.FirstOrDefaultAsync(s => s.Guid == request.SurveyId);
+        var survey = await _context.Surveys.AsNoTracking().FirstOrDefaultAsync(s => s.Guid == request.SurveyId);
         if (survey == null)
             return Result<List<QuestionListDto>>.Failure(null, "نظرسنجی یافت نشد.");
+        if (!((await AccessAsync(survey.Id))?.CanView ?? false))
+            return Result<List<QuestionListDto>>.Failure(null, NoAccess);
 
         var questions = await _context.Questions
             .Where(q => q.SurveyId == survey.Id && !q.IsRemoved)
@@ -59,10 +68,13 @@ public class QuestionQueryHandler :
         var question = await _context.Questions
             .Include(q => q.Options)
             .Include(q => q.QuestionLogics)
+            .AsNoTracking()
             .FirstOrDefaultAsync(q => q.Guid == questionGuid && !q.IsRemoved);
 
         if (question == null)
             return Result<QuestionDetailDto>.Failure(null, "سوال یافت نشد.");
+        if (!((await AccessAsync(question.SurveyId))?.CanView ?? false))
+            return Result<QuestionDetailDto>.Failure(null, NoAccess);
 
         var questionDto = MapToDetailDto(question);
         return Result<QuestionDetailDto>.Success(questionDto);
@@ -73,11 +85,24 @@ public class QuestionQueryHandler :
     /// </summary>
     public async Task<Result<List<QuestionDetailDto>>> Handle(GetQuestionsForResponseRequest request)
     {
-        var survey = await _context.Surveys.FirstOrDefaultAsync(s => s.Guid == request.SurveyId);
+        var survey = await _context.Surveys.AsNoTracking().FirstOrDefaultAsync(s => s.Guid == request.SurveyId && !s.IsRemoved);
         if (survey == null)
             return Result<List<QuestionDetailDto>>.Failure(null, "نظرسنجی یافت نشد.");
 
+        // پاسخ‌دهنده: نظرسنجی منتشرشده/فعال و دسترسی پاسخ (بدون ورود: فقط عمومی بدون الزام ورود)؛
+        // مدیر نظرسنجی برای پیش‌نمایش در هر وضعیتی. قبلاً سوال‌های پیش‌نویس هم بدون ورود قابل خواندن بود.
+        var identity = await _access.IdentityAsync();
+        var info = identity.IsAuthenticated ? await AccessAsync(survey.Id) : null;
+        var isLive = survey.Status is SurveyStatus.Published or SurveyStatus.Active;
+        var allowed = info?.CanManage == true
+                      || (isLive && (identity.IsAuthenticated
+                          ? info?.CanRespond == true
+                          : !survey.RequireLogin && survey.AccessType == AccessType.Public));
+        if (!allowed)
+            return Result<List<QuestionDetailDto>>.Failure(null, identity.IsAuthenticated ? NoAccess : "برای مشاهده‌ی این نظرسنجی باید وارد سامانه شوید.");
+
         var query = _context.Questions
+            .AsNoTracking()
             .Include(q => q.Options.Where(o => o.IsActive == 1))
             .Include(q => q.Criterion)          // ✅ اضافه شد
             .Where(q => q.SurveyId == survey.Id && !q.IsRemoved);
@@ -100,13 +125,18 @@ public class QuestionQueryHandler :
     {
         var question = await _context.Questions
             .Include(q => q.Options)
+            .AsNoTracking()
             .FirstOrDefaultAsync(q => q.Guid == request.QuestionId && !q.IsRemoved);
 
         if (question == null)
             return Result<QuestionStatisticsDto>.Failure(null, "سوال یافت نشد.");
+        if (!((await AccessAsync(question.SurveyId))?.CanViewResults ?? false))
+            return Result<QuestionStatisticsDto>.Failure(null, NoAccess);
 
+        // فقط پاسخ‌های تکمیل‌شده (پیش‌نویس‌ها شمرده نمی‌شوند)
         var answers = await _context.ResponseAnswers
-            .Where(a => a.QuestionId == question.Id)
+            .AsNoTracking()
+            .Where(a => a.QuestionId == question.Id && a.Response.Status == ResponseStatus.Completed)
             .ToListAsync();
 
         var totalAnswers = answers.Count;

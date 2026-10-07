@@ -139,7 +139,7 @@ public class AccessControlController(IAccessControlCommandFacade commandFacade) 
     /// </summary>
     /// <param name="id">شناسه نقش</param>
     /// <returns>نتیجه عملیات</returns>
-    [HttpDelete("DeleteRole/{guid}")]
+    [HttpDelete("DeleteRole/{id:int}")]
     [ProducesResponseType(typeof(Result<bool>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Result<bool>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> DeleteRole(int id)

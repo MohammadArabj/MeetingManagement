@@ -33,6 +33,21 @@ public class ResponseController(
         return result;
     }
 
+    /// <summary>ذخیره‌ی خودکار پاسخ‌های نیمه‌کاره‌ی کاربر جاری (ادامه‌ی پاسخ‌دهی بعداً)</summary>
+    [HttpPost("SaveDraft")]
+    public async Task<Result<ResponseDraftSavedDto>> SaveDraft([FromBody] SaveResponseDraftDto command) =>
+        await commandFacade.SaveDraft(command);
+
+    /// <summary>پیش‌نویس کاربر جاری (کاربر از توکن)</summary>
+    [HttpGet("MyDraft/{surveyGuid:guid}")]
+    public async Task<Result<UserDraftResponseDto>> GetMyDraft(Guid surveyGuid) =>
+        await queryFacade.GetUserDraft(new GetUserDraftRequest(surveyGuid, Guid.Empty));
+
+    /// <summary>پاک کردن پیش‌نویس کاربر جاری و شروع دوباره</summary>
+    [HttpPost("DiscardDraft/{surveyGuid:guid}")]
+    public async Task<Result<bool>> DiscardDraft(Guid surveyGuid) =>
+        await commandFacade.DiscardDraft(new DiscardResponseDraftDto(surveyGuid));
+
     [HttpPost("Delete/{guid:guid}")]
     [ProducesResponseType(typeof(Result<bool>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Result<bool>), StatusCodes.Status400BadRequest)]
@@ -88,15 +103,11 @@ public class ResponseController(
         return result;
     }
 
+    /// <summary>سازگاری با نسخه‌ی قبلی؛ userGuid نادیده گرفته می‌شود (همیشه کاربر توکن)</summary>
     [HttpGet("Draft/{surveyGuid}/{userGuid}")]
-    [ProducesResponseType(typeof(Result<UserDraftResponseDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<Result<UserDraftResponseDto>> GetUserDraft(Guid surveyGuid, Guid userGuid)
-    {
-        var request = new GetUserDraftRequest(surveyGuid, userGuid);
-        var result = await queryFacade.GetUserDraft(request);
-        return result;
-    }
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public async Task<Result<UserDraftResponseDto>> GetUserDraft(Guid surveyGuid, Guid userGuid) =>
+        await queryFacade.GetUserDraft(new GetUserDraftRequest(surveyGuid, Guid.Empty));
 
     /// <summary>
     /// ✅ داده ماتریسی پاسخ‌ها برای پیش‌نمایش در فرانت (سوال = ستون، پاسخ‌دهنده = ردیف)
@@ -137,14 +148,16 @@ public class ResponseController(
 
     #endregion
 
+    /// <summary>
+    /// وضعیت پاسخ‌دهی کاربر جاری (شرکت کرده / پیش‌نویس دارد). کاربر فقط از توکن خوانده می‌شود؛
+    /// مسیر قدیمی با userGuid برای سازگاری باقی است ولی آن مقدار نادیده گرفته می‌شود.
+    /// </summary>
+    [HttpGet("UserStatus/{surveyGuid:guid}")]
     [HttpGet("UserStatus/{surveyGuid:guid}/{userGuid:guid}")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(Result<UserResponseStatusDto>), StatusCodes.Status200OK)]
-    public async Task<Result<UserResponseStatusDto>> GetUserResponseStatus(Guid surveyGuid, Guid userGuid)
-    {
-        var request = new GetUserResponseStatusRequest(surveyGuid, userGuid);
-        return await queryFacade.GetUserResponseStatus(request);
-    }
+    public async Task<Result<UserResponseStatusDto>> GetUserResponseStatus(Guid surveyGuid) =>
+        await queryFacade.GetUserResponseStatus(new GetUserResponseStatusRequest(surveyGuid, Guid.Empty));
 
     /// <summary>
     /// ✅ تحلیل کامل و جامع پاسخ‌های نظرسنجی (نمای کلی + سوال‌به‌سوال)

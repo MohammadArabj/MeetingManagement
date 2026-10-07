@@ -4,6 +4,7 @@ using MeetingManagement.Common.Extensions;
 using Microsoft.EntityFrameworkCore;
 using SurveyManagement.Common;
 using SurveyManagement.Common.Extensions;
+using SurveyManagement.Domain.Shared.Access;
 using SurveyManagement.Domain.Shared.Acls.UserManagement;
 using SurveyManagement.Infrastructure.Persistence;
 using SurveyManagement.Infrastructure.Query.Contract.Response;
@@ -14,27 +15,37 @@ namespace SurveyManagement.Infrastructure.Query;
 
 public class ResponseQueryHandler(
     IUserManagementAclService userManagementAclService,
-    SurveyManagementQueryContext context) :
+    SurveyManagementQueryContext context,
+    ISurveyAccessService access) :
     IQueryHandlerAsync<Result<List<ResponseListDto>>, ResponseSearchRequest>,
     IQueryHandlerAsync<Result<ResponseDetailDto>, Guid>,
     IQueryHandlerAsync<Result<ResponseSummaryDto>, GetResponseSummaryRequest>,
-    IQueryHandlerAsync<Result<UserResponseStatusDto>, GetUserResponseStatusRequest>,
     IQueryHandlerAsync<Result<ResponseMatrixDto>, GetResponseMatrixRequest>,
     IQueryHandlerAsync<Result<SurveyAnalyticsDto>, GetSurveyAnalyticsRequest>,
     IQueryHandlerAsync<Result<ParticipantsReportDto>, GetSurveyParticipantsRequest>
 {
     private const int K_ANONYMITY_THRESHOLD = 5;
+    private const int MaxPageSize = 200;
+
+    /// <summary>نتایج فقط برای مالک، مدیر سامانه یا دارنده‌ی «مشاهده‌ی نتایج» همین نظرسنجی</summary>
+    private async Task<bool> CanViewResultsAsync(long surveyId) =>
+        (await access.GetAsync(surveyId))?.CanViewResults ?? false;
 
  
 
     public async Task<Result<List<ResponseListDto>>> Handle(ResponseSearchRequest request)
     {
-        var survey = await context.Surveys.FirstOrDefaultAsync(s => s.Guid == request.SurveyGuid);
+        var survey = await context.Surveys.AsNoTracking().FirstOrDefaultAsync(s => s.Guid == request.SurveyGuid);
         if (survey == null)
             return Result<List<ResponseListDto>>.Failure(null, "نظرسنجی یافت نشد.");
+        if (!await CanViewResultsAsync(survey.Id))
+            return Result<List<ResponseListDto>>.Failure(null, "شما به نتایج این نظرسنجی دسترسی ندارید.");
 
-        var query = context.Responses
-            .Where(r => r.SurveyId == survey.Id)
+        var pageSize = Math.Clamp(request.PageSize, 1, MaxPageSize);
+        var pageNumber = Math.Max(1, request.PageNumber);
+
+        var query = context.Responses.AsNoTracking()
+            .Where(r => r.SurveyId == survey.Id && r.Status == ResponseStatus.Completed)
             .WhereIf(!string.IsNullOrEmpty(request.Gender), r => r.Gender == request.Gender)
             .WhereIf(!string.IsNullOrEmpty(request.Office), r => r.Office == request.Office)
             .WhereIf(!string.IsNullOrEmpty(request.EmploymentType), r => r.EmploymentType == request.EmploymentType)
@@ -58,8 +69,8 @@ public class ResponseQueryHandler(
         var responses = await query
             .Include(r => r.Survey)
             .OrderByDescending(r => r.StartedAt)
-            .Skip((request.PageNumber - 1) * request.PageSize)
-            .Take(request.PageSize)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(r => new
             {
                 r.Guid,
@@ -108,10 +119,13 @@ public class ResponseQueryHandler(
             .Include(r => r.Survey)
             .Include(r => r.Answers)
                 .ThenInclude(a => a.Question)
-            .FirstOrDefaultAsync(r => r.Guid == responseGuid);
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Guid == responseGuid && r.Status == ResponseStatus.Completed);
 
         if (response == null)
             return Result<ResponseDetailDto>.Failure(null, "پاسخ یافت نشد.");
+        if (!await CanViewResultsAsync(response.SurveyId))
+            return Result<ResponseDetailDto>.Failure(null, "شما به نتایج این نظرسنجی دسترسی ندارید.");
 
         var detail = new ResponseDetailDto
         {
@@ -139,11 +153,14 @@ public class ResponseQueryHandler(
     public async Task<Result<ResponseSummaryDto>> Handle(GetResponseSummaryRequest request)
     {
         var survey = await context.Surveys
-            .Include(s => s.Responses)
+            .AsNoTracking()
+            .Include(s => s.Responses.Where(r => r.Status == ResponseStatus.Completed))
             .FirstOrDefaultAsync(s => s.Guid == request.SurveyId);
 
         if (survey == null)
             return Result<ResponseSummaryDto>.Failure(null, "نظرسنجی یافت نشد.");
+        if (!await CanViewResultsAsync(survey.Id))
+            return Result<ResponseSummaryDto>.Failure(null, "شما به نتایج این نظرسنجی دسترسی ندارید.");
 
         var avgTimeSpent = survey.Responses
             .Where(r => r.TimeSpentSeconds.HasValue)
@@ -169,26 +186,15 @@ public class ResponseQueryHandler(
         return Result<ResponseSummaryDto>.Success(summary);
     }
 
-    public async Task<Result<UserResponseStatusDto>> Handle(GetUserResponseStatusRequest request)
-    {
-        var survey = await context.Surveys.FirstOrDefaultAsync(s => s.Guid == request.SurveyGuid);
-        if (survey == null)
-            return Result<UserResponseStatusDto>.Failure(null, "نظرسنجی یافت نشد.");
-
-        var hasParticipated = await context.SurveyParticipants
-            .AnyAsync(p => p.SurveyId == survey.Id && p.UserGuid == request.UserGuid);
-
-        return Result<UserResponseStatusDto>.Success(new UserResponseStatusDto
-        {
-            HasParticipated = hasParticipated
-        });
-    }
+    // GetUserResponseStatusRequest → ResponseDraftQueryHandler (کاربر از توکن، نه از آدرس)
 
     public async Task<Result<ResponseMatrixDto>> Handle(GetResponseMatrixRequest request)
     {
-        var survey = await context.Surveys.FirstOrDefaultAsync(s => s.Guid == request.SurveyGuid);
+        var survey = await context.Surveys.AsNoTracking().FirstOrDefaultAsync(s => s.Guid == request.SurveyGuid);
         if (survey == null)
             return Result<ResponseMatrixDto>.Failure(null, "نظرسنجی یافت نشد.");
+        if (!await CanViewResultsAsync(survey.Id))
+            return Result<ResponseMatrixDto>.Failure(null, "شما به نتایج این نظرسنجی دسترسی ندارید.");
 
         var questions = await context.Questions
             .Where(q => q.SurveyId == survey.Id)
@@ -196,9 +202,10 @@ public class ResponseQueryHandler(
             .ToListAsync();
 
         var responses = await context.Responses
+            .AsNoTracking()
             .Include(r => r.Answers)
                 .ThenInclude(a => a.Question)
-            .Where(r => r.SurveyId == survey.Id)
+            .Where(r => r.SurveyId == survey.Id && r.Status == ResponseStatus.Completed)
             .OrderBy(r => r.CompletedAt ?? r.StartedAt)
             .ToListAsync();
 
@@ -398,9 +405,11 @@ public class ResponseQueryHandler(
 
     public async Task<Result<SurveyAnalyticsDto>> Handle(GetSurveyAnalyticsRequest request)
     {
-        var survey = await context.Surveys.FirstOrDefaultAsync(s => s.Guid == request.SurveyGuid);
+        var survey = await context.Surveys.AsNoTracking().FirstOrDefaultAsync(s => s.Guid == request.SurveyGuid);
         if (survey == null)
             return Result<SurveyAnalyticsDto>.Failure(null, "نظرسنجی یافت نشد.");
+        if (!await CanViewResultsAsync(survey.Id))
+            return Result<SurveyAnalyticsDto>.Failure(null, "شما به نتایج این نظرسنجی دسترسی ندارید.");
 
         var questions = await context.Questions
             .Where(q => q.SurveyId == survey.Id)
@@ -417,7 +426,8 @@ public class ResponseQueryHandler(
             .ToDictionary(g => g.Key, g => g.OrderBy(o => o.SortOrder).ToList());
 
         var allResponses = await context.Responses
-            .Where(r => r.SurveyId == survey.Id)
+            .AsNoTracking()
+            .Where(r => r.SurveyId == survey.Id && r.Status == ResponseStatus.Completed)
             .ToListAsync();
 
         var responseIds = allResponses.Select(r => r.Id).ToList();
@@ -868,9 +878,11 @@ public class ResponseQueryHandler(
 
     public async Task<Result<ParticipantsReportDto>> Handle(GetSurveyParticipantsRequest request)
     {
-        var survey = await context.Surveys.FirstOrDefaultAsync(s => s.Guid == request.SurveyGuid);
+        var survey = await context.Surveys.AsNoTracking().FirstOrDefaultAsync(s => s.Guid == request.SurveyGuid);
         if (survey == null)
             return Result<ParticipantsReportDto>.Failure(null, "نظرسنجی یافت نشد.");
+        if (!await CanViewResultsAsync(survey.Id))
+            return Result<ParticipantsReportDto>.Failure(null, "شما به نتایج این نظرسنجی دسترسی ندارید.");
 
         var userGuids = await context.SurveyParticipants
             .Where(p => p.SurveyId == survey.Id)

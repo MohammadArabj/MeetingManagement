@@ -13,6 +13,12 @@ public class ResponseCommandFacade(IResponsiveCommandBusAsync commandBus) : IRes
     public async Task<Result<Guid>> Submit(SubmitResponseDto command) =>
         await commandBus.Dispatch<SubmitResponseDto, Result<Guid>>(command);
 
+    public async Task<Result<ResponseDraftSavedDto>> SaveDraft(SaveResponseDraftDto command) =>
+        await commandBus.Dispatch<SaveResponseDraftDto, Result<ResponseDraftSavedDto>>(command);
+
+    public async Task<Result<bool>> DiscardDraft(DiscardResponseDraftDto command) =>
+        await commandBus.Dispatch<DiscardResponseDraftDto, Result<bool>>(command);
+
     public async Task<Result<bool>> Delete(DeleteResponseDto command) =>
         await commandBus.Dispatch<DeleteResponseDto, Result<bool>>(command);
 

@@ -4,6 +4,7 @@ using Epc.Identity;
 using SurveyManagement.Application.Contract.Question;
 using SurveyManagement.Common;
 using SurveyManagement.Domain.QuestionAgg;
+using SurveyManagement.Domain.Shared.Access;
 using SurveyManagement.Domain.SurveyAgg;
 
 namespace SurveyManagement.Application;
@@ -11,6 +12,7 @@ namespace SurveyManagement.Application;
 public class QuestionCommandHandler(
     IQuestionRepository questionRepository,
     ISurveyRepository surveyRepository,
+    ISurveyAccessService access,
     IClaimHelper claimHelper) :
     ICommandHandlerAsync<CreateOrEditQuestionDto, Result<Guid>>,
     ICommandHandlerAsync<DeleteQuestionDto, Result<bool>>,
@@ -29,7 +31,7 @@ public class QuestionCommandHandler(
         if (survey == null)
             return Result<Guid>.Failure(Guid.Empty, "نظرسنجی یافت نشد.");
 
-        if (survey.CreatedBy != currentUserId)
+        if (!((await access.GetAsync(survey.Id))?.CanManage ?? false))
             return Result<Guid>.Failure(Guid.Empty, "شما مجاز به ویرایش این نظرسنجی نیستید.");
 
         if (survey.Status != SurveyStatus.Draft)
@@ -153,7 +155,7 @@ public class QuestionCommandHandler(
         if (question == null)
             return Result<bool>.Failure(false, "سوال یافت نشد.");
 
-        if (question.Survey.CreatedBy != currentUserId)
+        if (!((await access.GetAsync(question.SurveyId))?.CanManage ?? false))
             return Result<bool>.Failure(false, "شما مجاز به حذف این سوال نیستید.");
 
         if (question.Survey.Status != SurveyStatus.Draft)
@@ -178,7 +180,7 @@ public class QuestionCommandHandler(
         if (survey == null)
             return Result<bool>.Failure(false, "نظرسنجی یافت نشد.");
 
-        if (survey.CreatedBy != currentUserId)
+        if (!((await access.GetAsync(survey.Id))?.CanManage ?? false))
             return Result<bool>.Failure(false, "شما مجاز به تغییر ترتیب سوالات این نظرسنجی نیستید.");
 
         if (survey.Status != SurveyStatus.Draft)
