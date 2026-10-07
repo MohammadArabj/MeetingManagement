@@ -1,6 +1,6 @@
 import { HttpInterceptor, HttpRequest, HttpHandler, HttpEvent } from "@angular/common/http";
 import { Injectable } from "@angular/core";
-import { Observable, throwError, catchError } from "rxjs";
+import { Observable, throwError } from "rxjs";
 import { ToastService } from "../../services/framework-services/toast.service";
 import { isValidNationalCode } from "../../shared/constants";
 
@@ -8,16 +8,18 @@ import { isValidNationalCode } from "../../shared/constants";
 export class ValidationInterceptor implements HttpInterceptor {
   constructor(private readonly toastService: ToastService) { }
 
-  intercept(request: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
-    const formId = `#${request.headers.get('formId')}`
-    const isFormSubmission = request.headers.has('X-Form-Submitted');  // فقط وقتی درخواست واقعا ارسال شده است
+  intercept(original: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+    const formId = `#${original.headers.get('formId')}`
+    const isFormSubmission = original.headers.has('X-Form-Submitted');  // فقط وقتی درخواست واقعا ارسال شده است
+    // هدرهای داخلی کلاینت به سرور ارسال نمی‌شوند
+    const request = original.clone({ headers: original.headers.delete('formId').delete('noValidate').delete('X-Form-Submitted') });
 
     // بررسی اینکه درخواست POST یا PUT باشد و هدر مربوطه را داشته باشد
     if ((request.method === 'POST' || request.method === 'PUT') && isFormSubmission) {
-      if (request.headers.get("noValidate") == "true") {
+      if (original.headers.get("noValidate") == "true") {
         return next.handle(request);
       }
-      const form = $(formId);
+      const form = $(original.headers.get('formId') ? formId : '#__no_form__');
       if (form[0]) {
         form.addClass("was-validated");
         const errors = this.logErrors(formId);
@@ -26,7 +28,7 @@ export class ValidationInterceptor implements HttpInterceptor {
           return next.handle(request);
         } else {
           this.toastService.error(`لطفا '${errors.join(" و ")}' را به درستی وارد کنید.`);
-          throw new Error();
+          return throwError(() => new Error('form-invalid'));
         }
       }
       else {
@@ -100,7 +102,7 @@ function controlNationalCodeValidity(item: HTMLElement, errors: any[]) {
 function logItemError(item: HTMLElement, errors: any[]) {
   const itemId = $(item).attr('id');
   const label = $(`label[for='${itemId}']`);
-  var outerText = label[0].outerText.replace("*", "");
+  var outerText = (label[0]?.innerText ?? $(item).attr('placeholder') ?? itemId ?? 'فیلد').replace("*", "").trim();
   if (!errors.includes(outerText)) {
     errors.push(outerText);
   }

@@ -109,7 +109,7 @@ export class ImpersonationService {
                 this.localStorageService.setItem(USER_ID_NAME, target.userGuid);
                 this.localStorageService.setItem(POSITION_ID, target.positionGuid);
                 this.localStorageService.setItem(POSITION_NAME, target.positionName);
-                this.localStorageService.setItem(Main_USER_ID, target.userGuid);
+                // Main_USER_ID همان کاربر توکن باقی می‌ماند؛ تغییر آن باعث پاک شدن نشست در بارگذاری بعدی می‌شد.
                 this.localStorageService.setItem(IsDeletage, 'false');
 
                 // ذخیره دسترسی‌های جدید

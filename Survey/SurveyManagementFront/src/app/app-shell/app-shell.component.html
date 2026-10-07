@@ -9,7 +9,10 @@
        RTL: flex-direction:row → اولین فرزند (sidebar) سمت راست قرار می‌گیرد
   ──────────────────────────────────────────────────────────────── -->
     <div class="app-shell-body">
-        <app-sidebar></app-sidebar>
+        <app-sidebar [open]="sidebarOpen()" (close)="sidebarOpen.set(false)"></app-sidebar>
+        <button type="button" class="sidebar-fab" (click)="sidebarOpen.set(true)" aria-label="باز کردن منو">
+            <i class="fas fa-bars"></i>
+        </button>
 
         <main class="app-shell-main">
             <div class="content-wrapper">
@@ -42,21 +45,7 @@
     </footer>
 
     <!-- ─── Loading ────────────────────────────────────────────────── -->
-    @if (isLoading()) {
-    <div class="global-loading-overlay active">
-        <div class="loading-content">
-            <div class="loading-spinner">
-                <div class="spinner-ring ring-1"></div>
-                <div class="spinner-ring ring-2"></div>
-                <div class="spinner-ring ring-3"></div>
-            </div>
-            <p class="loading-text">در حال بارگذاری...</p>
-            <div class="loading-dots">
-                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-            </div>
-        </div>
-    </div>
-    }
+    <app-loading-bar></app-loading-bar>
 
     <!-- ─── Offline ─────────────────────────────────────────────────── -->
     @if (!isOnline()) {

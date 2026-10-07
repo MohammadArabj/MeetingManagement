@@ -430,3 +430,12 @@
         transition-duration: .01ms !important;
     }
 }
+/* دکمه‌ی باز کردن منو در موبایل */
+.sidebar-fab { display: none; }
+@media (max-width: 768px) {
+  .sidebar-fab {
+    display: grid; place-items: center; position: fixed; bottom: 1rem; right: 1rem; z-index: 1030;
+    width: 3rem; height: 3rem; border-radius: 50%; border: 0; color: #fff;
+    background: var(--bs-primary, #4f46e5); box-shadow: 0 6px 18px rgba(0,0,0,.25);
+  }
+}

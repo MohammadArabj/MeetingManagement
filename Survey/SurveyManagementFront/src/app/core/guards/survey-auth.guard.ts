@@ -1,30 +1,41 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
+import { CanActivateFn } from '@angular/router';
+import { firstValueFrom, timeout } from 'rxjs';
 import { CodeFlowService } from '../../services/framework-services/code-flow.service';
-import { LocalStorageService } from '../../services/framework-services/local.storage.service';
-import {
-  ACCESS_TOKEN_NAME,
-} from '../types/configuration';
+import { HttpService } from '../../services/framework-services/http.service';
+import { safeReturnUrl } from '../../services/framework-services/auth-utils';
+import { environment } from '../../../environments/environment';
+
+export const ANONYMOUS_MODE_KEY = 'survey_anonymous_mode';
 
 /**
- * فقط چک می‌کنه توکن در localStorage هست یا نه
- * اگر هست → رد کن (کاربر قبلاً از challenge عبور کرده)
- * اگر نیست → به dashboard برگردون تا از نو لاگین کنه
+ * صفحه‌ی شرکت در نظرسنجی.
+ * ✅ قبلاً فقط وجود توکن در storage بررسی می‌شد (حتی منقضی) و کاربر بدون توکن به داشبورد پرت می‌شد.
+ * حالا:
+ *  ۱) نشست معتبر → ادامه.
+ *  ۲) بدون نشست: اگر سرور نظرسنجی را برای کاربر ناشناس قابل پاسخ بداند → ادامه به‌صورت ناشناس.
+ *  ۳) در غیر این صورت ورود SSO با حفظ آدرس همین نظرسنجی تا کاربر بعد از ورود دقیقاً
+ *     به همان‌جا (و همان سؤالی که نیمه‌کاره گذاشته بود) برگردد.
  */
-export const surveyAuthGuard: CanActivateFn = (
-  route: ActivatedRouteSnapshot,
-  state: RouterStateSnapshot
-) => {
-  const localStorageService = inject(LocalStorageService);
-  const router = inject(Router);
+export const surveyAuthGuard: CanActivateFn = async (route, state) => {
+  const auth = inject(CodeFlowService);
+  const http = inject(HttpService);
+  sessionStorage.removeItem(ANONYMOUS_MODE_KEY);
+  try {
+    if (await auth.isLoggedIn()) return true;
+  } catch { /* ادامه */ }
 
-  const token = localStorageService.getItem(ACCESS_TOKEN_NAME);
+  const guid = route.paramMap.get('surveyGuid') ?? '';
+  try {
+    const result: any = await firstValueFrom(
+      http.getFullUrlNoAuth(`${environment.getServiceUrl()}Survey/Public/${encodeURIComponent(guid)}`).pipe(timeout(15000)));
+    if (result?.isSuccess && result.data) {
+      sessionStorage.setItem(ANONYMOUS_MODE_KEY, 'true');
+      return true;
+    }
+  } catch { /* ادامه: ورود */ }
 
-  if (token) {
-    return true; // ✅ توکن هست، مستقیم وارد شو
-  }
-
-  // ─── توکن نیست → ذخیره مقصد و برگشت به dashboard ────────────────────────
-  sessionStorage.setItem('survey_return_url', state.url);
-  return router.createUrlTree(['/dashboard']);
+  sessionStorage.setItem('survey_return_url', safeReturnUrl(state.url));
+  await auth.startAuthentication();
+  return false;
 };

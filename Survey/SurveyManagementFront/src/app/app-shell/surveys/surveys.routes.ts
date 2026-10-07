@@ -1,3 +1,4 @@
+import { permissionGuard } from '../../core/guards/permission.guard';
 import { Routes } from '@angular/router';
 
 export const surveysRoutes: Routes = [
@@ -13,6 +14,7 @@ export const surveysRoutes: Routes = [
   },
   {
     path: 'create',
+    canActivate: [permissionGuard('SV_Surveys_Create')],
     loadComponent: () =>
       import('./survey-wizard/survey-wizard.component').then(m => m.SurveyWizardComponent)
   },

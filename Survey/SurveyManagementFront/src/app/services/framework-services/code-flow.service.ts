@@ -130,7 +130,9 @@ export function getClientSettings(): UserManagerSettings {
         filterProtocolClaims: true,
         // Keep until ProfileService proves required claims are in the ID token.
         loadUserInfo: true,
-        silent_redirect_uri: `${base}/silent-renew`, automaticSilentRenew: window.self === window.top,
+        // تمدید خودکار در iframe غیرفعال است (SSO اجازه‌ی قاب نمی‌دهد و خطاهای پنهان ایجاد می‌کرد)؛
+        // با انقضای توکن، اولین 401 کاربر را با حفظ مسیر به ورود مجدد می‌برد.
+        silent_redirect_uri: `${base}/silent-renew`, automaticSilentRenew: false,
         userStore: new WebStorageStateStore({ store: window.sessionStorage }),
         stateStore: new WebStorageStateStore({ store: window.sessionStorage }),
         // Diagnostic limit, not a performance fix. Coordinate with HTTP/proxy timeouts.

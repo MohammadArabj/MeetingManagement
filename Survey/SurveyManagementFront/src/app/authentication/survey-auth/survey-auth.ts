@@ -2,14 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { CodeFlowService } from '../../services/framework-services/code-flow.service';
-import { LocalStorageService } from '../../services/framework-services/local.storage.service';
-import { UserService } from '../../services/user.service';
-import { PermissionService } from '../../services/permission.service';
-import {
-  ACCESS_TOKEN_NAME, IsDeletage, Main_USER_ID,
-  PERMISSIONS_NAME, POSITION_ID, POSITION_NAME, ROLE_TOKEN_NAME,
-  USER_CURRENT_ACTIVE_SESSION_NAME, USER_ID_NAME,
-} from '../../core/types/configuration';
+import { safeReturnUrl } from '../../services/framework-services/auth-utils';
 
 @Component({
   selector: 'app-survey-auth',
@@ -54,9 +47,6 @@ export class SurveyAuthComponent implements OnInit {
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly codeFlowService: CodeFlowService,
-    private readonly localStorageService: LocalStorageService,
-    private readonly userService: UserService,
-    private readonly permissionService: PermissionService,
   ) { }
 
   async ngOnInit(): Promise<void> {
@@ -64,91 +54,36 @@ export class SurveyAuthComponent implements OnInit {
     const surveyUser = params['u'] as string | undefined;
     const surveyKey = params['k'] as string | undefined;
     const surveyGuid = params['guid'] as string | undefined;
-    const destination = surveyGuid
+    // ✅ guid فقط به‌صورت GUID معتبر پذیرفته می‌شود و «to» فقط مسیر داخلی امن (بدون open redirect)
+    const destination = surveyGuid && GUID.test(surveyGuid)
       ? `/survey/take/${surveyGuid}`
-      : (params['to'] as string | undefined) ?? '/dashboard';
+      : safeReturnUrl(params['to']);
 
-    // ─── پارامترهای ضروری ────────────────────────────────────────────────────
     if (!surveyUser || !surveyKey) {
       this.hasError = true;
       return;
     }
 
-    // ─── ذخیره مقصد نهایی برای بعد از challenge ─────────────────────────────
     sessionStorage.setItem('survey_return_url', destination);
 
-    // ─── اگر لاگین نیست → شروع احراز هویت ──────────────────────────────────
-    if (!await this.codeFlowService.isLoggedIn()) {
-      try {
+    try {
+      if (!await this.codeFlowService.isLoggedIn()) {
         await this.codeFlowService.startSurveyAuthentication(surveyUser, surveyKey);
-      } catch (err) {
-        console.error('[SurveyAuth] خطا در شروع احراز هویت:', err);
-        this.hasError = true;
+        return;
       }
-      return;
+      // کاربر از قبل وارد شده: پروفایل/سمت در getCurrentUser ذخیره شده است؛
+      // نشست و دسترسی‌ها را گارد مقصد (authGuard / surveyAuthGuard) بررسی می‌کند.
+      sessionStorage.removeItem('survey_return_url');
+      await this.router.navigateByUrl(destination, { replaceUrl: true });
+    } catch (err) {
+      console.error('[SurveyAuth] authentication failed', err);
+      this.hasError = true;
     }
-
-    // ─── اگر لاگین هست → مثل challenge همه چیز را لود کن ───────────────────
-    // چون ممکنه localStorage خالی باشه (مثلاً تب جدید یا session جدید)
-    this.storeUserProfile(destination);
-  }
-
-  // ─── ذخیره اطلاعات کاربر (کپی از challenge) ──────────────────────────────
-  private storeUserProfile(destination: string): void {
-    const profile = this.codeFlowService.user?.profile as Record<string, string>;
-
-    // اگر profile خالی بود یعنی user object لود نشده → باید completeAuthentication بشه
-    // این حالت نباید پیش بیاد چون isLoggedIn چک کردیم، ولی defensive check
-    if (!profile) {
-      this.codeFlowService.logout();
-      return;
-    }
-
-    this.localStorageService.setItem(USER_ID_NAME, profile['id'] ?? '');
-    this.localStorageService.setItem(Main_USER_ID, profile['id'] ?? '');
-    this.localStorageService.setItem(POSITION_ID, profile['activatedPosition'] ?? '');
-    this.localStorageService.setItem(POSITION_NAME, profile['positionTitle'] ?? '');
-    this.localStorageService.setItem(ROLE_TOKEN_NAME, profile['position'] ?? '');
-    this.localStorageService.setItem(IsDeletage, profile['isDelegate'] ?? '');
-    this.localStorageService.setItem(
-      ACCESS_TOKEN_NAME,
-      this.codeFlowService.user?.access_token ?? ''
-    );
-
-    this.loadSessionAndPermissions(destination);
-  }
-
-  private loadSessionAndPermissions(destination: string): void {
-    const positionGuid = this.localStorageService.getItem(POSITION_ID);
-
-    this.userService.getCurrentSession().subscribe({
-      next: (sessionData) => {
-        if (!sessionData?.sessionGuid) {
-          this.codeFlowService.logout();
-          return;
-        }
-        this.localStorageService.setItem(USER_CURRENT_ACTIVE_SESSION_NAME, sessionData.sessionGuid);
-        this.loadPermissions(positionGuid, destination);
-      },
-      error: () => this.codeFlowService.logout(),
-    });
-  }
-
-  private loadPermissions(positionGuid: string | null, destination: string): void {
-    this.permissionService.getPositionPermissions(positionGuid ?? '').subscribe({
-      next: (permissions) => {
-        this.localStorageService.removeItem(PERMISSIONS_NAME);
-        this.localStorageService.setItem(PERMISSIONS_NAME, permissions);
-
-        // ─── ذخیره رو پاک کن و برو مقصد ─────────────────────────────────────
-        sessionStorage.removeItem('survey_return_url');
-        this.router.navigateByUrl(destination);
-      },
-      error: () => this.codeFlowService.logout(),
-    });
   }
 
   goHome(): void {
     this.router.navigate(['/dashboard']);
   }
 }
+
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

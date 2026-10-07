@@ -19,6 +19,18 @@ export class RequestConfig {
 }
 export const SKIP_AUTH = new HttpContextToken<boolean>(() => false);
 
+/**
+ * خطای منطقی API (Result.isSuccess = false) یا خطای HTTP.
+ * قبلاً پاسخ ناموفق به‌عنوان «داده» به next() برمی‌گشت؛ مثلاً ثبت پاسخ نظرسنجی رد می‌شد ولی صفحه‌ی
+ * تشکر نمایش داده می‌شد و پاسخ‌ها از دست می‌رفت. حالا پاسخ ناموفق وارد شاخه‌ی error می‌شود.
+ */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number = 200, readonly data: unknown = null) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -59,13 +71,14 @@ export class HttpService {
       if (response.isSuccess) {
         if (showToast && response.message) this.toastService.success(response.message);
         return response.data as T;
-      } else {
-        if (showToast && response.message) this.toastService.error(response.message);
       }
+      // پیام خطای منطقی همیشه نمایش داده می‌شود و درخواست «ناموفق» تلقی می‌شود
+      const message = response.message || 'عملیات انجام نشد.';
+      this.toastService.error(message);
+      throw new ApiError(message, 200, response.data);
     }
     return response as T;
   }
- 
 
   // ⭐ توکن جدید برای bypass کردن interceptor
 
@@ -87,11 +100,15 @@ export class HttpService {
       context: new HttpContext().set(SKIP_AUTH, true),
     });
   }
-  // مدیریت خطاها و نمایش پیام خطا به صورت Toast
-  private handleError(error: HttpErrorResponse, showToast: boolean) {
-    console.error('HTTP Error:', error);
-    //if (showToast) this.toastService.error(error.error?.message || 'مشکلی رخ داده است. لطفا دوباره تلاش کنید.');
-    return throwError(() => new Error(error.error?.message || 'مشکلی رخ داده است.'));
+  // خطای HTTP → ApiError با وضعیت و پیام سرور (برای تشخیص 401/403/410 در فراخوان‌ها)
+  private handleError(error: unknown, _showToast?: boolean) {
+    if (error instanceof ApiError) return throwError(() => error);
+    if (error instanceof HttpErrorResponse) {
+      const message = typeof error.error === 'string' && error.error.length < 500 ? error.error
+        : error.error?.message ?? 'مشکلی رخ داده است.';
+      return throwError(() => new ApiError(message, error.status, error.error));
+    }
+    return throwError(() => error);
   }
 
   // متد getAll با پشتیبانی از پیام‌های Toast

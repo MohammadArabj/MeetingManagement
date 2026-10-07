@@ -32,23 +32,14 @@ export class SidebarComponent implements OnInit {
   readonly collapsed = signal<boolean>(false);
   readonly q = signal<string>('');
 
-  readonly items = signal<NavItem[]>([
-    {
-      section: 'مدیریت',
-      label: 'نظرسنجی‌ها',
-      icon: 'fa fa-list',
-      route: '/surveys/list',
-      visible: this.hasPermission('SV_Surveys'),
-      exact: true
-    },
-    { section: 'مدیریت', label: 'ایجاد نظرسنجی', icon: 'fa fa-plus-circle', route: '/surveys/create', visible: this.hasPermission('MT_Surveys_Create') },
-
-    // { section: 'عملیات', label: 'سوالات', icon: 'fa fa-question-circle', route: '/questions/list' },
-    // { section: 'عملیات', label: 'پاسخ‌ها', icon: 'fa fa-inbox', route: '/responses/list' },
-
-    { section: 'گزارش', label: 'داشبورد', icon: 'fa fa-chart-line', route: '/dashboard' },
-    //{ section: 'گزارش', label: 'گزارش‌گیری', icon: 'fa fa-file-alt', route: '/reports' }
-  ]);
+  // ✅ قبلاً فهرست یک‌بار (پیش از بارگذاری دسترسی‌ها) ساخته می‌شد و «visible» هم هرگز اعمال نمی‌شد.
+  readonly items = computed<NavItem[]>(() => [
+    { section: 'نظرسنجی', label: 'داشبورد', icon: 'fa fa-chart-line', route: '/dashboard' },
+    { section: 'نظرسنجی', label: 'نظرسنجی‌های من', icon: 'fa fa-clipboard-check', route: '/surveys/my' },
+    { section: 'مدیریت', label: 'نظرسنجی‌ها', icon: 'fa fa-list', route: '/surveys/list', exact: true },
+    { section: 'مدیریت', label: 'ایجاد نظرسنجی', icon: 'fa fa-plus-circle', route: '/surveys/create', visible: this.hasPermission('SV_Surveys_Create') },
+    { section: 'مدیریت', label: 'نقش‌ها و دسترسی‌ها', icon: 'fa fa-user-shield', route: '/user', visible: this.hasPermission('SV_AccessControl') },
+  ].filter(x => x.visible !== false));
 
   readonly grouped = computed(() => {
     const q = this.q().trim().toLowerCase();
@@ -88,33 +79,11 @@ export class SidebarComponent implements OnInit {
   }
 
   private async loadPermissions(): Promise<void> {
-    const permissionsToCheck = [
-      'SV_Surveys',
-      'SV_Surveys_Create',
-    ];
-
-    const newPermissions = new Set<string>();
-
-    // Use Promise.allSettled for better error handling
-    const results = await Promise.allSettled(
-      permissionsToCheck.map(async (perm) => {
-        const hasPermission = await this.passwordFlowService.checkPermission(perm);
-        return { perm, hasPermission };
-      })
-    );
-
-    results.forEach((result) => {
-      if (result.status === 'fulfilled') {
-        const { perm, hasPermission } = result.value;
-        if (hasPermission) {
-          newPermissions.add(perm);
-        }
-      } else {
-        console.error(`Error checking permission:`, result.reason);
-      }
-    });
-
-    this._permissions.set(newPermissions);
+    const granted = new Set<string>();
+    for (const perm of ['SV_Surveys_Create', 'SV_AccessControl']) {
+      if (await this.passwordFlowService.checkPermission(['SV_Admin', perm])) granted.add(perm);
+    }
+    this._permissions.set(granted);
   }
 
   private hasPermission(permission: string): boolean {

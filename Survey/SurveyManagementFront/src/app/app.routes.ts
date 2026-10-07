@@ -7,6 +7,9 @@ import { UserList } from './app-shell/user/user';
 import { authGuard } from './core/guards/auth.guard.service';
 import { SurveyAuthComponent } from './authentication/survey-auth/survey-auth';
 import { surveyAuthGuard } from './core/guards/survey-auth.guard';
+import { permissionGuard } from './core/guards/permission.guard';
+import { AuthErrorComponent } from './authentication/challenge/auth-error.component';
+import { SilentRenewComponent } from './authentication/challenge/silent-renew.component';
 
 export const routes: Routes = [
     // ─── Shell داخلی (نیاز به لاگین کامل) ──────────────────────────────────
@@ -38,7 +41,7 @@ export const routes: Routes = [
                 loadChildren: () =>
                     import('./app-shell/questions/questions.routes').then(m => m.questionsRoutes)
             },
-            { path: 'user', component: UserList },
+            { path: 'user', component: UserList, canActivate: [permissionGuard('SV_AccessControl')] },
         ]
     },
 
@@ -57,6 +60,9 @@ export const routes: Routes = [
         path: 'challenge',
         component: ChallengeComponent
     },
+    // ✅ قبلاً این دو مسیر وجود نداشت و خطای ورود به '**' → dashboard → authGuard → ورود... (حلقه) می‌رسید
+    { path: 'auth-error', component: AuthErrorComponent },
+    { path: 'silent-renew', component: SilentRenewComponent },
     {
         path: 'thankyou',
         component: ThankYouComponent

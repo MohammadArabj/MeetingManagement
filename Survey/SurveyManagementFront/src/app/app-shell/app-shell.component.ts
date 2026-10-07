@@ -1,42 +1,30 @@
-import { Component, OnInit, signal, HostListener } from '@angular/core';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { CommonModule } from '@angular/common';
 import { HeaderComponent } from './header/header.component';
-import { SidebarComponent } from "./sidebar/sidebar";
-
+import { SidebarComponent } from './sidebar/sidebar';
+import { LoadingBarComponent } from '../core/loading/loading-bar.component';
 
 @Component({
   selector: 'app-app-shell',
   templateUrl: './app-shell.component.html',
   styleUrls: ['./app-shell.component.css'],
   standalone: true,
-  imports: [CommonModule, HeaderComponent, RouterOutlet, SidebarComponent]
+  imports: [HeaderComponent, RouterOutlet, SidebarComponent, LoadingBarComponent]
 })
-export class AppShellComponent implements OnInit {
-
-  // Signals
-  readonly isLoading = signal<boolean>(false);
+export class AppShellComponent {
   readonly currentYear = new Date().getFullYear();
   readonly isOnline = signal<boolean>(navigator.onLine);
+  /** باز بودن منو در موبایل */
+  readonly sidebarOpen = signal(false);
 
-  ngOnInit(): void {
-    this.setupOnlineListener();
-    this.setupLoadingListener();
-  }
-
-  // Online/Offline Detection
-  private setupOnlineListener(): void {
-    window.addEventListener('online', () => this.isOnline.set(true));
-    window.addEventListener('offline', () => this.isOnline.set(false));
-  }
-
-  // Loading State (can be connected to a LoadingService)
-  private setupLoadingListener(): void {
-    // این می‌تونه با یک LoadingService سینک بشه
-    // مثلاً از HTTP Interceptor
-  }
-
-  setLoading(state: boolean): void {
-    this.isLoading.set(state);
+  constructor() {
+    const online = () => this.isOnline.set(true);
+    const offline = () => this.isOnline.set(false);
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    inject(DestroyRef).onDestroy(() => {
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', offline);
+    });
   }
 }
