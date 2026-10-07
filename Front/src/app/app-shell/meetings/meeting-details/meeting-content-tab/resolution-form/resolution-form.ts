@@ -36,7 +36,9 @@ import { AppSettings } from '../../../../../services/system-setting.service';
 import { CreateResolutionBoardMeetingDto, CreateResolutionDto, UserWithPosition } from './resolution-form.models';
 import {
   buildAssignmentsArray,
+  boardFormValueFromResolution,
   buildBoardItemsArray,
+  buildBoardResolutionDto,
   buildUniqueKey,
   buildUsersWithPositions,
   futureOrAfterMeetingDateValidator,
@@ -45,6 +47,14 @@ import {
   isPastDate,
   normalizeBoardStatus,
 } from './resolution-form.utils';
+import {
+  applyBoardActorsSelection,
+  applyRegularActorsSelection,
+  collectMemberKeys,
+  createNewBoardAssignmentGroup,
+  createRegularAssignmentGroup,
+  markAssignmentRemoved,
+} from './resolution-assignments.helpers';
 import { ResolutionFilesStore } from './resolution-files.store';
 import { ResolutionFilesPanelComponent } from './resolution-files-panel/resolution-files-panel';
 import { BoardResolutionFieldsComponent } from './board-resolution-fields/board-resolution-fields';
@@ -248,24 +258,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
       return;
     }
 
-    const memberKeys = new Set<string>();
-
-    members.forEach(member => {
-      if (member.isRemoved) return;
-      if (!member.userGuid) return;
-
-      if (member.positionGuid) {
-        const key = `${member.userGuid}_${member.positionGuid}`;
-        const existsInUsers = usersWithPos.some(u => u.uniqueKey === key);
-        if (existsInUsers) {
-          memberKeys.add(key);
-        }
-      } else {
-        usersWithPos
-          .filter(u => u.userGuid === member.userGuid)
-          .forEach(u => memberKeys.add(u.uniqueKey));
-      }
-    });
+    const memberKeys = collectMemberKeys(members, usersWithPos);
 
     if (memberKeys.size === 0) {
       this.toast.warning('هیچ عضو معتبری برای انتخاب در این جلسه یافت نشد');
@@ -384,6 +377,19 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
     this.files.hidePdfPreview();
   }
 
+  /** حذف اقدام‌کننده‌ی هیئت مدیره: ردیف ذخیره‌شده برای حذف در سرور علامت می‌خورد، ردیف جدید مستقیماً حذف می‌شود */
+  removeBoardAssignment(index: number): void {
+    const assignments = this.boardAssignments();
+    const assignment = assignments.at(index);
+    if (!assignment) return;
+
+    if (Number(assignment.get('id')?.value) > 0) {
+      markAssignmentRemoved(assignment);
+    } else {
+      assignments.removeAt(index);
+    }
+  }
+
   removeRegularAssignment(index: number): void {
     const assignments = this.regularAssignments();
     if (index < 0 || index >= assignments.length) return;
@@ -403,25 +409,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
       const assignment = assignments.at(index);
       if (!assignment) return;
 
-      const actors = assignment.get('actors')?.value || [];
-      actors.forEach((actor: any) => {
-        actor.isRemoved = true;
-      });
-
-      assignment.get('actors')?.setValue(actors);
-      assignment.get('isRemoved')?.setValue(true);
-
-      assignment.get('actors')?.clearValidators();
-      assignment.get('type')?.clearValidators();
-      assignment.get('followerGuid')?.clearValidators();
-      assignment.get('followerUniqueKey')?.clearValidators();
-      assignment.get('dueDate')?.clearValidators();
-
-      assignment.get('actors')?.updateValueAndValidity();
-      assignment.get('type')?.updateValueAndValidity();
-      assignment.get('followerGuid')?.updateValueAndValidity();
-      assignment.get('followerUniqueKey')?.updateValueAndValidity();
-      assignment.get('dueDate')?.updateValueAndValidity();
+      markAssignmentRemoved(assignment);
 
       const actorControls = this._actorGuidsControls();
       if (actorControls[index]) {
@@ -440,19 +428,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
     this.resetFormSilently();
 
     if (this.isBoardMeeting()) {
-      this.boardResolutionForm.patchValue({
-        id: res.id,
-        title: res.title || '',
-        number: res.number || '',
-        description: res.text || '',
-        parentResolutionId: res.parentResolutionId || '',
-        committeeMeetingGuid: res.committeeMeetingGuid || '',
-        committeeResolutionId: res.committeeResolutionId || '',
-        approvedPrice: res.approvedPrice || '',
-        contractNumber: res.contractNumber || '',
-        documentation: res.documentation || '',
-        decisionsMade: res.decisionsMade || '',
-      });
+      this.boardResolutionForm.patchValue(boardFormValueFromResolution(res));
 
       setTimeout(() => this.loadExistingBoardAssignments(), 0);
     } else {
@@ -547,23 +523,12 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
 
   private saveBoardResolution(): void {
     const v = this.boardResolutionForm.value;
-    const dto: CreateResolutionBoardMeetingDto = {
-      id: v.id || undefined,
-      number: v.number || '',
-      title: normalizePersian(v.title) || '',
-      description: normalizePersian(v.description) || '',
-      decisionsMade: normalizePersian(v.decisionsMade) || '',
-      documentation: normalizePersian(v.documentation) || '',
-      contractNumber: v.contractNumber || '',
-      approvedPrice: v.approvedPrice ? parseFloat(v.approvedPrice) : undefined,
-      meetingGuid: this.meetingGuid(),
-      parentMeetingGuid: v.parentMeetingGuid || undefined,
-      parentResolutionId: v.parentResolutionId || undefined,
-      committeeMeetingGuid: v.committeeMeetingGuid || undefined,
-      committeeResolutionId: v.committeeResolutionId || undefined,
-      files: this.files.buildFilesArray(),
-      items: buildBoardItemsArray(this.boardAssignments().controls.map(ctrl => ctrl.value)),
-    };
+    const dto: CreateResolutionBoardMeetingDto = buildBoardResolutionDto(
+      v,
+      this.meetingGuid(),
+      this.files.buildFilesArray(),
+      buildBoardItemsArray(this.boardAssignments().controls.map(ctrl => ctrl.value)),
+    );
 
     this._isSaving.set(true);
     this.resolutionService.createOrEditBoardMeeting(dto)
@@ -586,17 +551,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
       return;
     }
 
-    const g = this.fb.group({
-      actors: [[], Validators.required],
-      type: ['', Validators.required],
-      followerGuid: ['', Validators.required],
-      followerPositionGuid: [''],
-      followerUniqueKey: ['', Validators.required],
-      dueDate: ['', [Validators.required, this.futureOrAfterMeetingDateValidator]],
-      status: ['1'],
-      result: [''],
-      isRemoved: [false],
-    });
+    const g = createRegularAssignmentGroup(this.fb, this.futureOrAfterMeetingDateValidator);
 
     this.regularAssignments().push(g);
     this._actorGuidsControls.update(list => [...list, new FormControl([])]);
@@ -611,46 +566,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
 
     const editing = this.isEditingResolution();
 
-    const selectedKeys = new Set(
-      (selectedItems || []).map((x: any) => typeof x === 'string' ? x : (x.uniqueKey || x))
-    );
-
-    const oldActors = fg.get('actors')?.value || [];
-
-    if (selectedKeys.size === 0) {
-      if (!editing) {
-        fg.get('actors')?.setValue([]);
-      } else {
-        fg.get('actors')?.setValue(oldActors.map((a: any) => ({ ...a, isRemoved: true })));
-      }
-    } else {
-      let newActors = oldActors.map((a: any) => {
-        const key = `${a.actorGuid}_${a.actorPositionGuid}`;
-        return { ...a, isRemoved: !selectedKeys.has(key) };
-      });
-
-      const usersWithPos = this.usersWithPositions();
-      selectedKeys.forEach(key => {
-        const exists = oldActors.some((a: any) => `${a.actorGuid}_${a.actorPositionGuid}` === key);
-        if (exists) return;
-
-        const u = usersWithPos.find(p => p.uniqueKey === key);
-        if (!u) return;
-
-        newActors.push({
-          actorGuid: u.userGuid,
-          actorPositionGuid: u.positionGuid,
-          id: 0,
-          isRemoved: false,
-        });
-      });
-
-      fg.get('actors')?.setValue(newActors);
-    }
-
-    const activeKeys = (fg.get('actors')?.value || [])
-      .filter((a: any) => !a.isRemoved)
-      .map((a: any) => `${a.actorGuid}_${a.actorPositionGuid}`);
+    const activeKeys = applyRegularActorsSelection(fg, selectedItems, this.usersWithPositions(), editing);
 
     const actorControls = this._actorGuidsControls();
     actorControls[index]?.setValue(activeKeys);
@@ -687,18 +603,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
       return;
     }
 
-    const g = this.fb.group({
-      id: [0],
-      actorUniqueKey: [[], Validators.required],
-      actors: [[]],
-      followerGuid: [AppSettings.boardSecretaryUserGuid || ''],
-      followerPositionGuid: [AppSettings.boardPositionGuid || ''],
-      dueDate: ['', Validators.required],
-      status: ['1'],
-      result: [''],
-      description: [''],
-      isRemoved: [false],
-    });
+    const g = createNewBoardAssignmentGroup(this.fb);
 
     this.boardAssignments().insert(0, g);
     this.boardAssignmentsEditor()?.scrollToLatestAssignment();
@@ -708,33 +613,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
     const group = this.boardAssignments().at(assignmentIndex) as FormGroup;
     if (!group) return;
 
-    const editing = this.isEditingResolution();
-    const usersWithPos = this.usersWithPositions();
-
-    const selectedKeys = new Set<string>((selectedItems || []).map(x => typeof x === 'string' ? x : (x.uniqueKey ?? x)));
-    const oldActors: any[] = group.get('actors')?.value || [];
-
-    let newActors = oldActors.map(a => {
-      const key = buildUniqueKey(a.actorGuid, a.actorPositionGuid);
-      return { ...a, isRemoved: !selectedKeys.has(key) };
-    });
-
-    selectedKeys.forEach(key => {
-      const exists = oldActors.some(a => buildUniqueKey(a.actorGuid, a.actorPositionGuid) === key);
-      if (exists) return;
-
-      const u = usersWithPos.find(p => p.uniqueKey === key);
-      if (!u) return;
-
-      newActors.push({ id: 0, actorGuid: u.userGuid, actorPositionGuid: u.positionGuid, isRemoved: false });
-    });
-
-    if (!editing) newActors = newActors.filter(a => !a.isRemoved);
-
-    group.get('actors')?.setValue(newActors, { emitEvent: false });
-
-    const activeKeys = newActors.filter(a => !a.isRemoved).map(a => buildUniqueKey(a.actorGuid, a.actorPositionGuid));
-    group.get('actorUniqueKey')?.setValue(activeKeys, { emitEvent: false });
+    applyBoardActorsSelection(group, selectedItems, this.usersWithPositions(), this.isEditingResolution());
   }
 
   private loadExistingBoardAssignments(): void {
@@ -789,16 +668,15 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
     for (const g of groups) {
       const followerUniqueKey = buildUniqueKey(g.followerGuid, g.followerPositionGuid);
 
-      const fg = this.fb.group({
-        actors: [g.actors, Validators.required],
-        type: [g.type, Validators.required],
-        followerGuid: [g.followerGuid, Validators.required],
-        followerPositionGuid: [g.followerPositionGuid],
-        followerUniqueKey: [followerUniqueKey, Validators.required],
-        dueDate: [g.dueDate, [Validators.required, this.futureOrAfterMeetingDateValidator]],
-        status: [g.status || '1'],
-        result: [g.result || ''],
-        isRemoved: [false],
+      const fg = createRegularAssignmentGroup(this.fb, this.futureOrAfterMeetingDateValidator, {
+        actors: g.actors,
+        type: g.type,
+        followerGuid: g.followerGuid,
+        followerPositionGuid: g.followerPositionGuid,
+        followerUniqueKey,
+        dueDate: g.dueDate,
+        status: g.status || '1',
+        result: g.result || '',
       });
 
       fa.push(fg);

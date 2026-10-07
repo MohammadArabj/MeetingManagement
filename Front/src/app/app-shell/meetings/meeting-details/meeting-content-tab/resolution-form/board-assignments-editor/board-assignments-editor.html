@@ -19,6 +19,7 @@
       <div class="assignments-container-modern w-100" #assignmentsContainer>
         @if (controls.length > 0) {
         @for (assignment of controls; let i = $index; track $index) {
+        @if (!assignment.get('isRemoved')?.value) {
         <div class="assignment-card-modern" [formGroup]="assignment">
           <div class="card-header-new">
             <div class="assignment-number-new">{{ i + 1 }}</div>
@@ -123,6 +124,7 @@
 
           </div>
         </div>
+        }
         }
         } @else {
         <div class="empty-state-new">

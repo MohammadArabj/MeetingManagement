@@ -2,7 +2,8 @@ import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
 import moment from 'jalali-moment';
 
 import { SystemUser } from '../../../../../core/models/User';
-import { fixPersianDigits } from '../../../../../core/types/configuration';
+import { Resolution } from '../../../../../core/models/Resolution';
+import { fixPersianDigits, normalizePersian } from '../../../../../core/types/configuration';
 import { environment } from '../../../../../../environments/environment';
 import { AppSettings } from '../../../../../services/system-setting.service';
 
@@ -10,6 +11,7 @@ import {
   AgendaFileInfo,
   AssignmentItemDto,
   BoardAssignmentItemDto,
+  CreateResolutionBoardMeetingDto,
   EMPTY_GUID,
   FileItem,
   ResolutionFileDto,
@@ -275,6 +277,53 @@ export function buildBoardItemsArray(values: any[]): BoardAssignmentItemDto[] {
   });
 
   return result;
+}
+
+// ═══════════════════════════════════════════════════════════
+// Board resolution - form <-> DTO
+// ═══════════════════════════════════════════════════════════
+
+/** مقادیر اولیه فرم مصوبه هیئت مدیره در حالت ویرایش */
+export function boardFormValueFromResolution(res: Resolution): Record<string, any> {
+  return {
+    id: res.id,
+    title: res.title || '',
+    number: res.number || '',
+    description: res.text || '',
+    parentResolutionId: res.parentResolutionId || '',
+    committeeMeetingGuid: res.committeeMeetingGuid || '',
+    committeeResolutionId: res.committeeResolutionId || '',
+    approvedPrice: res.approvedPrice || '',
+    contractNumber: res.contractNumber || '',
+    documentation: res.documentation || '',
+    decisionsMade: res.decisionsMade || '',
+  };
+}
+
+/** ساخت DTO ذخیره مصوبه هیئت مدیره از مقدار فرم */
+export function buildBoardResolutionDto(
+  v: any,
+  meetingGuid: string,
+  files: ResolutionFileDto[],
+  items: BoardAssignmentItemDto[],
+): CreateResolutionBoardMeetingDto {
+  return {
+    id: v.id || undefined,
+    number: v.number || '',
+    title: normalizePersian(v.title) || '',
+    description: normalizePersian(v.description) || '',
+    decisionsMade: normalizePersian(v.decisionsMade) || '',
+    documentation: normalizePersian(v.documentation) || '',
+    contractNumber: v.contractNumber || '',
+    approvedPrice: v.approvedPrice ? parseFloat(v.approvedPrice) : undefined,
+    meetingGuid,
+    parentMeetingGuid: v.parentMeetingGuid || undefined,
+    parentResolutionId: v.parentResolutionId || undefined,
+    committeeMeetingGuid: v.committeeMeetingGuid || undefined,
+    committeeResolutionId: v.committeeResolutionId || undefined,
+    files,
+    items,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════

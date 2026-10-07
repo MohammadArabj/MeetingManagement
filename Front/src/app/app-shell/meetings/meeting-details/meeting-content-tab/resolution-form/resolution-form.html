@@ -51,7 +51,7 @@
 
         <!-- تخصیص‌ها - Board -->
         <app-board-assignments-editor [assignments]="boardAssignments()" [users]="usersWithPositions()"
-          (add)="addBoardAssignment(false)" (remove)="removeRegularAssignment($event)"
+          (add)="addBoardAssignment(false)" (remove)="removeBoardAssignment($event)"
           (actorsChange)="onBoardActorsChange($event.index, $event.items)">
         </app-board-assignments-editor>
       </form>
