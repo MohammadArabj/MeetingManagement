@@ -1,0 +1,144 @@
+<!-- تخصیص‌ها - Regular -->
+<div class="assignments-section-new">
+  <div class="assignments-header-new">
+    <div class="header-content-new">
+      <h6 class="section-title-modern">
+        <i class="fas fa-user-check"></i>
+        تخصیص‌ها و پیگیری
+      </h6>
+      <div class="header-stats-new">
+        <span class="assignment-counter-new">
+          <i class="fas fa-tasks"></i>
+          <span>{{ assignments().length }}</span> تخصیص
+        </span>
+        <button type="button" class="add-assignment-btn-new" (click)="add.emit()">
+          <i class="fas fa-plus"></i>
+          افزودن تخصیص
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div formArrayName="regularAssignments" class="mt-3">
+    @for(assignment of assignments().controls; let i = $index; track $index) {
+    @if(!assignment.get('isRemoved')?.value) {
+    <div class="row border rounded p-3 mt-2 assignment-card-regular" [formGroupName]="i">
+      <div class="col-md-3" style="margin-top: 1.25rem;">
+        <div class="form-group">
+          <label for="actorGuids">
+            تخصیص یافته به<span class="text-danger"> *</span>
+          </label>
+          <ng-select [multiple]="true" bindLabel="userName" bindValue="uniqueKey" appendTo="body"
+            [formControl]="actorControls()[i]" (change)="actorsChange.emit({ index: i, items: $event })"
+            placeholder="انتخاب کنید">
+            @for (user of users(); track user.uniqueKey) {
+            <ng-option [value]="user.uniqueKey">
+              <div class="user-option">
+                <div class="user-avatar-protected" (contextmenu)="$event.preventDefault()">
+                  <div class="ua-bg" [style.background-image]="'url(' + getUserPhotoUrl(user.personalNo) + ')'">
+                  </div>
+                  <div class="ua-shield"></div>
+                </div>
+                <div class="avatar-placeholder" style="display: none">
+                  {{ getUserInitials(user.userName) }}
+                </div>
+
+                <div class="user-info">
+                  <div class="user-name">{{ user.userName }}</div>
+                  <div class="user-position">{{ user.positionTitle }}</div>
+                </div>
+              </div>
+            </ng-option>
+            }
+
+            <ng-template ng-multi-label-tmp let-items="items" let-clear="clear">
+              <div class="selected-users">
+                @for (item of users() | slice:0:2; track $index) {
+                <span class="selected-user-tag">
+                  <div class="user-avatar-small-protected" (contextmenu)="$event.preventDefault()">
+                    <div class="ua-bg"
+                      [style.background-image]="'url(' + getUserPhotoUrl(item.personalNo) + ')'"></div>
+                    <div class="ua-shield"></div>
+                  </div>
+
+                  <span class="selected-avatar-placeholder" style="display: none">
+                    {{ getUserInitials(item.userName) }}
+                  </span>
+
+                  <span class="selected-user-name">{{ item.userName }}</span>
+                  <span class="selected-user-position">- {{ item.positionTitle }}</span>
+                </span>
+                }
+
+                @if(items.length > 2){
+                <span class="more-count">
+                  +{{ items.length - 2 }} نفر دیگر
+                </span>
+                }
+              </div>
+            </ng-template>
+          </ng-select>
+          <button class="btn btn-primary" (click)="selectAllMembers.emit(i)">انتخاب همه اعضا</button>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <custom-select identity="type" formControlName="type" [options]="assignmentTypes()" styleType="simple"
+          [required]="true" label="نوع تخصیص">
+        </custom-select>
+      </div>
+
+      <div class="col-md-3" style="margin-top: 1.25rem;">
+        <div class="form-group">
+          <label for="followerGuid">
+            مسئول پیگیری<span class="text-danger"> *</span>
+          </label>
+          <ng-select [multiple]="false" bindLabel="userName" bindValue="uniqueKey" appendTo="body"
+            formControlName="followerUniqueKey" (change)="followerChange.emit({ index: i, item: $event })"
+            placeholder="انتخاب کنید">
+            @for (user of users(); track user.uniqueKey) {
+            <ng-option [value]="user.uniqueKey">
+              <div class="user-option">
+                <div class="user-avatar-protected" (contextmenu)="$event.preventDefault()">
+                  <div class="ua-bg" [style.background-image]="'url(' + getUserPhotoUrl(user.personalNo) + ')'">
+                  </div>
+                  <div class="ua-shield"></div>
+                </div>
+                <div class="avatar-placeholder" style="display: none">
+                  {{ getUserInitials(user.userName) }}
+                </div>
+
+                <div class="user-info">
+                  <div class="user-name">{{ user.userName }}</div>
+                  <div class="user-position">{{ user.positionTitle }}</div>
+                </div>
+              </div>
+            </ng-option>
+            }
+          </ng-select>
+        </div>
+      </div>
+
+      <div class="col-md-2">
+        <custom-input type="date" identity="dueDate" formControlName="dueDate" styleType="simple"
+          label="تاریخ سررسید" [required]="true">
+        </custom-input>
+        @if(assignment.get('dueDate')?.hasError('beforeMeetingDate') && (assignment.get('dueDate')?.touched ||
+        assignment.get('dueDate')?.dirty)){
+        <div class="invalid-feedback d-block">
+          تاریخ سررسید نمی‌تواند قبل از تاریخ برگزاری جلسه باشد
+        </div>
+        }
+      </div>
+
+      <div class="col-md-1">
+        @if(i !== 0) {
+        <button type="button" class="btn btn-sm btn-danger" style="margin-top: 20px;"
+          (click)="remove.emit(i)">حذف</button>
+        }
+      </div>
+    </div>
+    }
+    }
+  </div>
+</div>

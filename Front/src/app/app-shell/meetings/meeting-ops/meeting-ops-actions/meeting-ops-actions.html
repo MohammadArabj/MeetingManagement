@@ -1,0 +1,46 @@
+<div class="row mt-1">
+  <div class="col-md-7" style="background-color: #d7f5fc;padding: 5px;">
+    <div class="d-flex align-items-center mb-2">
+      <button class="btn btn-sm btn-draft">کلید پیش نویس</button>
+      <span class="text-muted" style="font-size: 0.85rem;">در این حالت جلسه ثبت می‌گردد و فقط برای ثبت‌کننده قابل
+        مشاهده است.</span>
+    </div>
+  </div>
+  <div class="col-md-5 text-end">
+    @if (createType() !== 'Edit') {
+    <button class="btn btn-draft mx-1" (click)="submitted.emit(1)"> پیش نویس </button>
+    }
+    @if(isBoardMeeting()){
+    <button class="btn btn-success mx1" (click)="submitted.emit(3)">ثبت و ارسال پیامک </button>
+    }
+    @if(isBoardMeeting()&&createType() === 'Edit'){
+    <button class="btn btn-primary mx1" (click)="submitted.emit(3)">ویرایش و ارسال پیامک </button>
+    }
+    <button class="btn mx-1" [ngClass]="createType()==='Edit'?'btn-draft':'btn-success'" (click)="submitted.emit(2)"
+      style="width: 108.25px;">{{createType()==='Edit' ? "ویرایش" : "ثبت"}}</button>
+    <a class="btn btn-secondary mx-1" routerLink='/meetings/list' routerLinkActive="router-link-active"
+      style="width: 108.25px;">انصراف</a>
+
+    @if (createType() !== 'Edit') {
+    <!-- <div class="alert alert-info d-flex mt-2 position-relative" role="alert">
+      <h6 class="alert-heading mb-1 position-absolute top-1 translate-middle-x" style="margin-right: 18px;">راهنما</h6>
+
+      <span
+        class="badge badge-center rounded-pill bg-info border-label-info p-3 position-absolute top-50 translate-middle"
+        style="margin-right: 18px; margin-top: 9px;">
+        <i class="fa fa-detail fs-6"></i>
+      </span>
+
+      <div class="d-flex flex-column w-100" style="margin-right: 48px;">
+
+
+        <div class="d-flex align-items-center">
+          <button class="btn btn-sm btn-success" style="width: 102px;">کلید ثبت</button>
+          <span class="text-muted" style="font-size: 0.85rem;">در این حالت جلسه ثبت می‌گردد و برای همه اعضا قابل نمایش
+            می‌باشد.</span>
+        </div>
+      </div>
+    </div> -->
+    }
+  </div>
+</div>

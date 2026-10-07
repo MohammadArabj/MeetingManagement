@@ -1,0 +1,66 @@
+<div #signatureModal class="modal fade" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-signature me-2"></i>
+                    ثبت نظر و امضا
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                @if (selectedMemberForSignature(); as member) {
+                <div class="current-member-info mb-4">
+                    <div class="member-card">
+                        <div class="member-avatar">
+                            <img [src]="member.image || 'assets/img/default-avatar.png'" alt="">
+                        </div>
+                        <div class="member-info">
+                            <span class="member-name">{{ member.name }}</span>
+                            <small class="member-role" [style.color]="member.roleColor">{{ member.role }}</small>
+                        </div>
+                    </div>
+                </div>
+                }
+
+                <form [formGroup]="signatureForm" class="row g-3">
+                    <!-- توضیحات -->
+                    <div class="col-8">
+                        <label class="form-label">توضیحات / نظر</label>
+                        <textarea class="form-control" formControlName="comment" rows="5"
+                            placeholder="نظر یا توضیحات خود را وارد کنید..."></textarea>
+                    </div>
+
+                    <!-- امضا -->
+                    <div class="col-4">
+                        <label class="form-label">امضا</label>
+                        <div class="signature-box" (click)="toggleSign()">
+                            @if (signatureForm.get('isSign')?.value && signatureImage()) {
+                            <img [src]="signatureImage()" alt="امضا" class="signature-image">
+                            <button type="button" class="btn-remove-sign">
+                                <i class="fas fa-times-circle"></i>
+                            </button>
+                            } @else {
+                            <div class="signature-placeholder">
+                                <i class="fas fa-signature"></i>
+                                <span>کلیک برای امضا</span>
+                            </div>
+                            }
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" (click)="saveSignature()">
+                    ذخیره
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    انصراف
+                </button>
+
+            </div>
+        </div>
+    </div>
+</div>

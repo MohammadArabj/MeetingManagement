@@ -1,0 +1,12 @@
+  .assignment-card-regular {
+      background: var(--mm-surface-2);
+      border: 2px solid var(--mm-border);
+      border-radius: 12px;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .assignment-card-regular:hover {
+      border-color: var(--mm-primary);
+      box-shadow: 0 4px 15px rgba(var(--mm-primary-rgb), 0.2);
+  }

@@ -1,0 +1,42 @@
+<!-- Modal: تداخل مکان -->
+<div class="modal fade" id="roomConflictModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#fff3cd">
+        <h6 class="modal-title">
+          <i class="fas fa-building me-2 text-warning"></i>جلسه رزرو‌کننده مکان
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      @if (meeting()) {
+      <div class="modal-body p-2">
+        <table class="table table-sm table-borderless mb-0">
+          <tr>
+            <td class="text-muted" style="width:80px"><small>عنوان</small></td>
+            <td><strong>{{ meeting()?.title }}</strong></td>
+          </tr>
+          <tr>
+            <td class="text-muted"><small>شماره</small></td>
+            <td>{{ meeting()?.number || '—' }}</td>
+          </tr>
+          <tr>
+            <td class="text-muted"><small>ساعت</small></td>
+            <td>{{ meeting()?.startTime }} – {{ meeting()?.endTime }}</td>
+          </tr>
+          <tr>
+            <td class="text-muted"><small>ثبت‌کننده</small></td>
+            <td>{{ meeting()?.creatorName || '—' }}</td>
+          </tr>
+          <tr>
+            <td class="text-muted"><small>تاریخ ثبت</small></td>
+            <td>{{ meeting()?.createdDate || '—' }}</td>
+          </tr>
+        </table>
+      </div>
+      }
+      <div class="modal-footer py-1">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">بستن</button>
+      </div>
+    </div>
+  </div>
+</div>

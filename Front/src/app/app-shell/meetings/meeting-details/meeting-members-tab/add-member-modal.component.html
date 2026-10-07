@@ -1,0 +1,91 @@
+<div #addMemberModal class="modal fade" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-plus me-2"></i>
+                    افزودن عضو جدید
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <form [formGroup]="addMemberForm" class="row g-3">
+                    <!-- انتخاب کاربر -->
+                    <div class="col-12">
+                        <label class="form-label">انتخاب کاربر <span class="text-danger">*</span></label>
+                        <div class="search-container">
+                            <div class="search-input-wrapper">
+                                <i class="fas fa-search search-icon"></i>
+                                <input type="text" class="form-control search-input"
+                                    placeholder="جستجوی نام، نام کاربری یا سمت..." [value]="memberSearchQuery()"
+                                    (input)="onMemberSearch($event)" (focus)="showMemberDropdown()"
+                                    (blur)="hideMemberDropdown()">
+                            </div>
+
+                            @if (memberDropdownVisible() && availableUsersForMember().length > 0) {
+                            <div class="users-dropdown">
+                                @for (user of availableUsersForMember(); track user.guid) {
+                                <button type="button" class="user-item" (mousedown)="selectMemberUser(user)">
+                                    <div class="user-avatar">
+                                        <img [src]="user.image" alt=""
+                                            (error)="$any($event.target).src='assets/img/default-avatar.png'">
+                                    </div>
+                                    <div class="user-info">
+                                        <span class="user-name">{{ user.name }}</span>
+                                        <small class="user-position">{{ user.position }}</small>
+                                    </div>
+                                </button>
+                                } @empty {
+                                <div class="no-results">
+                                    <i class="fas fa-search"></i>
+                                    <span>کاربری یافت نشد</span>
+                                </div>
+                                }
+                            </div>
+                            }
+                        </div>
+
+                        <!-- نمایش کاربر انتخاب شده -->
+                        @if (addMemberForm.get('selectedUser')?.value; as user) {
+                        <div class="selected-user-card mt-2">
+                            <div class="user-avatar">
+                                <img [src]="user.image" alt="">
+                            </div>
+                            <div class="user-info">
+                                <span class="user-name">{{ user.name }}</span>
+                                <small class="user-position">{{ user.position }}</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                (click)="addMemberForm.patchValue({selectedUser: null})">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        }
+                    </div>
+
+                    <!-- انتخاب نقش -->
+                    <div class="col-md-6">
+                        <label class="form-label">نقش <span class="text-danger">*</span></label>
+                        <select class="form-select" formControlName="roleId">
+                            @for (role of availableRoles(); track role.id) {
+                            <option [value]="role.id" [style.color]="role.other">
+                                {{ role.title }}
+                            </option>
+                            }
+                        </select>
+                    </div>
+                </form>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" (click)="saveMember()" [disabled]="addMemberForm.invalid">
+                    ذخیره
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    انصراف
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

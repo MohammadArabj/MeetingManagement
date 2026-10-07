@@ -1,0 +1,55 @@
+:host {
+  display: block;
+}
+
+.btn-draft {
+  color: #fff;
+  background-color: var(--mm-info);
+  border-color: var(--mm-info);
+  box-shadow: 0 0.125rem 0.25rem 0 rgba(61, 202, 221, 0.4);
+}
+
+.btn-draft:hover {
+  color: #fff !important;
+  background-color: var(--mm-info) !important;
+  border-color: var(--mm-info) !important;
+  transform: translateY(-1px) !important
+}
+
+.btn-check:focus+.btn-draft,
+.btn-draft:focus,
+.btn-draft.focus {
+  color: #fff;
+  background-color: var(--mm-info);
+  border-color: var(--mm-info);
+  transform: translateY(0);
+  box-shadow: none
+}
+
+.btn-check:checked+.btn-draft,
+.btn-check:active+.btn-draft,
+.btn-draft:active,
+.btn-draft.active,
+.btn-draft.show.dropdown-toggle,
+.show>.btn-draft.dropdown-toggle {
+  color: #fff !important;
+  background-color: var(--mm-info) !important;
+  border-color: var(--mm-info) !important
+}
+
+.btn-check:checked+.btn-draft:focus,
+.btn-check:active+.btn-draft:focus,
+.btn-draft:active:focus,
+.btn-draft.active:focus,
+.btn-draft.show.dropdown-toggle:focus,
+.show>.btn-draft.dropdown-toggle:focus {
+  box-shadow: none
+}
+
+.btn-draft.disabled,
+.btn-draft:disabled {
+  color: #fff !important;
+  background-color: var(--mm-info) !important;
+  border-color: var(--mm-info) !important;
+  box-shadow: none !important
+}

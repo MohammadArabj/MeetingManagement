@@ -1,0 +1,85 @@
+<div #substituteModal class="modal fade" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-people-arrows me-2"></i>
+                    انتخاب جانشین
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                @if (selectedMemberForSubstitute(); as member) {
+                <div class="current-member-info mb-4">
+                    <label class="form-label text-muted">جانشین برای:</label>
+                    <div class="member-card">
+                        <div class="member-avatar">
+                            <img [src]="member.image || 'assets/img/default-avatar.png'" alt="">
+                        </div>
+                        <div class="member-info">
+                            <span class="member-name">{{ member.name }}</span>
+                            <small class="member-role" [style.color]="member.roleColor">{{ member.role }}</small>
+                        </div>
+                    </div>
+                </div>
+                }
+
+                <form [formGroup]="substituteForm">
+                    <label class="form-label">انتخاب جانشین <span class="text-danger">*</span></label>
+                    <div class="search-container">
+                        <div class="search-input-wrapper">
+                            <i class="fas fa-search search-icon"></i>
+                            <input type="text" class="form-control search-input" placeholder="جستجوی جانشین..."
+                                [value]="substituteSearchQuery()" (input)="onSubstituteSearch($event)"
+                                (focus)="showSubstituteDropdown()" (blur)="hideSubstituteDropdown()">
+                        </div>
+
+                        @if (substituteDropdownVisible() && availableUsersForSubstitute().length > 0) {
+                        <div class="users-dropdown">
+                            @for (user of availableUsersForSubstitute(); track user.guid) {
+                            <button type="button" class="user-item" (mousedown)="selectSubstituteUser(user)">
+                                <div class="user-avatar">
+                                    <img [src]="user.image" alt="">
+                                </div>
+                                <div class="user-info">
+                                    <span class="user-name">{{ user.name }}</span>
+                                    <small class="user-position">{{ user.position }}</small>
+                                </div>
+                            </button>
+                            }
+                        </div>
+                        }
+                    </div>
+
+                    @if (substituteForm.get('selectedUser')?.value; as user) {
+                    <div class="selected-user-card mt-2">
+                        <div class="user-avatar">
+                            <img [src]="user.image" alt="">
+                        </div>
+                        <div class="user-info">
+                            <span class="user-name">{{ user.name }}</span>
+                            <small class="user-position">{{ user.position }}</small>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger"
+                            (click)="substituteForm.patchValue({selectedUser: null})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    }
+                </form>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" (click)="saveSubstitute()"
+                    [disabled]="substituteForm.invalid">
+                    ذخیره جانشین
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    انصراف
+                </button>
+
+            </div>
+        </div>
+    </div>
+</div>

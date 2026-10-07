@@ -1,0 +1,175 @@
+/* ═══════════════════════════════════════════════════════════════ */
+/* Guest Type Selector */
+/* ═══════════════════════════════════════════════════════════════ */
+.guest-type-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.guest-type-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1.5rem 1rem;
+    background: var(--bg-light);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+}
+
+.guest-type-option:hover {
+    border-color: var(--mm-primary);
+    background: rgba(var(--mm-primary-rgb), 0.1);
+}
+
+.guest-type-option.active {
+    border-color: var(--mm-primary);
+    background: #f0bd050f;
+}
+
+.guest-type-option input {
+    display: none;
+}
+
+.guest-type-option i {
+    font-size: 2rem;
+    color: var(--mm-primary);
+}
+
+.guest-type-option span {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* Gender Selector */
+/* ═══════════════════════════════════════════════════════════════ */
+.gender-selector {
+    display: flex;
+    gap: 1rem;
+}
+
+.gender-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-light);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.gender-option:hover {
+    border-color: var(--mm-primary)
+}
+
+.gender-option.active {
+    border-color: var(--mm-primary);
+    background: #f0bd050f;
+}
+
+.gender-option input {
+    display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* File Upload */
+/* ═══════════════════════════════════════════════════════════════ */
+.file-upload-zone {
+    position: relative;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    text-align: center;
+    transition: var(--transition);
+}
+
+.file-upload-zone:hover {
+    border-color: var(--primary);
+    background: rgba(13, 110, 253, 0.05);
+}
+
+.file-upload-zone.uploading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.file-upload-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.upload-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.upload-label i {
+    font-size: 1.5rem;
+    color: var(--text-muted);
+}
+
+.upload-label span {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.upload-progress {
+    margin-top: 0.75rem;
+}
+
+.upload-progress .progress {
+    height: 6px;
+    border-radius: 3px;
+}
+
+.upload-progress small {
+    display: block;
+    text-align: center;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.uploaded-file {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(25, 135, 84, 0.1);
+    border: 1px solid rgba(25, 135, 84, 0.3);
+    border-radius: var(--radius);
+}
+
+.uploaded-file .preview-image {
+    width: 50px;
+    height: 50px;
+    border-radius: var(--radius);
+    object-fit: cover;
+}
+
+.uploaded-file .upload-success {
+    flex: 1;
+    color: var(--success);
+    font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* Responsive */
+/* ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    .guest-type-selector {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,6 +1,5 @@
 import { AgendaItem, MeetingMember } from '../../../core/models/Meeting';
 import { Position, SystemUser } from '../../../core/models/User';
-import { ConflictItem } from '../../../core/types/conflict-result';
 import { generateGuid } from '../../../core/types/configuration';
 import { MeetingRoles } from '../../../core/meeting-access/meeting-roles';
 import { environment } from '../../../../environments/environment';
@@ -372,6 +371,3 @@ export function buildSubmissionSuccessMessage(isEdit: boolean, response: any): {
     : `جلسه با موفقیت ثبت گردید<br>شماره جلسه:<a href="/#/meetings/details/${response.guid}" target="_blank">${response.number}</a>`;
   return { title, text };
 }
-
-/** ConflictItem تنها برای خوانایی امضای توابع اینجا import شده است */
-export type MeetingConflict = ConflictItem;

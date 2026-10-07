@@ -1,0 +1,193 @@
+<div class="panel-header">
+  <h6 class="panel-title">
+    <i class="fas fa-folder-open me-2"></i>
+    مدیریت فایل‌ها
+  </h6>
+  <span class="file-count-badge">{{ fileCount() }} فایل</span>
+</div>
+
+<!-- ناحیه آپلود -->
+<div class="file-upload-zone" id="uploadArea" (click)="triggerFileInput()" (dragover)="handleDragOver($event)"
+  (dragleave)="handleDragLeave($event)" (drop)="handleDrop($event)">
+  <div class="upload-icon">
+    <i class="fas fa-cloud-upload-alt"></i>
+  </div>
+  <div class="upload-text">فایل PDF را بکشید و رها کنید</div>
+  <div class="upload-hint">یا کلیک کنید تا فایل انتخاب کنید</div>
+  <button class="btn btn-upload" type="button">
+    <i class="fas fa-upload me-2"></i>
+    انتخاب فایل
+  </button>
+  <input type="file" #fileInput multiple accept=".pdf" style="display: none;" (change)="handleFiles($event)">
+</div>
+
+@if(uploadProgress() > 0) {
+<div class="upload-progress">
+  <div class="d-flex align-items-center mb-2">
+    <div class="spinner me-2"></div>
+    <span class="fw-bold small">در حال آپلود...</span>
+  </div>
+  <div class="progress">
+    <div class="progress-bar" role="progressbar" [ngStyle]="{width: uploadProgress() + '%'}"></div>
+  </div>
+</div>
+}
+
+<!-- فایل‌های دستور جلسه -->
+@if(hasAgendaFiles()) {
+<div class="agenda-files-section">
+  <div class="section-header">
+    <h6 class="section-title">
+      <i class="fas fa-list-alt me-2"></i>
+      فایل‌های دستور جلسه
+      <span class="badge bg-info ms-2">{{ agendaFiles().length }}</span>
+    </h6>
+    <small class="text-muted">این فایل‌ها فقط برای مشاهده هستند</small>
+  </div>
+
+  <div class="agenda-files-list">
+    @for (file of agendaFiles(); track file.id) {
+    <div class="file-card agenda-file-card" [class.selected]="selectedFileId() === file.id"
+      (click)="fileSelected.emit(file.id)">
+
+      <div class="file-info">
+        <div class="file-icon agenda-icon">
+          <i class="fas fa-file-pdf"></i>
+          <span class="agenda-number-badge">{{ file.agendaIndex }}</span>
+        </div>
+      </div>
+
+      <div class="file-details">
+        <div class="file-name" [title]="file.name">{{ file.name }}</div>
+        <div class="file-meta">
+          @if(file.sizeFormatted) {
+          {{ file.sizeFormatted }} •
+          }
+          {{ file.uploadDate }}
+        </div>
+        @if(file.agendaText) {
+        <div class="agenda-text-preview" [title]="file.agendaText">
+          <i class="fas fa-quote-right me-1"></i>
+          {{ file.agendaText | slice:0:50 }}{{ file.agendaText.length > 50 ? '...' : '' }}
+        </div>
+        }
+      </div>
+
+      <div class="file-actions">
+        <button class="action-btn btn-view" title="مشاهده فایل"
+          (click)="$event.stopPropagation(); fileSelected.emit(file.id)">
+          <i class="fas fa-eye"></i>
+        </button>
+        <span class="readonly-badge" title="فایل دستور جلسه - غیرقابل حذف">
+          <i class="fas fa-lock"></i>
+        </span>
+      </div>
+    </div>
+    }
+  </div>
+</div>
+}
+
+<!-- فایل‌های مصوبه -->
+<div class="resolution-files-section">
+  @if(resolutionFiles().length > 0 || hasRemovedFiles()) {
+  <div class="section-header">
+    <h6 class="section-title">
+      <i class="fas fa-file-alt me-2"></i>
+      فایل‌های مصوبه
+      <span class="badge bg-primary ms-2">{{ resolutionFiles().length }}</span>
+    </h6>
+  </div>
+  }
+
+  <div class="files-container" id="filesList">
+    @if (resolutionFiles().length === 0 && !hasAgendaFiles()) {
+    <div class="text-center text-muted py-4">
+      <i class="fas fa-folder-open fa-2x mb-2"></i><br>
+      هیچ فایلی آپلود نشده
+    </div>
+    }
+
+    @for (file of resolutionFiles(); track file.id) {
+    <div class="file-card" [class.selected]="selectedFileId() === file.id" [class.uploading]="file.isUploading"
+      (click)="fileSelected.emit(file.id)">
+
+      <div class="file-info">
+        <div class="file-icon">
+          <i class="fas fa-file-pdf"></i>
+        </div>
+      </div>
+
+      <div class="file-details">
+        <div class="file-name" [title]="file.name">{{ file.name }}</div>
+        <div class="file-meta">
+          {{ file.sizeFormatted }} • {{ file.uploadDate }}
+          @if(!file.guid) {
+          <span class="badge bg-warning ms-1">جدید</span>
+          }
+        </div>
+
+        @if(file.isUploading) {
+        <div class="upload-progress-bar">
+          <div class="progress-fill" [style.width.%]="file.uploadProgress"></div>
+        </div>
+        <span class="upload-percent">{{ file.uploadProgress }}%</span>
+        }
+      </div>
+
+      <div class="file-actions">
+        @if(!file.isUploading) {
+        <button class="action-btn btn-view" title="نمایش فایل"
+          (click)="$event.stopPropagation(); fileSelected.emit(file.id)">
+          <i class="fas fa-eye"></i>
+        </button>
+
+        <button class="action-btn btn-delete" title="حذف فایل"
+          (click)="$event.stopPropagation(); fileDeleted.emit(file.id)">
+          <i class="fas fa-trash"></i>
+        </button>
+        }
+      </div>
+    </div>
+    }
+
+    <!-- فایل‌های حذف شده - با امکان Undo -->
+    @for (file of allResolutionFiles(); track file.id) {
+    @if(file.isRemoved && file.guid) {
+    <div class="file-card file-removed">
+      <div class="file-info">
+        <div class="file-icon file-icon-removed">
+          <i class="fas fa-file-pdf"></i>
+          <i class="fas fa-times removed-overlay"></i>
+        </div>
+      </div>
+
+      <div class="file-details">
+        <div class="file-name text-decoration-line-through text-muted" [title]="file.name">
+          {{ file.name }}
+        </div>
+        <div class="file-meta text-danger">
+          <i class="fas fa-exclamation-triangle me-1"></i>
+          حذف خواهد شد (با ذخیره مصوبه)
+        </div>
+      </div>
+
+      <div class="file-actions">
+        <button class="action-btn btn-restore" title="بازگردانی فایل"
+          (click)="$event.stopPropagation(); fileRestored.emit(file.id)">
+          <i class="fas fa-undo"></i>
+        </button>
+      </div>
+    </div>
+    }
+    }
+  </div>
+</div>
+
+<!-- Loading state -->
+@if(loadingAgendaFiles()) {
+<div class="loading-agenda-files">
+  <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+  <span>در حال بارگذاری فایل‌های دستور جلسه...</span>
+</div>
+}

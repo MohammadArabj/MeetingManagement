@@ -1,7 +1,6 @@
 import {
   Component,
   DestroyRef,
-  ElementRef,
   SimpleChanges,
   computed,
   effect,
@@ -15,135 +14,42 @@ import {
   OnInit,
   OnChanges,
 } from '@angular/core';
-import { ReactiveFormsModule, FormsModule, FormArray, FormBuilder, FormControl, FormGroup, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
+import { ReactiveFormsModule, FormsModule, FormArray, FormBuilder, FormControl, FormGroup, Validators } from '@angular/forms';
 import { finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import moment from 'jalali-moment';
-import { NgOptionComponent, NgSelectComponent } from '@ng-select/ng-select';
-import { NgStyle, SlicePipe } from '@angular/common';
 
 import { Subject } from 'rxjs';
 
 import { CustomInputComponent } from '../../../../../shared/custom-controls/custom-input';
-import { CustomSelectComponent } from '../../../../../shared/custom-controls/custom-select';
 
 import { Resolution } from '../../../../../core/models/Resolution';
 import { SystemUser } from '../../../../../core/models/User';
 import { ComboBase } from '../../../../../shared/combo-base';
-import { base64ToArrayBuffer, fixPersianDigits, MeetingType, normalizePersian } from '../../../../../core/types/configuration';
-
-import { environment } from '../../../../../../environments/environment';
+import { MeetingType, normalizePersian } from '../../../../../core/types/configuration';
 
 import { ToastService } from '../../../../../services/framework-services/toast.service';
 import { MeetingService } from '../../../../../services/meeting.service';
 import { ResolutionService } from '../../../../../services/resolution.service';
-import { FileMeetingService } from '../../../../../services/file-meeting.service';
-import { AgendaService } from '../../../../../services/agenda.service';
-import { FileService } from '../../../../../services/file.service';
 import { MeetingBehaviorService } from '../../meeting-behavior-service';
-import { TusUploadService, UploadStatus } from '../../../../../services/framework-services/tus-upload.service';
 import { AppSettings } from '../../../../../services/system-setting.service';
 
-// ═══════════════════════════════════════════════════════════
-// Types
-// ═══════════════════════════════════════════════════════════
-
-type FileKind = 'pdf' | 'loading' | 'unknown';
-
-type FileScope = 'agenda' | 'resolution';
-
-interface FileItem {
-  id: number;
-  name: string;
-  url: string;
-  type: FileKind;
-
-  size?: number;
-  sizeFormatted?: string;
-  uploadDate?: string;
-
-  guid?: string;
-  fileGuid?: string;
-
-  isRemoved?: boolean;
-  isLazyLoaded?: boolean;
-  isUploading?: boolean;
-  uploadProgress?: number;
-
-  scope: FileScope;
-
-  agendaText?: string;
-  agendaIndex?: number;
-
-  isBlobUrl?: boolean;
-}
-
-interface UserWithPosition {
-  userGuid: string;
-  userName: string;
-  positionGuid: string | null;
-  positionTitle: string;
-  personalNo: string;
-  uniqueKey: string;
-}
-
-interface ResolutionFileDto {
-  id: number;
-  isRemoved: boolean;
-  fileGuid: string;
-}
-
-interface ActorItemDto {
-  id: number;
-  userGuid: string;
-  positionGuid: string | null;
-  isRemoved: boolean;
-}
-
-interface AssignmentItemDto {
-  actors: ActorItemDto[];
-  follower: ActorItemDto;
-  type: string;
-  dueDate: string;
-}
-
-interface BoardAssignmentItemDto {
-  actors: ActorItemDto[];
-  followerGuid: string;
-  followerPositionGuid: string;
-  dueDate: string;
-  status?: string;
-  result?: string;
-  description?: string;
-  isRemoved: boolean;
-}
-
-interface CreateResolutionDto {
-  id?: number;
-  description: string;
-  meetingGuid: string;
-  files: ResolutionFileDto[];
-  assignments: AssignmentItemDto[];
-}
-
-interface CreateResolutionBoardMeetingDto {
-  id?: number;
-  title: string;
-  number?: string;
-  description?: string;
-  decisionsMade?: string;
-  documentation?: string;
-  contractNumber?: string;
-  approvedPrice?: number;
-  meetingGuid: string;
-  parentMeetingGuid?: string;
-  parentResolutionId?: number;
-  committeeMeetingGuid?: string;
-  committeeResolutionId?: number;
-  files: ResolutionFileDto[];
-  items: BoardAssignmentItemDto[];
-}
+import { CreateResolutionBoardMeetingDto, CreateResolutionDto, UserWithPosition } from './resolution-form.models';
+import {
+  buildAssignmentsArray,
+  buildBoardItemsArray,
+  buildUniqueKey,
+  buildUsersWithPositions,
+  futureOrAfterMeetingDateValidator,
+  groupBoardAssignments,
+  groupRegularAssignments,
+  isPastDate,
+  normalizeBoardStatus,
+} from './resolution-form.utils';
+import { ResolutionFilesStore } from './resolution-files.store';
+import { ResolutionFilesPanelComponent } from './resolution-files-panel/resolution-files-panel';
+import { BoardResolutionFieldsComponent } from './board-resolution-fields/board-resolution-fields';
+import { BoardAssignmentsEditorComponent } from './board-assignments-editor/board-assignments-editor';
+import { RegularAssignmentsEditorComponent } from './regular-assignments-editor/regular-assignments-editor';
 
 @Component({
   selector: 'app-resolution-form',
@@ -152,21 +58,17 @@ interface CreateResolutionBoardMeetingDto {
     ReactiveFormsModule,
     FormsModule,
     CustomInputComponent,
-    CustomSelectComponent,
-    NgSelectComponent,
-    NgOptionComponent,
-    NgStyle,
-    SlicePipe,
+    ResolutionFilesPanelComponent,
+    BoardResolutionFieldsComponent,
+    BoardAssignmentsEditorComponent,
+    RegularAssignmentsEditorComponent,
   ],
+  providers: [ResolutionFilesStore],
   templateUrl: './resolution-form.html',
   styleUrl: './resolution-form.css',
 })
 export class ResolutionFormComponent implements OnInit, OnChanges {
   private destroy$ = new Subject<void>();
-
-  hasRemovedFiles(): boolean {
-    return this._resolutionFiles().some(f => f.isRemoved === true);
-  }
 
   // ═══════════════════════════════════════════════════════════
   // DI
@@ -176,13 +78,10 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
   private readonly toast = inject(ToastService);
   private readonly meetingService = inject(MeetingService);
   private readonly resolutionService = inject(ResolutionService);
-  private readonly fileMeetingService = inject(FileMeetingService);
   private readonly meetingBehaviorService = inject(MeetingBehaviorService);
-  private readonly agendaService = inject(AgendaService);
-  private readonly sanitizer = inject(DomSanitizer);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly meetingBehavior = inject(MeetingBehaviorService);
-  private readonly tus = inject(TusUploadService);
+  /** وضعیت فایل‌ها، آپلود و پیش‌نمایش PDF (سرویس در سطح همین کامپوننت) */
+  private readonly files = inject(ResolutionFilesStore);
 
   // ═══════════════════════════════════════════════════════════
   // Inputs
@@ -214,22 +113,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
   readonly filesUploaded = output<any>();
 
   // ViewChildren
-  readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
-  readonly assignmentsContainer = viewChild<ElementRef>('assignmentsContainer');
-
-  // ═══════════════════════════════════════════════════════════
-  // UI lists
-  // ═══════════════════════════════════════════════════════════
-  readonly actionStatusList = [
-    { guid: '1', title: 'در انتظار اقدام' },
-    { guid: '2', title: 'در حال انجام' },
-    { guid: '3', title: 'پایان یافته' },
-  ];
-
-  readonly assignmentResultList = [
-    { guid: '1', title: 'انجام شده' },
-    { guid: '2', title: 'انجام نشده' },
-  ];
+  private readonly boardAssignmentsEditor = viewChild(BoardAssignmentsEditorComponent);
 
   // ═══════════════════════════════════════════════════════════
   // Forms
@@ -240,46 +124,37 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
   previousMeetings: ComboBase[] = [];
   previousCommitteMeetings: ComboBase[] = [];
 
+  /** ولیدیتور تاریخ سررسید؛ تاریخ جلسه هر بار از input فعلی خوانده می‌شود */
+  private readonly futureOrAfterMeetingDateValidator = futureOrAfterMeetingDateValidator(() => this.meetingDate());
+
   // ═══════════════════════════════════════════════════════════
   // State (Signals)
   // ═══════════════════════════════════════════════════════════
-  readonly _resolutionFiles = signal<FileItem[]>([]);
-  private readonly _agendaFiles = signal<FileItem[]>([]);
-
-  private readonly _selectedFileId = signal<number | null>(null);
-  private readonly _pdfUrl = signal<SafeResourceUrl | null>(null);
-
-  private readonly _loadingAgendaFiles = signal<boolean>(false);
-  private readonly _isUploading = signal<boolean>(false);
-  private readonly _uploadProgress = signal<number>(0);
-
   private readonly _isPastMeeting = signal<boolean>(false);
 
   private readonly _previousResolutions = signal<ComboBase[] | null>(null);
   private readonly _previousCommitteResolutions = signal<ComboBase[] | null>(null);
 
-  private readonly _agendas = signal<any[]>([]);
   private readonly _actorGuidsControls = signal<FormControl[]>([]);
   private readonly _boardActorControls = signal<FormControl[]>([]);
-
-  private _agendaLoadSeq = 0;
 
   // ═══════════════════════════════════════════════════════════
   // Readonly
   // ═══════════════════════════════════════════════════════════
-  readonly selectedFileId = this._selectedFileId.asReadonly();
-  readonly pdfUrl = this._pdfUrl.asReadonly();
+  readonly _resolutionFiles = this.files._resolutionFiles;
 
-  readonly loadingAgendaFiles = this._loadingAgendaFiles.asReadonly();
-  readonly isUploading = this._isUploading.asReadonly();
-  readonly uploadProgress = this._uploadProgress.asReadonly();
+  readonly selectedFileId = this.files.selectedFileId;
+  readonly pdfUrl = this.files.pdfUrl;
+
+  readonly loadingAgendaFiles = this.files.loadingAgendaFiles;
+  readonly isUploading = this.files.isUploading;
+  readonly uploadProgress = this.files.uploadProgress;
 
   readonly isPastMeeting = this._isPastMeeting.asReadonly();
 
   readonly previousResolutions = this._previousResolutions.asReadonly();
   readonly previousCommitteResolutions = this._previousCommitteResolutions.asReadonly();
 
-  readonly agendas = this._agendas.asReadonly();
   readonly actorGuidsControls = this._actorGuidsControls.asReadonly();
   readonly boardActorControls = this._boardActorControls.asReadonly();
 
@@ -289,7 +164,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
   readonly isBoardMeeting = computed(() => this.meetingType() === 'board' || this.meetingType() === (MeetingType as any).BOARD);
   readonly isRegularMeeting = computed(() => this.meetingType() === 'regular' || this.meetingType() === (MeetingType as any).REGULAR);
 
-  readonly currentMeeting = computed(() => this.meetingBehavior.meeting());
+  readonly currentMeeting = computed(() => this.meetingBehaviorService.meeting());
   readonly meetingNumber = computed(() => this.currentMeeting()?.number || '');
 
   readonly uploadFolder = computed(() => {
@@ -307,43 +182,17 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
     return this.resolutionNumber();
   });
 
-  readonly usersWithPositions = computed<UserWithPosition[]>(() => {
-    const list = this.userList();
-    const res: UserWithPosition[] = [];
+  readonly usersWithPositions = computed<UserWithPosition[]>(() => buildUsersWithPositions(this.userList()));
 
-    list.forEach(user => {
-      if (user.positions?.length) {
-        user.positions.forEach(p => {
-          res.push({
-            userGuid: user.guid,
-            userName: user.name,
-            positionGuid: p.positionGuid,
-            positionTitle: p.positionTitle || '',
-            personalNo: user.userName || '',
-            uniqueKey: `${user.guid}_${p.positionGuid}`,
-          });
-        });
-      } else {
-        res.push({
-          userGuid: user.guid,
-          userName: user.name,
-          positionGuid: '',
-          positionTitle: 'بدون سمت',
-          personalNo: user.userName || '',
-          uniqueKey: `${user.guid}_empty`,
-        });
-      }
-    });
+  readonly agendaFiles = this.files.agendaFiles;
+  readonly resolutionFiles = this.files.resolutionFiles;
 
-    return res;
-  });
+  readonly hasAgendaFiles = this.files.hasAgendaFiles;
+  readonly fileCount = this.files.fileCount;
 
-  readonly agendaFiles = computed(() => this._agendaFiles().filter(f => !f.isRemoved && f.type !== 'loading'));
-  readonly resolutionFiles = computed(() => this._resolutionFiles().filter(f => !f.isRemoved && f.type !== 'loading'));
-
-  readonly hasAgendaFiles = computed(() => this.agendaFiles().length > 0);
-  readonly fileCount = computed(() => this.agendaFiles().length + this.resolutionFiles().length);
-  readonly allFiles = computed(() => [...this.agendaFiles(), ...this.resolutionFiles()]);
+  hasRemovedFiles(): boolean {
+    return this.files.hasRemovedFiles();
+  }
 
   // ═══════════════════════════════════════════════════════════
   // ctor
@@ -359,7 +208,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
 
   ngOnInit(): void {
     const md = this.meetingDate();
-    if (md) this.checkIfPastMeeting(md);
+    if (md) this._isPastMeeting.set(isPastDate(md));
 
     if (this.isBoardMeeting()) {
       this.meetingService.getParentMeetings()
@@ -494,64 +343,6 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // Helpers
-  // ═══════════════════════════════════════════════════════════
-  private checkIfPastMeeting(meetingDate: Date | string): void {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const m = new Date(meetingDate);
-    m.setHours(0, 0, 0, 0);
-    this._isPastMeeting.set(m < today);
-  }
-
-  private buildUniqueKey(userGuid: string, positionGuid?: string | null): string {
-    const pg = (positionGuid ?? '').toString().trim();
-    return `${userGuid}_${pg !== '' ? pg : 'empty'}`;
-  }
-
-  private normalizeValue(v: any): string {
-    if (v === null || v === undefined) return '';
-    if (typeof v === 'object') return (v.guid ?? v.value ?? v.id ?? '').toString();
-    return v.toString();
-  }
-
-  private normalizeBoardResult(raw: any): string {
-    const r = this.normalizeValue(raw);
-    if (r === '1' || r === '2') return r;
-    if (r === 'Done') return '1';
-    if (r === 'NotDone') return '2';
-    return '';
-  }
-
-  private normalizeBoardStatus(rawStatus: any, rawResult: any): { status: string; result: string } {
-    const s = this.normalizeValue(rawStatus);
-    const r = this.normalizeValue(rawResult);
-
-    if (s === 'Done' || s === 'NotDone') {
-      return { status: '3', result: s === 'Done' ? '1' : '2' };
-    }
-
-    if (['1', '2', '3'].includes(s)) {
-      return { status: s, result: this.normalizeBoardResult(r) };
-    }
-
-    const sl = s.toLowerCase();
-    if (sl === 'inprogress') return { status: '2', result: this.normalizeBoardResult(r) };
-    if (sl === 'pending' || sl === 'waiting') return { status: '1', result: this.normalizeBoardResult(r) };
-    if (sl === 'end' || sl === 'ended' || sl === 'completed') return { status: '3', result: this.normalizeBoardResult(r) };
-
-    return { status: '1', result: this.normalizeBoardResult(r) };
-  }
-
-  formatFileSize(bytes: number): string {
-    if (!bytes) return '';
-    const k = 1024;
-    const sizes = ['بایت', 'کیلوبایت', 'مگابایت', 'گیگابایت'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  }
-
-  // ═══════════════════════════════════════════════════════════
   // FormArray getters
   // ═══════════════════════════════════════════════════════════
   boardAssignments(): FormArray {
@@ -562,359 +353,35 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
     return this.regularResolutionForm.get('regularAssignments') as FormArray;
   }
 
-  get boardAssignmentControls() {
-    return (this.boardAssignments()?.controls as FormGroup[]) || [];
-  }
-
   // ═══════════════════════════════════════════════════════════
-  // Validators
-  // ═══════════════════════════════════════════════════════════
-  futureOrAfterMeetingDateValidator = (control: AbstractControl): ValidationErrors | null => {
-    if (!control.value) return null;
-
-    const fixed = fixPersianDigits(control.value);
-    const g = moment(fixed, 'jYYYY/jMM/jDD').format('YYYY-MM-DD');
-    const inputDate = new Date(g);
-
-    const md = this.meetingDate();
-    if (!md) return null;
-
-    const mdStr = typeof md === 'string' ? md : md.toISOString();
-    const mdFixed = fixPersianDigits(mdStr);
-    const mdG = moment(mdFixed, 'jYYYY/jMM/jDD').format('YYYY-MM-DD');
-    const meetingDateObj = new Date(mdG);
-
-    return inputDate < meetingDateObj ? { beforeMeetingDate: true } : null;
-  };
-
-  // ═══════════════════════════════════════════════════════════
-  // Agenda Loading
+  // Files (delegated to ResolutionFilesStore)
   // ═══════════════════════════════════════════════════════════
   private loadAgendaFiles(): void {
-    const meetingGuid = this.meetingGuid();
-    if (!meetingGuid) return;
-
-    const seq = ++this._agendaLoadSeq;
-    this._loadingAgendaFiles.set(true);
-
-    this._agendaFiles.set([
-      {
-        id: -1,
-        name: 'در حال بارگذاری فایل‌های دستور جلسه...',
-        url: '',
-        type: 'loading',
-        scope: 'agenda',
-      },
-    ]);
-
-    this.agendaService.getListBy(meetingGuid)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (data: any[]) => {
-          if (seq !== this._agendaLoadSeq) return;
-
-          const agendas = data || [];
-          this._agendas.set(agendas);
-
-          const agendaFilesInfo: { agendaIndex: number; agendaText: string; fileGuid: string }[] = [];
-
-          agendas.forEach((agenda: any, index: number) => {
-            if (Array.isArray(agenda.files)) {
-              agenda.files.forEach((f: any) => {
-                const g = f.fileGuid;
-                if (g && g !== '00000000-0000-0000-0000-000000000000') {
-                  agendaFilesInfo.push({
-                    agendaIndex: index + 1,
-                    agendaText: agenda.text || `دستور جلسه ${index + 1}`,
-                    fileGuid: g,
-                  });
-                }
-              });
-            } else if (agenda.fileGuid && agenda.fileGuid !== '00000000-0000-0000-0000-000000000000') {
-              agendaFilesInfo.push({
-                agendaIndex: index + 1,
-                agendaText: agenda.text || `دستور جلسه ${index + 1}`,
-                fileGuid: agenda.fileGuid,
-              });
-            }
-          });
-
-          if (agendaFilesInfo.length === 0) {
-            this._agendaFiles.set([]);
-            this._loadingAgendaFiles.set(false);
-            return;
-          }
-
-          const fileGuids = agendaFilesInfo.map(x => x.fileGuid);
-
-          this.tus.getMetas(fileGuids)
-            .then((metas: any[]) => {
-              if (seq !== this._agendaLoadSeq) return;
-
-              const items: FileItem[] = agendaFilesInfo.map((info, idx) => {
-                const meta = metas.find((m: any) => m?.guid?.toLowerCase() === info.fileGuid.toLowerCase());
-                const previewUrl = meta?.path ? this.tus.buildFileUrl(meta.path) : '';
-
-                return {
-                  id: Number(`${Date.now()}${idx}`),
-                  name: meta?.originalFileName || `فایل دستور ${info.agendaIndex}`,
-                  url: previewUrl,
-                  type: 'pdf',
-                  scope: 'agenda',
-
-                  size: meta?.fileSize || 0,
-                  sizeFormatted: this.formatFileSize(meta?.fileSize || 0),
-                  uploadDate: meta?.createdAt
-                    ? new Date(meta.createdAt).toLocaleDateString('fa-IR')
-                    : new Date().toLocaleDateString('fa-IR'),
-
-                  guid: info.fileGuid,
-                  fileGuid: info.fileGuid,
-                  isLazyLoaded: !previewUrl,
-
-                  agendaText: info.agendaText,
-                  agendaIndex: info.agendaIndex,
-                };
-              });
-
-              this._agendaFiles.set(items);
-            })
-            .catch(err => {
-              console.error('Error loading agenda metas:', err);
-              if (seq !== this._agendaLoadSeq) return;
-
-              const fallback: FileItem[] = agendaFilesInfo.map((info, idx) => ({
-                id: Number(`${Date.now()}${idx}`),
-                name: `فایل دستور ${info.agendaIndex}`,
-                url: '',
-                type: 'pdf',
-                scope: 'agenda',
-
-                guid: info.fileGuid,
-                fileGuid: info.fileGuid,
-                isLazyLoaded: true,
-
-                agendaText: info.agendaText,
-                agendaIndex: info.agendaIndex,
-              }));
-
-              this._agendaFiles.set(fallback);
-            })
-            .finally(() => {
-              if (seq === this._agendaLoadSeq) this._loadingAgendaFiles.set(false);
-            });
-        },
-        error: (err) => {
-          console.error('Error loading agendas:', err);
-          if (seq !== this._agendaLoadSeq) return;
-          this._agendaFiles.set([]);
-          this._loadingAgendaFiles.set(false);
-          this.toast.error('خطا در بارگذاری فایل‌های دستور جلسه');
-        },
-      });
+    this.files.loadAgendaFiles(this.meetingGuid());
   }
 
-  private async loadAgendaFileOnDemand(file: FileItem): Promise<void> {
-    const fileGuid = file.guid || file.fileGuid;
-    if (!fileGuid) {
-      this.toast.error('شناسه فایل یافت نشد');
-      return;
-    }
-
-    if (file.url && !file.isLazyLoaded) {
-      this.showPdfPreview(file.url, file.name);
-      return;
-    }
-
-    this.toast.info('در حال بارگذاری فایل...');
-
-    try {
-      const metas = await this.tus.getMetas([fileGuid]);
-      const meta = metas?.[0];
-
-      if (!meta?.path) {
-        this.toast.error('فایل یافت نشد');
-        return;
-      }
-
-      const url = this.tus.buildFileUrl(meta.path);
-
-      this._agendaFiles.update(list =>
-        list.map(f => f.id === file.id
-          ? {
-            ...f,
-            url,
-            name: meta.originalFileName || f.name,
-            size: meta.fileSize || f.size,
-            sizeFormatted: this.formatFileSize(meta.fileSize || 0),
-            isLazyLoaded: false,
-          }
-          : f
-        )
-      );
-
-      this.showPdfPreview(url, meta.originalFileName || file.name);
-    } catch (e) {
-      console.error('Error loading agenda file on demand:', e);
-      this.toast.error('خطا در بارگذاری فایل');
-    }
+  processFiles(files: File[]): Promise<void> {
+    return this.files.processFiles(files, () => this.uploadFolder());
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // Resolution files (TUS)
-  // ═══════════════════════════════════════════════════════════
-  triggerFileInput(): void {
-    this.fileInput()?.nativeElement?.click();
+  selectFile(fileId: number): void {
+    this.files.selectFile(fileId);
   }
 
-  handleDragOver(event: DragEvent): void {
-    event.preventDefault();
-    event.stopPropagation();
-    (event.currentTarget as HTMLElement)?.classList.add('dragover');
+  deleteFile(fileId: number): Promise<void> {
+    return this.files.deleteFile(fileId);
   }
 
-  handleDragLeave(event: DragEvent): void {
-    event.preventDefault();
-    event.stopPropagation();
-    (event.currentTarget as HTMLElement)?.classList.remove('dragover');
+  restoreFile(fileId: number): void {
+    this.files.restoreFile(fileId);
   }
 
-  handleDrop(event: DragEvent): void {
-    event.preventDefault();
-    event.stopPropagation();
-    (event.currentTarget as HTMLElement)?.classList.remove('dragover');
-    const files = Array.from(event.dataTransfer?.files || []);
-    this.processFiles(files);
-  }
-
-  handleFiles(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const files = input.files ? Array.from(input.files) : [];
-    this.processFiles(files);
-    input.value = '';
-  }
-
-  async processFiles(files: File[]): Promise<void> {
-    const pdfFiles = files.filter(f => f.type === 'application/pdf');
-    const invalid = files.filter(f => f.type !== 'application/pdf');
-
-    if (invalid.length) this.toast.error('فقط فایل‌های PDF پذیرفته می‌شوند');
-
-    for (const f of pdfFiles) {
-      await this.uploadFileWithTus(f);
-    }
-  }
-
-  private async uploadFileWithTus(file: File): Promise<void> {
-    const localId = Number(`${Date.now()}${Math.floor(Math.random() * 1000)}`);
-    const localUrl = URL.createObjectURL(file);
-
-    const localItem: FileItem = {
-      id: localId,
-      name: file.name,
-      url: localUrl,
-      type: 'pdf',
-      scope: 'resolution',
-
-      size: file.size,
-      sizeFormatted: this.formatFileSize(file.size),
-      uploadDate: new Date().toLocaleDateString('fa-IR'),
-
-      isUploading: true,
-      uploadProgress: 0,
-
-      isBlobUrl: true,
-    };
-
-    this._resolutionFiles.update(cur => [...cur, localItem]);
-    this._isUploading.set(true);
-
-    try {
-      const added = this.tus.addFiles([file], {
-        maxSizeMB: 50,
-        acceptedTypes: ['application/pdf'],
-        localPreview: false,
-      });
-
-      if (!added.length) throw new Error('فایل به صف آپلود اضافه نشد');
-
-      const tusItem = added[0];
-
-      const progressTimer = setInterval(() => {
-        const current = this.tus.filesMap().get(tusItem.id);
-        if (!current) return;
-
-        this._resolutionFiles.update(list =>
-          list.map(x => x.id === localId
-            ? { ...x, uploadProgress: current.progress }
-            : x
-          )
-        );
-
-        if (current.status === UploadStatus.Completed || current.status === UploadStatus.Failed) {
-          clearInterval(progressTimer);
-        }
-      }, 100);
-
-      const guid = await this.tus.uploadFile(tusItem.id, {
-        folderPath: this.uploadFolder(),
-        description: 'فایل مصوبه',
-      });
-
-      clearInterval(progressTimer);
-
-      if (!guid) throw new Error('آپلود ناموفق بود');
-
-      this._resolutionFiles.update(list =>
-        list.map(x => x.id === localId
-          ? { ...x, fileGuid: guid, isUploading: false, uploadProgress: 100 }
-          : x
-        )
-      );
-
-      this.toast.success('فایل با موفقیت آپلود شد');
-
-    } catch (e: any) {
-      console.error('Error uploading file:', e);
-
-      const item = this._resolutionFiles().find(x => x.id === localId);
-      if (item?.isBlobUrl && item.url?.startsWith('blob:')) {
-        URL.revokeObjectURL(item.url);
-      }
-
-      this._resolutionFiles.update(list => list.filter(x => x.id !== localId));
-      this.toast.error(`خطا در آپلود فایل: ${e?.message || 'نامشخص'}`);
-
-    } finally {
-      const stillUploading = this._resolutionFiles().some(x => x.isUploading);
-      this._isUploading.set(stillUploading);
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // PDF Preview
-  // ═══════════════════════════════════════════════════════════
   showPdfPreview(url: string, name: string): void {
-    const pdfPanel = document.getElementById('pdfPanel');
-    const mainContainer = document.getElementById('mainContainer');
-
-    this._pdfUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
-
-    const title = document.getElementById('pdf-title');
-    if (title) title.innerHTML = name;
-
-    pdfPanel?.classList.remove('hidden');
-    mainContainer?.classList.remove('no-pdf');
+    this.files.showPdfPreview(url, name);
   }
 
   hidePdfPreview(): void {
-    const pdfPanel = document.getElementById('pdfPanel');
-    const mainContainer = document.getElementById('mainContainer');
-
-    this._pdfUrl.set(null);
-    pdfPanel?.classList.add('hidden');
-    mainContainer?.classList.add('no-pdf');
-    this._selectedFileId.set(null);
+    this.files.hidePdfPreview();
   }
 
   removeRegularAssignment(index: number): void {
@@ -964,29 +431,6 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // Select file
-  // ═══════════════════════════════════════════════════════════
-  selectFile(fileId: number): void {
-    this._selectedFileId.set(fileId);
-
-    const a = this._agendaFiles().find(x => x.id === fileId);
-    if (a) {
-      if (a.type === 'loading') return;
-      if (a.isLazyLoaded || !a.url) {
-        this.loadAgendaFileOnDemand(a);
-      } else {
-        this.showPdfPreview(a.url, a.name);
-      }
-      return;
-    }
-
-    const r = this._resolutionFiles().find(x => x.id === fileId);
-    if (!r) return;
-
-    if (r.url) this.showPdfPreview(r.url, r.name);
-  }
-
-  // ═══════════════════════════════════════════════════════════
   // Patch edit mode
   // ═══════════════════════════════════════════════════════════
   private patchFormForEdit(): void {
@@ -1020,115 +464,22 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
       setTimeout(() => this.loadExistingRegularAssignments(), 0);
     }
 
-    setTimeout(() => this.loadExistingResolutionFiles(), 0);
+    setTimeout(() => this.files.loadExistingResolutionFiles(this.selectedResolution()?.id), 0);
   }
 
   private resetFormSilently(): void {
     this.boardResolutionForm.reset();
     this.regularResolutionForm.reset();
 
-    this._resolutionFiles().forEach(f => {
-      if (f.isBlobUrl && f.url?.startsWith('blob:')) URL.revokeObjectURL(f.url);
-    });
-
     this.boardAssignments().clear();
     this.regularAssignments().clear();
 
-    this._resolutionFiles.set([]);
+    this.files.reset();
 
-    this._selectedFileId.set(null);
-    this._pdfUrl.set(null);
-    this._uploadProgress.set(0);
     this._actorGuidsControls.set([]);
     this._boardActorControls.set([]);
 
     this.hidePdfPreview();
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // Existing resolution files (edit)
-  // ═══════════════════════════════════════════════════════════
-  private loadExistingResolutionFiles(): void {
-    const res = this.selectedResolution();
-    if (!res?.id) return;
-
-    this._resolutionFiles.set([
-      {
-        id: -2,
-        name: 'در حال بارگذاری فایل‌ها...',
-        url: '',
-        type: 'loading',
-        scope: 'resolution',
-      },
-    ]);
-
-    this.fileMeetingService.getFiles(res.id, 'Resolution')
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (files: any) => {
-          this._resolutionFiles.update(cur => cur.filter(x => x.id !== -2));
-
-          if (!files?.length) return;
-
-          const fileGuids = files
-            .map((f: any) => f.fileGuid)
-            .filter((g: string) => g && g !== '00000000-0000-0000-0000-000000000000');
-
-          if (!fileGuids.length) return;
-
-          this.tus.getMetas(fileGuids)
-            .then((metas: any[]) => {
-              const processed: FileItem[] = files.map((f: any, idx: number) => {
-                const meta = metas.find((m: any) => m?.guid?.toLowerCase() === f.fileGuid?.toLowerCase());
-                const previewUrl = meta?.path ? this.tus.buildFileUrl(meta.path) : '';
-
-                return {
-                  id: f.id || Number(`${Date.now()}${idx}`),
-                  name: meta?.originalFileName || meta?.name || `فایل ${idx + 1}`,
-                  url: previewUrl,
-                  type: 'pdf',
-                  scope: 'resolution',
-
-                  size: meta?.fileSize || 0,
-                  sizeFormatted: this.formatFileSize(meta?.fileSize || 0),
-                  uploadDate: meta?.createdAt
-                    ? new Date(meta.createdAt).toLocaleDateString('fa-IR')
-                    : new Date().toLocaleDateString('fa-IR'),
-
-                  guid: f.fileGuid,
-                  fileGuid: f.fileGuid,
-                  isLazyLoaded: !previewUrl,
-                  isRemoved: false,
-                };
-              });
-
-              this._resolutionFiles.update(cur => [...cur, ...processed]);
-            })
-            .catch(err => {
-              console.error('Error loading file metas:', err);
-              this.toast.warning('برخی اطلاعات فایل‌ها بارگذاری نشد');
-
-              const fallback: FileItem[] = files.map((f: any, idx: number) => ({
-                id: f.id || Number(`${Date.now()}${idx}`),
-                name: `فایل ${idx + 1}`,
-                url: '',
-                type: 'pdf',
-                scope: 'resolution',
-                guid: f.fileGuid,
-                fileGuid: f.fileGuid,
-                isLazyLoaded: true,
-                isRemoved: false,
-              }));
-
-              this._resolutionFiles.update(cur => [...cur, ...fallback]);
-            });
-        },
-        error: (err) => {
-          console.error('Error loading existing files:', err);
-          this._resolutionFiles.update(cur => cur.filter(x => x.id !== -2));
-          this.toast.error('خطا در بارگذاری فایل‌ها');
-        },
-      });
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -1137,7 +488,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
   saveResolution(): void {
     if (this._isSaving()) return;
 
-    if (this._isUploading()) {
+    if (this.isUploading()) {
       this.toast.warning('لطفاً صبر کنید تا آپلود فایل‌ها تمام شود');
       return;
     }
@@ -1177,8 +528,8 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
       id: id || undefined,
       description: normalizePersian(form.get('description')?.value) || '',
       meetingGuid: this.meetingGuid(),
-      files: this.buildFilesArray(),
-      assignments: this.buildAssignmentsArray(),
+      files: this.files.buildFilesArray(),
+      assignments: buildAssignmentsArray(this.regularResolutionForm.get('regularAssignments')?.value || []),
     };
 
     this._isSaving.set(true);
@@ -1210,8 +561,8 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
       parentResolutionId: v.parentResolutionId || undefined,
       committeeMeetingGuid: v.committeeMeetingGuid || undefined,
       committeeResolutionId: v.committeeResolutionId || undefined,
-      files: this.buildFilesArray(),
-      items: this.buildBoardItemsArray(),
+      files: this.files.buildFilesArray(),
+      items: buildBoardItemsArray(this.boardAssignments().controls.map(ctrl => ctrl.value)),
     };
 
     this._isSaving.set(true);
@@ -1327,35 +678,6 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
     });
   }
 
-  private buildAssignmentsArray(): AssignmentItemDto[] {
-    const arr = this.regularResolutionForm.get('regularAssignments')?.value || [];
-    const result: AssignmentItemDto[] = [];
-
-    arr.forEach((a: any) => {
-      const validActors = (a.actors || []);
-      if (!validActors.length) return;
-
-      result.push({
-        actors: validActors.map((x: any) => ({
-          id: x.id || 0,
-          userGuid: x.actorGuid,
-          positionGuid: x.actorPositionGuid || null, // ✅ FIX: '' باعث خطای 400 در Guid سمت سرور می‌شد
-          isRemoved: !!x.isRemoved,
-        })),
-        follower: {
-          id: 0,
-          userGuid: a.followerGuid,
-          positionGuid: a.followerPositionGuid || null,
-          isRemoved: false,
-        },
-        type: a.type,
-        dueDate: a.dueDate,
-      });
-    });
-
-    return result;
-  }
-
   // ═══════════════════════════════════════════════════════════
   // Assignments - Board
   // ═══════════════════════════════════════════════════════════
@@ -1379,7 +701,7 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
     });
 
     this.boardAssignments().insert(0, g);
-    this.scrollToLatestAssignment();
+    this.boardAssignmentsEditor()?.scrollToLatestAssignment();
   }
 
   onBoardActorsChange(assignmentIndex: number, selectedItems: any[]): void {
@@ -1393,12 +715,12 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
     const oldActors: any[] = group.get('actors')?.value || [];
 
     let newActors = oldActors.map(a => {
-      const key = this.buildUniqueKey(a.actorGuid, a.actorPositionGuid);
+      const key = buildUniqueKey(a.actorGuid, a.actorPositionGuid);
       return { ...a, isRemoved: !selectedKeys.has(key) };
     });
 
     selectedKeys.forEach(key => {
-      const exists = oldActors.some(a => this.buildUniqueKey(a.actorGuid, a.actorPositionGuid) === key);
+      const exists = oldActors.some(a => buildUniqueKey(a.actorGuid, a.actorPositionGuid) === key);
       if (exists) return;
 
       const u = usersWithPos.find(p => p.uniqueKey === key);
@@ -1411,37 +733,8 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
 
     group.get('actors')?.setValue(newActors, { emitEvent: false });
 
-    const activeKeys = newActors.filter(a => !a.isRemoved).map(a => this.buildUniqueKey(a.actorGuid, a.actorPositionGuid));
+    const activeKeys = newActors.filter(a => !a.isRemoved).map(a => buildUniqueKey(a.actorGuid, a.actorPositionGuid));
     group.get('actorUniqueKey')?.setValue(activeKeys, { emitEvent: false });
-  }
-
-  private buildBoardItemsArray(): BoardAssignmentItemDto[] {
-    const result: BoardAssignmentItemDto[] = [];
-
-    this.boardAssignments().controls.forEach(ctrl => {
-      const a = ctrl.value;
-      if (!a.id && a.isRemoved) return;
-
-      const actors = (a.actors || []).map((x: any) => ({
-        id: x.id || 0,
-        userGuid: x.actorGuid || '',
-        positionGuid: x.actorPositionGuid || null, // ✅ FIX: '' باعث خطای 400 در Guid سمت سرور می‌شد
-        isRemoved: !!x.isRemoved,
-      }));
-
-      result.push({
-        actors,
-        followerGuid: a.followerGuid || AppSettings.boardSecretaryUserGuid,
-        followerPositionGuid: a.followerPositionGuid || AppSettings.boardPositionGuid,
-        dueDate: a.dueDate || '',
-        status: a.status || '1',
-        result: a.result || '',
-        description: a.description || '',
-        isRemoved: !!a.isRemoved,
-      });
-    });
-
-    return result;
   }
 
   private loadExistingBoardAssignments(): void {
@@ -1451,50 +744,12 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
     const fa = this.boardAssignments();
     fa.clear();
 
-    // ✅ FIX 3: کلید گروه‌بندی شامل follower هم میشه
-    // قبلاً فقط dueDate+status+result+description بود - چند actor با همون dueDate
-    // اما follower متفاوت، اشتباه گروه‌بندی می‌شدند.
-    // حالا با اضافه کردن followerGuid+followerPositionGuid به کلید،
-    // هر مجموعه‌ی actor که واقعاً یک assignment هستند درست گروه می‌شوند.
-    const grouped = res.assignments.reduce((acc: any, a: any) => {
-      const followerGuid = a.followerGuid || AppSettings.boardSecretaryUserGuid || '';
-      const followerPositionGuid = a.followerPositionGuid || AppSettings.boardPositionGuid || '';
-
-      const key = [
-        followerGuid,
-        followerPositionGuid,
-        a.dueDate || '',
-        a.status || '',
-        a.result || '',
-        a.description || '',
-      ].join('|');
-
-      if (!acc[key]) {
-        acc[key] = {
-          actors: [],
-          dueDate: a.dueDate,
-          status: a.status,
-          result: a.result,
-          description: a.description || '',
-          followerGuid,
-          followerPositionGuid,
-        };
-      }
-      acc[key].actors.push({
-        id: a.id,
-        actorGuid: a.actorGuid || '',
-        actorPositionGuid: a.actorPositionGuid || '',
-        isRemoved: false,
-      });
-      return acc;
-    }, {});
-
-    Object.values(grouped).forEach((g: any) => {
+    groupBoardAssignments(res.assignments).forEach((g: any) => {
       const actorKeys = (g.actors || [])
         .filter((x: any) => !x.isRemoved)
-        .map((x: any) => this.buildUniqueKey(x.actorGuid, x.actorPositionGuid));
+        .map((x: any) => buildUniqueKey(x.actorGuid, x.actorPositionGuid));
 
-      const normalized = this.normalizeBoardStatus(g.status, g.result);
+      const normalized = normalizeBoardStatus(g.status, g.result);
 
       const fg = this.fb.group({
         id: [g.actors?.[0]?.id || 0],
@@ -1524,47 +779,15 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
     fa.clear();
     this._actorGuidsControls.set([]);
 
-    const assignments: any[] = (res as any).assignments || [];
+    const groups = groupRegularAssignments((res as any).assignments || []);
 
-    const map = new Map<string, any>();
-
-    for (const a of assignments) {
-      const type = this.normalizeValue(a.assignmentType || '');
-      const dueDate = this.normalizeValue(a.dueDate || a.due || '');
-      const followerGuid = this.normalizeValue(a.followerGuid || a.followerUserGuid || '');
-      const followerPositionGuid = this.normalizeValue(a.followerPositionGuid || a.followerPosGuid || '');
-      const status = this.normalizeValue(a.status || '1') || '1';
-      const result = this.normalizeValue(a.result || '');
-
-      const key = `${type}|${dueDate}|${followerGuid}|${followerPositionGuid}|${status}|${result}`;
-
-      if (!map.has(key)) {
-        map.set(key, {
-          type,
-          dueDate,
-          followerGuid,
-          followerPositionGuid,
-          status,
-          result,
-          actors: [],
-        });
-      }
-
-      map.get(key).actors.push({
-        id: a.id || 0,
-        actorGuid: this.normalizeValue(a.actorGuid || a.userGuid || ''),
-        actorPositionGuid: this.normalizeValue(a.actorPositionGuid || a.positionGuid || ''),
-        isRemoved: false,
-      });
-    }
-
-    if (map.size === 0) {
+    if (groups.length === 0) {
       this.addNewRegularAssignment(true);
       return;
     }
 
-    for (const g of map.values()) {
-      const followerUniqueKey = this.buildUniqueKey(g.followerGuid, g.followerPositionGuid);
+    for (const g of groups) {
+      const followerUniqueKey = buildUniqueKey(g.followerGuid, g.followerPositionGuid);
 
       const fg = this.fb.group({
         actors: [g.actors, Validators.required],
@@ -1580,38 +803,9 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
 
       fa.push(fg);
 
-      const actorKeys = (g.actors || []).map((x: any) => this.buildUniqueKey(x.actorGuid, x.actorPositionGuid));
+      const actorKeys = (g.actors || []).map((x: any) => buildUniqueKey(x.actorGuid, x.actorPositionGuid));
       this._actorGuidsControls.update(list => [...list, new FormControl(actorKeys)]);
     }
-  }
-
-  private scrollToLatestAssignment(): void {
-    const el = this.assignmentsContainer()?.nativeElement;
-    if (!el) return;
-    setTimeout(() => { el.scrollTop = 0; }, 50);
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // Utility UI for avatars
-  // ═══════════════════════════════════════════════════════════
-  handleImageError(event: Event): void {
-    const img = event.target as HTMLImageElement;
-    if (img && img.nextElementSibling instanceof HTMLElement) {
-      img.style.display = 'none';
-      img.nextElementSibling.style.display = 'flex';
-    }
-  }
-
-  getUserPhotoUrl(personalNo: string): string {
-    const photoUrl = encodeURIComponent(`photo/${personalNo}.jpg`);
-    return `${environment.fileManagementEndpoint}/api/Image?url=${photoUrl}&w=48&q=75`;
-  }
-
-  getUserInitials(userName: string): string {
-    if (!userName) return '';
-    const words = userName.trim().split(' ');
-    if (words.length === 1) return words[0].charAt(0).toUpperCase();
-    return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -1630,76 +824,10 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // Files
+  // Cancel / destroy / reset
   // ═══════════════════════════════════════════════════════════
-  private buildFilesArray(): ResolutionFileDto[] {
-    return this._resolutionFiles()
-      .filter(f => !f.isUploading)
-      .filter(f => f.type !== 'loading')
-      .filter(f => f.guid || f.fileGuid)
-      .map(f => {
-        if (f.guid) {
-          return {
-            id: f.id,
-            isRemoved: !!f.isRemoved,
-            fileGuid: f.guid
-          };
-        }
-        return {
-          id: 0,
-          isRemoved: !!f.isRemoved,
-          fileGuid: f.fileGuid!
-        };
-      })
-      .filter(x => !!x.fileGuid);
-  }
-
-  async deleteFile(fileId: number): Promise<void> {
-    const file = this._resolutionFiles().find(x => x.id === fileId);
-    if (!file) return;
-
-    if (!confirm('آیا از حذف این فایل اطمینان دارید؟')) return;
-
-    if (file.isBlobUrl && file.url?.startsWith('blob:')) {
-      URL.revokeObjectURL(file.url);
-    }
-
-    if (file.fileGuid && !file.guid) {
-      try {
-        await this.tus.deleteAttachment(file.fileGuid);
-        this.toast.success('فایل حذف شد');
-      } catch (e) {
-        console.warn('Failed to delete new file:', e);
-        this.toast.warning('فایل از لیست حذف شد');
-      }
-
-      this._resolutionFiles.update(list => list.filter(x => x.id !== fileId));
-    } else if (file.guid) {
-      this._resolutionFiles.update(list =>
-        list.map(x => x.id === fileId ? { ...x, isRemoved: true } : x)
-      );
-      this.toast.info('فایل برای حذف علامت‌گذاری شد. با ذخیره مصوبه، حذف نهایی می‌شود.');
-    }
-
-    if (this._selectedFileId() === fileId) {
-      this.hidePdfPreview();
-    }
-  }
-
   async cancelForm(): Promise<void> {
-    const newUploadedFiles = this._resolutionFiles()
-      .filter(f => !f.guid && !!f.fileGuid && !f.isRemoved);
-
-    if (newUploadedFiles.length > 0) {
-      const guids = newUploadedFiles.map(x => x.fileGuid!);
-
-      try {
-        await this.tus.deleteAttachments(guids);
-        console.log(`Deleted ${guids.length} uploaded files on cancel`);
-      } catch (e) {
-        console.warn('Failed to delete uploaded files on cancel:', e);
-      }
-    }
+    await this.files.deleteNewUploadsOnCancel();
 
     this.resetForm();
     this.modalClosed.emit();
@@ -1708,55 +836,24 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-    this.cleanupUnusedFiles();
-  }
-
-  private async cleanupUnusedFiles(): Promise<void> {
-    const newUploadedFiles = this._resolutionFiles()
-      .filter(f => !f.guid && !!f.fileGuid && !f.isRemoved);
-
-    if (newUploadedFiles.length === 0) return;
-
-    const guids = newUploadedFiles.map(x => x.fileGuid!);
-
-    try {
-      await this.tus.deleteAttachments(guids);
-      console.log(`Cleanup: Deleted ${guids.length} unused uploaded files`);
-    } catch (e) {
-      console.warn('Cleanup failed:', e);
-    }
-
-    this._resolutionFiles().forEach(f => {
-      if (f.isBlobUrl && f.url?.startsWith('blob:')) {
-        URL.revokeObjectURL(f.url);
-      }
-    });
+    this.files.cleanupUnusedFiles();
   }
 
   resetForm(): void {
     this.boardResolutionForm.reset();
     this.regularResolutionForm.reset();
 
-    this._resolutionFiles().forEach(f => {
-      if (f.isBlobUrl && f.url?.startsWith('blob:')) {
-        URL.revokeObjectURL(f.url);
-      }
-    });
-
     this.boardAssignments().clear();
     this.regularAssignments().clear();
 
-    this._resolutionFiles.set([]);
-    this._selectedFileId.set(null);
-    this._pdfUrl.set(null);
-    this._uploadProgress.set(0);
+    this.files.reset();
+
     this._actorGuidsControls.set([]);
     this._boardActorControls.set([]);
 
-
     this.hidePdfPreview();
 
-    if (!this.isEditingResolution() && this.meetingGuid() && this._agendaFiles().length === 0) {
+    if (!this.isEditingResolution() && this.meetingGuid() && this.files.hasNoAgendaEntries()) {
       this.loadAgendaFiles();
     }
 
@@ -1765,12 +862,5 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
         if (this.regularAssignments().length === 0) this.addNewRegularAssignment(true);
       }, 0);
     }
-  }
-
-  restoreFile(fileId: number): void {
-    this._resolutionFiles.update(list =>
-      list.map(x => x.id === fileId ? { ...x, isRemoved: false } : x)
-    );
-    this.toast.success('فایل بازگردانی شد');
   }
 }

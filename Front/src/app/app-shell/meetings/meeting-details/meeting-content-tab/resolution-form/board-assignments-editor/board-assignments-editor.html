@@ -1,0 +1,139 @@
+<!-- تخصیص‌ها - Board -->
+<div class="assignments-section-new">
+  <div class="assignments-header-new">
+    <div class="header-content-new">
+      <h6 class="section-title-modern">
+        <i class="fas fa-user-check"></i>
+        تخصیص‌ها و پیگیری
+      </h6>
+      <div class="header-stats-new">
+        <span class="assignment-counter-new">
+          <i class="fas fa-tasks"></i>
+          <span>{{ assignments().length }}</span> اقدام کننده
+        </span>
+        <button type="button" class="add-assignment-btn-new" (click)="add.emit()">
+          <i class="fas fa-plus"></i>
+          افزودن اقدام کننده
+        </button>
+      </div>
+      <div class="assignments-container-modern w-100" #assignmentsContainer>
+        @if (controls.length > 0) {
+        @for (assignment of controls; let i = $index; track $index) {
+        <div class="assignment-card-modern" [formGroup]="assignment">
+          <div class="card-header-new">
+            <div class="assignment-number-new">{{ i + 1 }}</div>
+            <button type="button" class="delete-btn-new" (click)="remove.emit(i)"
+              title="حذف اقدام کننده">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+          <div class="row">
+            <div class="col-md-4" style="margin-top: 18px;">
+              <div class="form-group">
+                <label for="actorGuid">اقدام کننده <span class="text-danger">*</span></label>
+                <ng-select [multiple]="true" bindLabel="userName" bindValue="uniqueKey" appendTo="body"
+                  formControlName="actorUniqueKey" (change)="actorsChange.emit({ index: i, items: $event })"
+                  placeholder="انتخاب کنید">
+                  @for (user of users(); track user.uniqueKey) {
+                  <ng-option [value]="user.uniqueKey">
+                    <div class="user-option">
+                      <div class="user-avatar-protected" (contextmenu)="$event.preventDefault()">
+                        <div class="ua-bg"
+                          [style.background-image]="'url(' + getUserPhotoUrl(user.personalNo) + ')'"></div>
+                        <div class="ua-shield"></div>
+                      </div>
+
+                      <div class="avatar-placeholder" style="display: none">
+                        {{ getUserInitials(user.userName) }}
+                      </div>
+
+                      <div class="user-info">
+                        <div class="user-name">{{ user.userName }}</div>
+                        <div class="user-position">{{ user.positionTitle }}</div>
+                      </div>
+                    </div>
+                  </ng-option>
+                  }
+                </ng-select>
+              </div>
+            </div>
+
+            <custom-input styleType="simple" label="تاریخ سر رسید" formControlName="dueDate" identity="dueDate"
+              size="col-3" type="date"></custom-input>
+
+            <custom-select label="وضعیت" [options]="actionStatusList" formControlName="status" identity="status"
+              classInput="form-control" styleType="simple" size="col-3">
+            </custom-select>
+
+            @if (assignment.get('status')?.value == '3') {
+            <custom-select label="نتیجه" [options]="assignmentResultList" formControlName="result"
+              identity="result" classInput="form-control" styleType="simple" size="col-2" [required]="true">
+            </custom-select>
+
+            @if(assignment.get('result')?.hasError('required') && (assignment.get('result')?.touched ||
+            assignment.get('result')?.dirty)){
+            <div class="invalid-feedback d-block">
+              در وضعیت «پایان یافته»، انتخاب نتیجه الزامی است.
+            </div>
+            }
+            }
+
+            <custom-input type="textarea" label="توضیحات" formControlName="description" identity="description"
+              styleType="simple" size="col-12"></custom-input>
+
+            <div class="status-badge-container-new">
+              @switch (assignment.get('status')?.value) {
+              @case ('1') {
+              <span class="status-badge-new status-no-response-new">
+                <i class="fas fa-hourglass-start"></i>
+                در انتظار اقدام
+              </span>
+              }
+              @case ('2') {
+              <span class="status-badge-new status-no-response-new">
+                <i class="fas fa-clock"></i>
+                در حال انجام
+              </span>
+              }
+              @case ('3') {
+              <span class="status-badge-new status-completed-new">
+                <i class="fas fa-flag-checkered"></i>
+                پایان یافته
+              </span>
+
+              @if (assignment.get('result')?.value == '1') {
+              <span class="status-badge-new status-completed-new ms-2">
+                <i class="fas fa-check"></i>
+                انجام شده
+              </span>
+              } @else if (assignment.get('result')?.value == '2') {
+              <span class="status-badge-new status-not-completed-new ms-2">
+                <i class="fas fa-times"></i>
+                انجام نشده
+              </span>
+              } @else {
+              <span class="status-badge-new status-not-completed-new ms-2">
+                <i class="fas fa-exclamation-triangle"></i>
+                نتیجه نامشخص
+              </span>
+              }
+              }
+              }
+            </div>
+
+          </div>
+        </div>
+        }
+        } @else {
+        <div class="empty-state-new">
+          <div class="empty-state-icon-new">
+            <i class="fas fa-users"></i>
+          </div>
+          <div class="empty-state-title-new">هیچ اقدام کننده‌ای تعیین نشده است</div>
+          <div class="empty-state-text-new">برای افزودن اقدام کننده روی دکمه بالا کلیک کنید</div>
+        </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>

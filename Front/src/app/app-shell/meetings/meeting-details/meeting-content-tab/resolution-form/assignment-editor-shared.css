@@ -1,0 +1,293 @@
+  /* استایل‌های مشترک ویرایشگرهای تخصیص (هیئت مدیره و عادی) */
+
+  :host {
+      display: block;
+  }
+
+  .assignments-section-new {
+      background: var(--mm-surface);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .assignments-header-new {
+      border-bottom: 2px solid var(--mm-border);
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+  }
+
+  .header-content-new {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 15px;
+  }
+
+  .section-title-modern {
+      color: var(--mm-text);
+      font-weight: 600;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+  }
+
+  .header-stats-new {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+  }
+
+  .assignment-counter-new {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--mm-muted);
+      font-weight: 500;
+      background: var(--mm-surface-2);
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--mm-border);
+  }
+
+  .add-assignment-btn-new {
+      background: linear-gradient(45deg, var(--mm-success), #20c997);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+  }
+
+  .add-assignment-btn-new:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+  }
+
+  /* استایل‌های آواتار برای ng-select */
+  .user-option {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      gap: 12px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+  }
+
+  .user-option:hover {
+      background-color: var(--mm-surface-2);
+  }
+
+  .user-avatar,
+  .selected-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: contain;
+      border: 2px solid var(--mm-border);
+      flex-shrink: 0;
+      transition: border-color 0.2s ease;
+  }
+
+  .selected-avatar {
+      width: 20px;
+      height: 20px;
+      border-width: 1px;
+  }
+
+  .avatar-placeholder,
+  .selected-avatar-placeholder {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(45deg, var(--mm-primary), var(--mm-primary-hover));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 14px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 4px rgba(var(--mm-primary-rgb), 0.2);
+  }
+
+  .selected-avatar-placeholder {
+      width: 20px;
+      height: 20px;
+      font-size: 10px;
+  }
+
+  .user-info {
+      flex: 1;
+      min-width: 0;
+  }
+
+  .user-name,
+  .selected-user-name {
+      font-weight: 500;
+      color: var(--mm-ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.2;
+  }
+
+  .user-position {
+      font-size: 10px !important;
+  }
+
+  .selected-user-name {
+      font-size: 12px;
+  }
+
+  .selected-users {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      width: 100%;
+  }
+
+  .selected-user-tag {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: var(--mm-surface-2);
+      border: 1px solid var(--mm-border);
+      border-radius: 16px;
+      font-size: 12px;
+      transition: all 0.2s ease;
+  }
+
+  .selected-user-tag:hover {
+      background: var(--mm-surface-3);
+      border-color: var(--mm-border-strong);
+  }
+
+  .more-count {
+      padding: 4px 8px;
+      background: var(--mm-surface-3);
+      border-radius: 12px;
+      font-size: 11px;
+      color: var(--mm-muted);
+      font-weight: 500;
+  }
+
+  /* تنظیمات برای RTL */
+  [dir="rtl"] .user-option {
+      gap: 12px;
+  }
+
+  [dir="rtl"] .selected-users {
+      gap: 8px;
+  }
+
+  [dir="rtl"] .selected-user-tag {
+      gap: 6px;
+  }
+
+  /* رسپانسیو */
+  @media (max-width: 768px) {
+      .user-avatar {
+          width: 28px;
+          height: 28px;
+      }
+
+      .avatar-placeholder {
+          width: 28px;
+          height: 28px;
+          font-size: 12px;
+      }
+
+      .selected-avatar {
+          width: 18px;
+          height: 18px;
+      }
+
+      .selected-avatar-placeholder {
+          width: 18px;
+          height: 18px;
+          font-size: 9px;
+      }
+  }
+
+  /* ===== Avatar Protection - Resolution Modal ===== */
+  .user-avatar-protected {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      min-height: 32px;
+      border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      border: 2px solid var(--mm-border);
+      background-color: var(--mm-surface-3);
+      transition: border-color 0.2s ease;
+      -webkit-user-select: none;
+      user-select: none;
+  }
+
+  .user-avatar-small-protected {
+      position: relative;
+      width: 20px;
+      height: 20px;
+      min-width: 20px;
+      min-height: 20px;
+      border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      border: 1px solid var(--mm-border);
+      background-color: var(--mm-surface-3);
+      -webkit-user-select: none;
+      user-select: none;
+  }
+
+  .ua-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      background-size: cover;
+      background-position: center center;
+      background-repeat: no-repeat;
+      -webkit-user-drag: none;
+      pointer-events: none;
+  }
+
+  .ua-shield {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      background: transparent;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+      .user-avatar-protected {
+          width: 28px;
+          height: 28px;
+          min-width: 28px;
+          min-height: 28px;
+      }
+
+      .user-avatar-small-protected {
+          width: 18px;
+          height: 18px;
+          min-width: 18px;
+          min-height: 18px;
+      }
+  }
