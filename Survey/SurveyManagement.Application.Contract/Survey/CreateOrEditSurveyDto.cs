@@ -25,6 +25,9 @@ public record CreateOrEditSurveyDto : ICommand
     public int? MaxResponses { get; init; }
     public bool RequireLogin { get; init; }
     public string? ThemeColor { get; init; }
+
+    /// <summary>جلوه‌ی صفحه‌ی تشکر: confetti | fireworks | balloons | stars | hearts | ribbons | none</summary>
+    public string? CompletionEffect { get; init; }
     public Guid? LogoGuid { get; init; }
     public Guid? BackgroundImageGuid { get; init; }
 }

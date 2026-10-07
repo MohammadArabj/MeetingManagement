@@ -13,6 +13,7 @@ public class PublicSurveyDto
     public string? WelcomeMessage { get; set; }
     public string? ThankYouMessage { get; set; }
     public string? ThemeColor { get; set; }
+    public string? CompletionEffect { get; set; }
     public Guid? LogoGuid { get; set; }
     public Guid? BackgroundImageGuid { get; set; }
     

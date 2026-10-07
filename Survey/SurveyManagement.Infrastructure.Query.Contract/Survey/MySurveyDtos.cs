@@ -50,6 +50,7 @@ public class MySurveyListDto
 
     // ظاهر
     public string? ThemeColor { get; set; }
+    public string? CompletionEffect { get; set; }
     public Guid? LogoGuid { get; set; }
 
     // تنظیمات

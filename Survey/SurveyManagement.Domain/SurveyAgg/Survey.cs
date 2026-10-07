@@ -156,6 +156,22 @@ public class Survey : AuditableAggregateRootBase<long>
     public string? ThemeColor { get; private set; }
     
     /// <summary>
+    /// جلوه‌ی صفحه‌ی تشکر پس از ثبت پاسخ (confetti، fireworks، balloons، stars، hearts، ribbons، none)؛
+    /// null یعنی پیش‌فرض (confetti)
+    /// </summary>
+    public string? CompletionEffect { get; private set; }
+
+    public static readonly IReadOnlySet<string> CompletionEffects =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "confetti", "fireworks", "balloons", "stars", "hearts", "ribbons", "none" };
+
+    public void SetCompletionEffect(string? effect)
+    {
+        CompletionEffect = string.IsNullOrWhiteSpace(effect) || !CompletionEffects.Contains(effect.Trim())
+            ? null
+            : effect.Trim().ToLowerInvariant();
+    }
+
+    /// <summary>
     /// لوگو (URL یا Base64)
     /// </summary>
     public Guid? LogoGuid { get; private set; }

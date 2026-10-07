@@ -660,6 +660,10 @@ namespace SurveyManagement.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("CompletionEffect")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<DateTime>("Created")
                         .HasColumnType("datetime2");
 

@@ -178,6 +178,7 @@ public class SurveyQueryHandler(
             PublishedDate = survey.PublishedDate?.ToString("yyyy/MM/dd HH:mm"),
             PublishedBy = publishedUser?.Fullname,
             ThemeColor = survey.ThemeColor,
+            CompletionEffect = survey.CompletionEffect,
             LogoGuid = survey.LogoGuid,
             BackgroundImageGuid = survey.BackgroundImageGuid,
             TotalQuestions = survey.Questions.Count,
@@ -391,6 +392,7 @@ public class SurveyQueryHandler(
             ThankYouMessage = survey.ThankYouMessage,
             MaxResponses = survey.MaxResponses,
             ThemeColor = survey.ThemeColor,
+            CompletionEffect = survey.CompletionEffect,
             LogoGuid = survey.LogoGuid,
             BackgroundImageGuid = survey.BackgroundImageGuid,
             HasCriteria=survey.Criteria.Any()
@@ -533,6 +535,7 @@ public class SurveyQueryHandler(
             WelcomeMessage = survey.WelcomeMessage,
             ThankYouMessage = survey.ThankYouMessage,
             ThemeColor = survey.ThemeColor,
+            CompletionEffect = survey.CompletionEffect,
             LogoGuid = survey.LogoGuid,
             BackgroundImageGuid = survey.BackgroundImageGuid,
             AllowAnonymous = survey.AllowAnonymous,
@@ -779,6 +782,7 @@ public class SurveyQueryHandler(
                 IsActive = survey.Status == SurveyStatus.Active || survey.Status == SurveyStatus.Published,
                 IsExpired = isExpired,
                 ThemeColor = survey.ThemeColor,
+                CompletionEffect = survey.CompletionEffect,
                 LogoGuid = survey.LogoGuid,
                 AllowAnonymous = survey.AllowAnonymous,
                 AllowSaveDraft = true, // پاسخ‌های کاربر واردشده همیشه خودکار ذخیره می‌شود

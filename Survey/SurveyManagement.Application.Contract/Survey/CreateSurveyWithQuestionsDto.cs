@@ -58,6 +58,9 @@ public record SurveyInfoDto
     public int? MaxResponses { get; init; }
     public string? ThemeColor { get; init; }
 
+    /// <summary>جلوه‌ی صفحه‌ی تشکر: confetti | fireworks | balloons | stars | hearts | ribbons | none</summary>
+    public string? CompletionEffect { get; init; }
+
     // ✅ تغییر به GUID
     public Guid? LogoGuid { get; init; }
     public Guid? BackgroundImageGuid { get; init; }

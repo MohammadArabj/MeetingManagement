@@ -67,6 +67,7 @@ public class SurveyForEditDto
     public string? ThankYouMessage { get; set; }
     public int? MaxResponses { get; set; }
     public string? ThemeColor { get; set; }
+    public string? CompletionEffect { get; set; }
     public Guid? LogoGuid { get; set; } // ✅ GUID به جای URL
     public Guid? BackgroundImageGuid { get; set; } // ✅ GUID به جای URL
     public bool HasCriteria { get; set; }

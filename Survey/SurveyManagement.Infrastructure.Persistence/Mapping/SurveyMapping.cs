@@ -95,6 +95,10 @@ public class SurveyMapping : IEntityTypeConfiguration<Survey>
         builder.Property(c => c.ThemeColor)
             .HasMaxLength(50)
             .IsRequired(false);
+
+        builder.Property(c => c.CompletionEffect)
+            .HasMaxLength(30)
+            .IsRequired(false);
             
         builder.Property(c => c.LogoGuid)
             .HasMaxLength(500)

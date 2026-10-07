@@ -69,6 +69,7 @@ public class SurveyCommandHandler(
 
             if (command.ThemeColor.HasValue() || command.LogoGuid.HasValue() || command.BackgroundImageGuid.HasValue())
                 survey.SetTheme(currentUserId, command.ThemeColor, command.LogoGuid, command.BackgroundImageGuid);
+            survey.SetCompletionEffect(command.CompletionEffect);
 
             repository.Update(survey);
             await repository.SaveChangesAsync();
@@ -88,6 +89,7 @@ public class SurveyCommandHandler(
 
             if (command.ThemeColor.HasValue() || command.LogoGuid.HasValue() || command.BackgroundImageGuid.HasValue())
                 survey.SetTheme(currentUserId, command.ThemeColor, command.LogoGuid, command.BackgroundImageGuid);
+            survey.SetCompletionEffect(command.CompletionEffect);
 
             await repository.CreateAsync(survey);
             await repository.SaveChangesAsync();
@@ -294,6 +296,7 @@ public class SurveyCommandHandler(
 
             if (command.Survey.ThemeColor.HasValue() || command.Survey.LogoGuid.HasValue() || command.Survey.BackgroundImageGuid.HasValue())
                 survey.SetTheme(currentUserId, command.Survey.ThemeColor, command.Survey.LogoGuid, command.Survey.BackgroundImageGuid);
+            survey.SetCompletionEffect(command.Survey.CompletionEffect);
 
             repository.Update(survey);
         }
@@ -312,6 +315,7 @@ public class SurveyCommandHandler(
 
             if (command.Survey.ThemeColor.HasValue() || command.Survey.LogoGuid.HasValue() || command.Survey.BackgroundImageGuid.HasValue())
                 survey.SetTheme(currentUserId, command.Survey.ThemeColor, command.Survey.LogoGuid, command.Survey.BackgroundImageGuid);
+            survey.SetCompletionEffect(command.Survey.CompletionEffect);
 
             await repository.CreateAsync(survey);
             await repository.SaveChangesAsync(); // نیاز به Id برای سوالات

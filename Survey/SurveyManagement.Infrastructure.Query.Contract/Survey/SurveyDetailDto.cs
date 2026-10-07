@@ -32,6 +32,7 @@ public class SurveyDetailDto
     public string? PublishedDate { get; set; }
     public string? PublishedBy { get; set; }
     public string? ThemeColor { get; set; }
+    public string? CompletionEffect { get; set; }
     public Guid? LogoGuid { get; set; }
     public Guid? BackgroundImageGuid { get; set; }
     public int TotalQuestions { get; set; }
