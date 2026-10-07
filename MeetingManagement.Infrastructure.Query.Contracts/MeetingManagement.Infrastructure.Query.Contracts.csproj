@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Agenda\" />
+    <Folder Include="Setting\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Epc.Company" Version="1.2.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MeetingManagement.Common\MeetingManagement.Common.csproj" />
+  </ItemGroup>
+
+</Project>

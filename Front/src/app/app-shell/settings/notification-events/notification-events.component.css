@@ -1,0 +1,9 @@
+:host { display: block; }
+.stats { display: flex; flex-wrap: wrap; gap: .75rem; }
+.stat { background: var(--bs-tertiary-bg, #f8f9fa); border-radius: .5rem; padding: .5rem 1rem; font-size: .85rem; }
+.stat span { font-size: 1.25rem; font-weight: 700; margin-left: .35rem; }
+.group-title { margin: 1rem 0 .5rem; font-weight: 700; color: var(--bs-primary, #0d6efd); }
+.events-table th { font-size: .8rem; color: var(--bs-secondary-color, #6b7280); white-space: nowrap; }
+.chip { display: inline-block; font-size: .72rem; padding: .1rem .5rem; margin: .1rem; border-radius: 999px;
+  background: var(--bs-secondary-bg, #e9ecef); }
+.preview { max-width: 280px; }

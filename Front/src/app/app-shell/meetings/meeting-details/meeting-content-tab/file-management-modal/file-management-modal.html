@@ -1,0 +1,173 @@
+<!-- file-management-modal.html -->
+
+<div class="modal-header">
+  <h5 class="modal-title">
+    <i class="fas fa-folder-open me-2"></i>
+    فایل‌های پیوست
+    @if(fileCount() > 0) {
+    <span class="badge bg-primary ms-2">{{ fileCount() }}</span>
+    }
+  </h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" (click)="closeModal()"></button>
+</div>
+
+<div class="modal-body">
+  <!-- ✅ Loading State -->
+  @if(isLoadingFiles()) {
+  <div class="text-center py-4">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">در حال بارگذاری...</span>
+    </div>
+    <p class="mt-2 text-muted">در حال بارگذاری فایل‌ها...</p>
+  </div>
+  }
+
+  <!-- ✅ File List -->
+  @if(!isLoadingFiles() && hasFiles()) {
+  <div class="file-list-container" [class.with-preview]="isPreviewOpen()">
+
+    <!-- لیست فایل‌ها -->
+    <div class="file-list">
+      <ul class="list-group">
+        @for(file of processedFiles(); track trackByGuid($index, file)) {
+        <li class="list-group-item file-item" [class.loading]="file.isLoading" [class.error]="file.error">
+
+          <div class="file-info" (click)="viewFile(file.fileGuid, $event)">
+            <!-- آیکون فایل -->
+            <div class="file-icon">
+              @if(file.isLoading) {
+              <i class="fas fa-spinner fa-spin text-muted"></i>
+              } @else {
+              <i class="fas {{ getFileIcon(file.displayType) }}" [class.text-danger]="file.displayType === 'pdf'"
+                [class.text-primary]="file.displayType === 'image'"
+                [class.text-warning]="file.displayType === 'document'"
+                [class.text-info]="file.displayType === 'text'"></i>
+              }
+            </div>
+
+            <!-- اطلاعات فایل -->
+            <div class="file-details">
+              <div class="file-name" [title]="file.fileName">
+                {{ file.fileName }}
+              </div>
+              <div class="file-meta">
+                @if(file.formattedSize) {
+                <span class="file-size">{{ file.formattedSize }}</span>
+                }
+                @if(file.error) {
+                <span class="text-danger ms-2">
+                  <i class="fas fa-exclamation-triangle"></i>
+                  {{ file.error }}
+                </span>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- دکمه‌های عملیات -->
+          <div class="file-actions">
+            @if(!file.isLoading) {
+            <button class="btn btn-sm btn-outline-primary" (click)="viewFile(file.fileGuid, $event)"
+              [disabled]="!!file.error" title="مشاهده">
+              <i class="fas fa-eye"></i>
+            </button>
+
+            <button class="btn btn-sm btn-outline-info" (click)="downloadFile(file.fileGuid)" [disabled]="!!file.error"
+              title="دانلود">
+              <i class="fas fa-download"></i>
+            </button>
+
+            @if(canDeleteFiles()) {
+            <button class="btn btn-sm btn-outline-danger" (click)="confirmDeleteFile(file.id)" title="حذف">
+              <i class="fas fa-trash"></i>
+            </button>
+            }
+            }
+          </div>
+        </li>
+        }
+      </ul>
+    </div>
+
+    <!-- ✅ پنل پیش‌نمایش -->
+    @if(isPreviewOpen()) {
+    <div class="preview-panel">
+      <div class="preview-header">
+        <h6 class="preview-title">
+          <i class="fas fa-eye me-2"></i>
+          {{ previewFile()?.fileName }}
+          @if(previewFile()?.formattedSize) {
+          <small class="text-muted ms-2">({{ previewFile()?.formattedSize }})</small>
+          }
+        </h6>
+        <button class="btn btn-sm btn-outline-secondary" (click)="closePreview()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="preview-content">
+        @if(isLoadingPreview()) {
+        <div class="preview-loading">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">در حال بارگذاری...</span>
+          </div>
+          <p class="mt-2">در حال بارگذاری پیش‌نمایش...</p>
+        </div>
+        } @else if(previewUrl()) {
+        @switch(previewFile()?.displayType) {
+        @case('pdf') {
+        <iframe class="preview-iframe" [src]="previewUrl()"></iframe>
+        }
+        @case('image') {
+        <img class="preview-image" [src]="previewUrl()" [alt]="previewFile()?.fileName">
+        }
+        @case('video') {
+        <video class="preview-video" [src]="previewUrl()" controls></video>
+        }
+        @case('audio') {
+        <audio class="preview-audio" [src]="previewUrl()" controls></audio>
+        }
+        @default {
+        <div class="preview-unsupported">
+          <i class="fas fa-file fa-3x text-muted mb-3"></i>
+          <p>پیش‌نمایش این نوع فایل پشتیبانی نمی‌شود</p>
+          <button class="btn btn-primary" (click)="downloadFile(previewFile()!.fileGuid)">
+            <i class="fas fa-download me-2"></i>
+            دانلود فایل
+          </button>
+        </div>
+        }
+        }
+        } @else {
+        <div class="preview-error">
+          <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+          <p>خطا در بارگذاری پیش‌نمایش</p>
+        </div>
+        }
+      </div>
+    </div>
+    }
+  </div>
+  }
+
+  <!-- ✅ Empty State -->
+  @if(!isLoadingFiles() && !hasFiles()) {
+  <div class="text-center text-muted py-5">
+    <i class="fas fa-folder-open fa-3x mb-3"></i>
+    <p class="mb-0">هیچ فایلی پیوست نشده است</p>
+  </div>
+  }
+</div>
+
+<div class="modal-footer">
+  @if(hasFiles() && !isPreviewOpen()) {
+  <span class="text-muted me-auto">
+    <i class="fas fa-info-circle me-1"></i>
+    برای مشاهده روی فایل کلیک کنید
+  </span>
+  }
+  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" (click)="closeModal()">
+    <i class="fas fa-times me-2"></i>
+    بستن
+  </button>
+</div>

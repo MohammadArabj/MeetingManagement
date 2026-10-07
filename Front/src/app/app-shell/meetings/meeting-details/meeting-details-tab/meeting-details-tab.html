@@ -1,0 +1,521 @@
+@if (meeting(); as m) {
+<div class="row">
+    <div class="col-md-7 flex-fill">
+        <div class="card mb-3 h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0">جزئیات</h5>
+                </div>
+
+                <div class="d-flex gap-3 align-items-center flex-wrap">
+                    <!-- ثبت کننده -->
+                    <div class="form-group text-center mb-0">
+                        <b><i class="fa fa-pen"></i> ثبت کننده:</b>
+                        <b class="text-primary mx-2">{{ m.creator }}</b>
+                    </div>
+
+                    <!-- تاریخ ثبت -->
+                    @if (m.created) {
+                    <div class="form-group text-center mb-0">
+                        <b><i class="fa fa-calendar-plus"></i> تاریخ ثبت:</b>
+                        <b class="text-primary mx-2">
+                            {{ m.created  }}
+                        </b>
+                    </div>
+                    }
+                </div>
+
+                <div>
+                    @if (canEditMeeting()) {
+                    <button class="btn btn-sm btn-primary" type="button" (click)="openEditModal()">ویرایش</button>
+                    }
+                </div>
+            </div>
+
+            <div class="card-body mt-4">
+                <div class="row">
+                    @for (item of [
+                    { icon: 'fa-hashtag', label: 'شماره جلسه:', value: m.number },
+                    { icon: 'fa-file', label: 'عنوان جلسه:', value: m.title },
+                    { icon: 'fa-list-alt', label: 'دسته بندی:', value: m.category },
+                    { icon: 'fa-calendar', label: 'تاریخ:', value: m.mtDate },
+                    { icon: 'fa-clock', label: 'ساعت شروع:', value: m.startTime },
+                    { icon: 'fa-clock', label: 'ساعت پایان:', value: m.endTime },
+                    { icon: 'fa-map-marker', label: 'مکان برگزاری:', value: m.location },
+                    { icon: 'fa-user-group', label: 'جلسه پیشین:', value: m.followMeeting}
+                    ]; track $index) {
+                    @if (item.value) {
+                    <div class="col-md-6 mb-4">
+                        <div class="form-group">
+                            <b><i class="fa" [ngClass]="item.icon"></i> {{ item.label }}</b>
+                            <span class="text-primary mx-2">{{ item.value }}</span>
+                        </div>
+                    </div>
+                    }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5 flex-fill">
+        <div class="card mb-3 h-100 w-100 shadow-sm rounded">
+            <div class="card-header d-flex justify-content-between align-items-center fw-bold">
+                <h5 class="mb-0">اعضای جلسه</h5>
+
+                <div class="d-flex gap-2 align-items-center">
+                    <!-- دکمه افزودن عضو/مهمان -->
+                    <!-- @if (canAddMember()) {
+                    <button type="button" class="btn btn-sm btn-info text-white" (click)="openAddMemberModal()">
+                         افزودن عضو / مهمان
+                    </button>
+                    } -->
+
+                    @if (canChangeAttendance()) {
+                    <button type="button" class="btn btn-sm btn-success" (click)="setAllPresence(true)">
+                        حضور همه
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger" (click)="setAllPresence(false)">
+                        غیاب همه
+                    </button>
+                    }
+                </div>
+            </div>
+
+            <div class="card-body p-0">
+                <div #memberScrollContainer class="table-responsive" style="max-height: 550px; overflow-y: auto;">
+                    <table class="table table-hover align-middle m-0">
+                        <thead class="table-light">
+                            <tr class="text-center">
+                                <th style="width: 55%"></th>
+                                <th>نقش</th>
+                                <th>اعلام حضور</th>
+                                <th>حضور</th>
+                                <th>امضا</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (member of members(); track member.id) {
+                            <tr>
+                                <td class="position-relative">
+                                    @if (meetingRoles.isGuest(member.roleId)) {
+                                    <div class="guest-ribbon">مهمان</div>
+                                    }
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-protected me-2" (contextmenu)="$event.preventDefault()">
+                                            <div class="avatar-bg"
+                                                [style.background-image]="'url(' + member.image + ')'"
+                                                (error)="member.image = '/img/default-avatar.png'">
+                                            </div>
+                                            <div class="avatar-shield"></div>
+                                        </div>
+                                        <div>
+                                            <span class="fw-semibold">{{ member.name }}</span>
+                                            <div class="small text-muted">{{ member.position }}</div>
+                                            @if (member.substitute) {
+                                            <div class="text-muted small">جانشین: {{ member.substitute }}</div>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td><span class="fw-medium">{{ member.role }}</span></td>
+
+                                <td>
+                                    @if (member.isAttendance) {
+                                    <i class="fa fa-circle-check text-success fs-5"></i>
+                                    } @else {
+                                    <i class="fa fa-circle-xmark text-danger fs-5"></i>
+                                    }
+                                </td>
+
+                                <td>
+                                    @if (canChangeAttendance()) {
+                                    <div class="presence-toggle">
+                                        <button type="button" class="option"
+                                            [class.selected]="member.isPresent === false"
+                                            [class.red]="member.isPresent === false"
+                                            (click)="togglePresence(member, false)">
+                                            <i class="fa fa-times"></i>
+                                        </button>
+                                        <button type="button" class="option" style="width: 38px" disabled
+                                            [class.selected]="member.isPresent === null"
+                                            [class.gray]="member.isPresent === null">
+                                            @if (member.isPresent === null) { <i class="fa fa-question"></i> }
+                                        </button>
+                                        <button type="button" class="option"
+                                            [class.selected]="member.isPresent === true"
+                                            [class.green]="member.isPresent === true"
+                                            (click)="togglePresence(member, true)">
+                                            <i class="fa fa-check"></i>
+                                        </button>
+                                    </div>
+                                    } @else {
+                                    @if (member.isPresent) {
+                                    <i class="fa fa-circle-check text-success fs-5"></i>
+                                    } @else {
+                                    <i class="fa fa-circle-xmark text-danger fs-5"></i>
+                                    }
+                                    }
+                                </td>
+
+                                <td>
+                                    @if (member.isSign) {
+                                    <i class="fa fa-circle-check text-success fs-5"></i>
+                                    } @else {
+                                    <i class="fa fa-circle-xmark text-danger fs-5"></i>
+                                    }
+                                </td>
+                            </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════ Edit Modal ═══════════ -->
+<div class="modal fade" id="editModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog" style="max-width: 40rem;">
+        <form class="modal-content" [formGroup]="meetingForm" (ngSubmit)="saveMeeting()">
+            <div class="modal-header">
+                <h5 class="modal-title">ویرایش جلسه</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="row">
+                    <custom-input type="text" label="عنوان جلسه" identity="title" formControlName="title"
+                        size="col-12"></custom-input>
+                    <custom-select [options]="categories()" identity="categoryGuid" formControlName="categoryGuid"
+                        label="دسته بندی" size="col-12"></custom-select>
+                    <custom-input type="date" label="تاریخ" identity="date" formControlName="date"
+                        size="col-12"></custom-input>
+                    <div class="col-md-6">
+                        <custom-input label="ساعت شروع" formControlName="startTime" type="time" identity="startTime"
+                            [required]="true"></custom-input>
+                    </div>
+                    <div class="col-md-6">
+                        <custom-input label="ساعت پایان" formControlName="endTime" type="time" identity="endTime"
+                            [required]="true"></custom-input>
+                    </div>
+                    <custom-select label="مکان" formControlName="locationType" [options]="locationTypes()"
+                        identity="locationType" [required]="true" (change)="onLocationTypeChange()" size="col-12">
+                    </custom-select>
+                    @if (meetingForm.get('locationType')?.value === 'internal') {
+                    <div class="col-12">
+                        <custom-select label="محل برگزاری" formControlName="roomGuid" [options]="rooms()"
+                            identity="roomGuid" [required]="true"></custom-select>
+                    </div>
+                    }
+                    @if (meetingForm.get('locationType')?.value === 'external') {
+                    <div class="col-12">
+                        <custom-input label="آدرس مکان" formControlName="roomName" type="textarea" identity="roomName"
+                            [required]="true"></custom-input>
+                    </div>
+                    }
+                    @if (meetingForm.get('locationType')?.value === 'online') {
+                    <div class="col-12">
+                        <custom-input label="لینک جلسه" formControlName="roomLink" type="text" identity="roomLink"
+                            [required]="true"></custom-input>
+                    </div>
+                    }
+                    <div class="col-md-12">
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="isFollowUp"
+                                [checked]="isFollowUpChecked()" (change)="onCheckboxChange($event)">
+                            <label class="form-check-label" for="isFollowUp">پیرو جلسه دیگری است</label>
+                        </div>
+                        @if (isFollowUpChecked()) {
+                        <custom-select label="جلسه پیشین" formControlName="followGuid" [options]="meetings()"
+                            identity="followGuid" size="col-12"></custom-select>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-success">ذخیره</button>
+                <button type="button" class="btn btn-warning" data-bs-dismiss="modal">انصراف</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ═══════════ Add Member / Guest Modal ═══════════ -->
+<div class="modal fade" id="addMemberModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog" style="max-width: 42rem;">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-user-plus me-2"></i>افزودن عضو / مهمان</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+
+                <!-- ── انتخاب نوع: عضو یا مهمان ── -->
+                <div class="d-flex gap-3 mb-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" id="modeMember" name="addMode"
+                            [checked]="addMemberMode() === 'member'" (change)="onAddMemberModeChange('member')">
+                        <label class="form-check-label fw-semibold" for="modeMember">
+                            <i class="fa fa-user me-1 text-primary"></i> عضو جلسه
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" id="modeGuest" name="addMode"
+                            [checked]="addMemberMode() === 'guest'" (change)="onAddMemberModeChange('guest')">
+                        <label class="form-check-label fw-semibold" for="modeGuest">
+                            <i class="fa fa-user-tag me-1 text-info"></i> مهمان
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ══════════ حالت: عضو جلسه ══════════ -->
+                @if (addMemberMode() === 'member') {
+                <div>
+                    <!-- جستجوی کاربر -->
+                    <div class="mb-3 position-relative">
+                        <label class="form-label fw-semibold">انتخاب کاربر <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fa fa-search"></i></span>
+                            <input type="text" class="form-control"
+                                placeholder="نام، نام کاربری یا سمت را جستجو کنید..." [value]="memberSearchQuery()"
+                                (input)="onMemberSearch($event)" (focus)="showMemberDropdown()"
+                                (blur)="hideMemberDropdown()">
+                        </div>
+
+                        @if (selectedAddUser()) {
+                        <div class="mt-2 p-2 border rounded bg-light d-flex align-items-center gap-2">
+                            <img [src]="selectedAddUser()!.image" class="rounded-circle"
+                                style="width:36px;height:36px;object-fit:cover;"
+                                onerror="this.src='/img/default-avatar.png'">
+                            <div>
+                                <div class="fw-semibold">{{ selectedAddUser()!.name }}</div>
+                                <small class="text-muted">{{ selectedAddUser()!.position }}</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
+                                (click)="selectedAddUser.set(null); memberSearchQuery.set('')">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        }
+
+                        <!-- Dropdown نتایج جستجو -->
+                        @if (memberDropdownVisible() && filteredUsers().length > 0) {
+                        <div class="position-absolute w-100 border rounded bg-white shadow-sm"
+                            style="z-index:1060; max-height:220px; overflow-y:auto; top:100%;">
+                            @for (user of filteredUsers(); track user.guid) {
+                            <button type="button"
+                                class="w-100 text-end border-0 bg-transparent p-2 d-flex align-items-center gap-2 user-select-item"
+                                style="cursor:pointer;" (mousedown)="selectUserForAdd(user)">
+                                <img [src]="user.image" class="rounded-circle"
+                                    style="width:32px;height:32px;object-fit:cover;"
+                                    onerror="this.src='/img/default-avatar.png'">
+                                <div class="text-start">
+                                    <div class="fw-semibold small">{{ user.name }}</div>
+                                    <div class="text-muted" style="font-size:0.78rem;">{{ user.position }}</div>
+                                </div>
+                            </button>
+                            }
+                        </div>
+                        }
+                    </div>
+
+                    <!-- انتخاب نقش -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">نقش در جلسه <span class="text-danger">*</span></label>
+                        <select class="form-select" [ngModel]="selectedAddRole()"
+                            (ngModelChange)="selectedAddRole.set($event)">
+                            @for (role of allowedMemberRoles; track role.id) {
+                            <option [value]="role.id">{{ role.title }}</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                }
+
+                <!-- ══════════ حالت: مهمان ══════════ -->
+                @if (addMemberMode() === 'guest') {
+
+                <!-- انتخاب نوع مهمان -->
+                <div class="d-flex gap-3 mb-4 p-3 bg-light rounded">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" id="guestExternal" name="guestType"
+                            [checked]="addGuestType() === 'external'" (change)="onAddGuestTypeChange('external')">
+                        <label class="form-check-label" for="guestExternal">
+                            <i class="fa fa-building me-1"></i> خارج از سازمان
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" id="guestInternal" name="guestType"
+                            [checked]="addGuestType() === 'internal'" (change)="onAddGuestTypeChange('internal')">
+                        <label class="form-check-label" for="guestInternal">
+                            <i class="fa fa-id-badge me-1"></i> داخل سازمان
+                        </label>
+                    </div>
+                </div>
+
+                <!-- مهمان داخلی: جستجوی کاربر -->
+                @if (addGuestType() === 'internal') {
+                <div class="mb-3 position-relative">
+                    <label class="form-label fw-semibold">انتخاب کاربر <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fa fa-search"></i></span>
+                        <input type="text" class="form-control" placeholder="نام، نام کاربری یا سمت را جستجو کنید..."
+                            [value]="memberSearchQuery()" (input)="onMemberSearch($event)"
+                            (focus)="showMemberDropdown()" (blur)="hideMemberDropdown()">
+                    </div>
+
+                    @if (selectedAddUser()) {
+                    <div class="mt-2 p-2 border rounded bg-light d-flex align-items-center gap-2">
+                        <img [src]="selectedAddUser()!.image" class="rounded-circle"
+                            style="width:36px;height:36px;object-fit:cover;"
+                            onerror="this.src='/img/default-avatar.png'">
+                        <div>
+                            <div class="fw-semibold">{{ selectedAddUser()!.name }}</div>
+                            <small class="text-muted">{{ selectedAddUser()!.position }}</small>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
+                            (click)="selectedAddUser.set(null); memberSearchQuery.set('')">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    }
+
+                    @if (memberDropdownVisible() && filteredUsers().length > 0) {
+                    <div class="position-absolute w-100 border rounded bg-white shadow-sm"
+                        style="z-index:1060; max-height:220px; overflow-y:auto; top:100%;">
+                        @for (user of filteredUsers(); track user.guid) {
+                        <button type="button"
+                            class="w-100 text-end border-0 bg-transparent p-2 d-flex align-items-center gap-2"
+                            style="cursor:pointer;" (mousedown)="selectUserForAdd(user)">
+                            <img [src]="user.image" class="rounded-circle"
+                                style="width:32px;height:32px;object-fit:cover;"
+                                onerror="this.src='/img/default-avatar.png'">
+                            <div class="text-start">
+                                <div class="fw-semibold small">{{ user.name }}</div>
+                                <div class="text-muted" style="font-size:0.78rem;">{{ user.position }}</div>
+                            </div>
+                        </button>
+                        }
+                    </div>
+                    }
+                </div>
+                }
+
+                <!-- مهمان خارجی: فرم اطلاعات -->
+                @if (addGuestType() === 'external') {
+                <form [formGroup]="externalGuestForm">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">نام و نام خانوادگی <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" formControlName="name" placeholder="نام کامل مهمان"
+                                [class.is-invalid]="externalGuestForm.get('name')?.invalid && externalGuestForm.get('name')?.touched">
+                            @if (externalGuestForm.get('name')?.invalid && externalGuestForm.get('name')?.touched) {
+                            <div class="invalid-feedback">نام الزامی است</div>
+                            }
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">شماره موبایل <span class="text-danger">*</span></label>
+                            <input type="tel" class="form-control" formControlName="mobile" placeholder="09xxxxxxxxx"
+                                [class.is-invalid]="externalGuestForm.get('mobile')?.invalid && externalGuestForm.get('mobile')?.touched">
+                            @if (externalGuestForm.get('mobile')?.invalid && externalGuestForm.get('mobile')?.touched) {
+                            <div class="invalid-feedback">شماره موبایل معتبر وارد کنید (09xxxxxxxxx)</div>
+                            }
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">آدرس ایمیل</label>
+                            <input type="email" class="form-control" formControlName="email"
+                                placeholder="example@domain.com"
+                                [class.is-invalid]="externalGuestForm.get('email')?.invalid && externalGuestForm.get('email')?.touched">
+                            @if (externalGuestForm.get('email')?.invalid && externalGuestForm.get('email')?.touched) {
+                            <div class="invalid-feedback">فرمت ایمیل صحیح نیست</div>
+                            }
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">سازمان <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" formControlName="organization"
+                                placeholder="نام سازمان یا شرکت"
+                                [class.is-invalid]="externalGuestForm.get('organization')?.invalid && externalGuestForm.get('organization')?.touched">
+                            @if (externalGuestForm.get('organization')?.invalid &&
+                            externalGuestForm.get('organization')?.touched) {
+                            <div class="invalid-feedback">نام سازمان الزامی است</div>
+                            }
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">جنسیت <span class="text-danger">*</span></label>
+                            <div class="d-flex gap-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" id="genderMale"
+                                        formControlName="gender" value="Male">
+                                    <label class="form-check-label" for="genderMale"><i class="fa fa-male me-1"></i>
+                                        آقا</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" id="genderFemale"
+                                        formControlName="gender" value="Female">
+                                    <label class="form-check-label" for="genderFemale"><i class="fa fa-female me-1"></i>
+                                        خانم</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                }
+                }
+
+            </div><!-- /.modal-body -->
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" [disabled]="isSavingMember()" (click)="saveNewMember()">
+                    @if (isSavingMember()) {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    ذخیره
+                </button>
+                <button type="button" class="btn btn-warning" data-bs-dismiss="modal"
+                    [disabled]="isSavingMember()">انصراف</button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════ File Viewer Modal ═══════════ -->
+<div class="modal fade" id="fileViewerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{{ fileName() }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                @if (fileType() === 'image') {
+                <img [src]="fileUrl()" class="img-fluid" alt="فایل پیوست">
+                }
+                @if (fileType() === 'text') {
+                <pre class="p-3 bg-light border rounded">{{ fileContent() }}</pre>
+                }
+                @if (fileType() === 'other') {
+                <p class="text-muted">فرمت فایل پشتیبانی نمی‌شود. لطفاً از دکمه دانلود استفاده کنید.</p>
+                }
+            </div>
+            <div class="modal-footer">
+                <a class="btn btn-success" [href]="downloadUrl()" download>دانلود فایل</a>
+                <button type="button" class="btn btn-warning" data-bs-dismiss="modal">بستن</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+} @else {
+<div class="p-4 text-center text-muted">در حال بارگذاری اطلاعات جلسه...</div>
+}

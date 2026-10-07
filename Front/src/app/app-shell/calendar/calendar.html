@@ -1,0 +1,177 @@
+@if(isPermitted()){
+<div class="container-fluid px-4 mt-4">
+  <div class="calendar-wrapper">
+
+    <div class="calendar-header-card">
+      <div class="header-content">
+        <div class="header-title">
+          <span>تقویم جلسات</span>
+        </div>
+        <button class="btn-add-blocked" (click)="openBlockedTimeModal()">
+          <i class="fas fa-ban me-2"></i>
+          ثبت عدم حضور
+        </button>
+      </div>
+    </div>
+
+    <div class="calendar-content-card">
+      <div class="calendar-top-bar">
+        <div class="search-box">
+          <i class="fas fa-search"></i>
+          <input type="text" class="search-input" placeholder="جستجوی تاریخ (مثلاً ۱۴۰۳/۰۱/۰۱)" data-jdp
+            [ngModel]="selectedDate()" (ngModelChange)="highlightDate($event)">
+        </div>
+
+        <div class="legend-container">
+          <div class="legend-item">
+            <span class="legend-dot meeting"></span>
+            <span>جلسات</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot blocked"></span>
+            <span>عدم حضور</span>
+          </div>
+        </div>
+      </div>
+
+      @if (isLoading()) {
+      <div class="loading-container">
+        <div class="loading-spinner"></div>
+        <span>در حال بارگذاری...</span>
+      </div>
+      }
+
+      <div class="calendar-container" [class.loading]="isLoading()">
+        <full-calendar #fullcalendar [options]="calendarOptions()"></full-calendar>
+      </div>
+
+      @if (blockedTimeCount() > 0) {
+      <div class="blocked-times-section">
+        <div class="section-header">
+          <i class="fas fa-ban"></i>
+          <span>زمان‌های عدم حضور</span>
+          <span class="count-badge">{{ blockedTimeCount() }}</span>
+        </div>
+
+        <div class="blocked-times-grid">
+          @for (bt of blockedTimes(); track bt.guid) {
+          <div class="blocked-time-card">
+            <div class="bt-card-header">
+              <span class="bt-card-date">{{ formatDateToJalali(bt.date) }}</span>
+              <div class="bt-card-actions">
+                <button class="btn-icon edit" (click)="openEditBlockedTimeModal(bt)" title="ویرایش"
+                  [disabled]="isPastBlockedDate(bt.date)">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon delete" (click)="confirmDeleteBlockedTime(bt.guid)" title="حذف">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="bt-card-body">
+              <div class="bt-time-range">
+                <i class="fas fa-clock"></i>
+                <span>{{ bt.startTime }} - {{ bt.endTime }}</span>
+              </div>
+              @if (bt.description) {
+              <div class="bt-description">{{ bt.description }}</div>
+              }
+            </div>
+          </div>
+          }
+        </div>
+      </div>
+      }
+
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="blockedTimeModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content custom-modal">
+
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-ban me-2"></i>
+          {{ isEditMode() ? 'ویرایش زمان عدم حضور' : 'ثبت زمان عدم حضور' }}
+        </h5>
+        <button type="button" class="btn-modal-close" (click)="closeBlockedTimeModal()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="info-alert">
+          <i class="fas fa-info-circle"></i>
+          <span>با ثبت زمان عدم حضور، در این بازه زمانی امکان اضافه شدن شما به جلسات وجود نخواهد داشت.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            تاریخ <span class="required">*</span>
+          </label>
+          <input type="text" class="form-input" data-jdp autocomplete="off" [ngModel]="formDate()"
+            (ngModelChange)="updateFormDate($event)" placeholder="تاریخ را انتخاب کنید">
+        </div>
+
+        @if (isPastFormDate()) {
+        <div class="warning-alert">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>امکان ثبت/ویرایش عدم حضور برای روزهای قبل از امروز وجود ندارد.</span>
+        </div>
+        }
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">
+              از ساعت <span class="required">*</span>
+            </label>
+            <input type="time" class="form-input" [ngModel]="formStartTime()"
+              (ngModelChange)="updateFormStartTime($event)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">
+              تا ساعت <span class="required">*</span>
+            </label>
+            <input type="time" class="form-input" [ngModel]="formEndTime()" (ngModelChange)="updateFormEndTime($event)">
+          </div>
+        </div>
+
+        @if (formStartTime() && formEndTime() && formStartTime() >= formEndTime()) {
+        <div class="warning-alert">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>ساعت شروع باید قبل از ساعت پایان باشد</span>
+        </div>
+        }
+
+        <div class="form-group">
+          <label class="form-label">
+            توضیحات
+          </label>
+          <textarea class="form-input form-textarea" [ngModel]="formDescription()"
+            (ngModelChange)="updateFormDescription($event)"
+            placeholder="دلیل عدم حضور را بنویسید (اختیاری)..."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" (click)="closeBlockedTimeModal()">
+          انصراف
+        </button>
+
+        <button type="button" class="btn-save" (click)="saveBlockedTime()" [disabled]="isSaving() || !canSave()">
+          @if (isSaving()) {
+          <span class="spinner-sm"></span>
+          در حال ذخیره...
+          } @else {
+          {{ isEditMode() ? 'ذخیره تغییرات' : 'ثبت' }}
+          }
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+}

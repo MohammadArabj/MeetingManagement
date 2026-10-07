@@ -1,0 +1,31 @@
+<Solution>
+  <Folder Name="/Application/">
+    <Project Path="MeetingManagement.Application.Contracts/MeetingManagement.Application.Contracts.csproj" />
+    <Project Path="MeetingManagement.Application/MeetingManagement.Application.csproj" />
+  </Folder>
+  <Folder Name="/Common/">
+    <Project Path="MeetingManagement.Common/MeetingManagement.Common.csproj" />
+  </Folder>
+  <Folder Name="/Domain/">
+    <Project Path="MeetingManagement.Domain/MeetingManagement.Domain.csproj" />
+  </Folder>
+  <Folder Name="/Front/">
+    <Project Path="Front/Front.esproj">
+      <Build />
+      <Deploy />
+    </Project>
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="MeetingManagement.Infrastructure.Acl/MeetingManagement.Infrastructure.Acl.csproj" />
+    <Project Path="MeetingManagement.Infrastructure.Configuration/MeetingManagement.Infrastructure.Configuration.csproj" />
+    <Project Path="MeetingManagement.Infrastructure.Persistence/MeetingManagement.Infrastructure.Persistence.csproj" />
+    <Project Path="MeetingManagement.Infrastructure.Query.Contracts/MeetingManagement.Infrastructure.Query.Contracts.csproj" />
+    <Project Path="MeetingManagement.Infrastructure.Query/MeetingManagement.Infrastructure.Query.csproj" />
+  </Folder>
+  <Folder Name="/Presentation/">
+    <Project Path="MeetingManagement.Presentation.Api/MeetingManagement.Presentation.Api.csproj" />
+    <Project Path="MeetingManagement.Presentation.Facade.Contracts/MeetingManagement.Presentation.Facade.Contracts.csproj" />
+    <Project Path="MeetingManagement.Presentation.Facade.Query/MeetingManagement.Presentation.Facade.Query.csproj" />
+    <Project Path="MeetingManagement.Presentation.Facade/MeetingManagement.Presentation.Facade.Command.csproj" />
+  </Folder>
+</Solution>

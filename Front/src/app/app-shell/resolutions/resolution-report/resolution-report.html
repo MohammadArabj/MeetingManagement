@@ -1,0 +1,342 @@
+<!-- ===== Tabs ===== -->
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <ul class="nav nav-pills flex-nowrap overflow-auto rounded px-3 py-2" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" [class.active]="activeTab() === 'detail'" (click)="switchTab('detail')">
+                <i class="fa fa-table me-2"></i>گزارش تفصیلی
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" [class.active]="activeTab() === 'stats'" (click)="switchTab('stats')"
+                [disabled]="!statsReport()">
+                <i class="fa fa-chart-bar me-2"></i>خلاصه آماری
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" [class.active]="activeTab() === 'summary'" (click)="switchTab('summary')">
+                <i class="fa fa-chart-pie me-2"></i>گزارش خلاصه
+            </button>
+        </li>
+    </ul>
+</div>
+
+<!-- ===== Filter Section ===== -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header text-white d-flex justify-content-between align-items-center">
+        <span><i class="fa fa-filter me-2"></i>فیلترهای جستجو</span>
+    </div>
+    <div class="card-body">
+        <form [formGroup]="reportForm" (ngSubmit)="generateReport()">
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">از تاریخ</label>
+                    <input type="text" data-jdp class="form-control" formControlName="fromDate">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">تا تاریخ</label>
+                    <input type="text" data-jdp class="form-control" formControlName="toDate">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">شماره جلسه</label>
+                    <input type="text" class="form-control" formControlName="meetingNumber">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">عنوان جلسه</label>
+                    <input type="text" class="form-control" formControlName="meetingTitle">
+                </div>
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">دسته‌بندی جلسه</label>
+                    <select class="form-select" formControlName="categoryGuid">
+                        <option value="">همه دسته‌بندی‌ها</option>
+                        @for (category of categories(); track category.guid) {
+                        <option [value]="category.guid">{{ category.title }}</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">شماره مصوبه</label>
+                    <input type="text" class="form-control" formControlName="resolutionNumber">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">عنوان مصوبه</label>
+                    <input type="text" class="form-control" formControlName="resolutionTitle">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">متن مصوبه</label>
+                    <input type="text" class="form-control" formControlName="resolutionText">
+                </div>
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">تاریخ سررسید</label>
+                    <input type="text" data-jdp class="form-control" formControlName="dueDate">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">وضعیت اقدام</label>
+                    <select class="form-select" formControlName="actionStatus" (change)="onActionStatusChange()">
+                        <option value="">همه وضعیت‌ها</option>
+                        <option [value]="ActionStatus.Pending">در انتظار اقدام</option>
+                        <option [value]="ActionStatus.InProgress">در حال انجام</option>
+                        <option [value]="ActionStatus.End">پایان یافته</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">نتیجه اقدام</label>
+                    <select class="form-select" formControlName="assignmentResult" [disabled]="!isEndStatus()">
+                        <option value="">همه نتایج</option>
+                        <option [value]="AssignmentResult.Done">انجام شده</option>
+                        <option [value]="AssignmentResult.NotDone">انجام نشده</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">اقدام کننده</label>
+                    <select class="form-select" formControlName="actorPositionGuid">
+                        <option value="">همه اقدام کنندگان</option>
+                        @for (actor of actors(); track actor.guid) {
+                        <option [value]="actor.guid">{{ actor.title }}</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="d-flex gap-2 justify-content-end mt-3">
+                <button type="submit" class="btn btn-warning" [disabled]="isLoading">
+                    @if (isLoading) {
+                    <span class="spinner-border spinner-border-sm me-1"></span>در حال تولید...
+                    } @else { تولید گزارش }
+                </button>
+                <button type="button" class="btn btn-secondary" (click)="clearFilters()" [disabled]="isLoading">
+                    حذف فیلتر
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ===== TAB: گزارش تفصیلی ===== -->
+@if (activeTab() === 'detail') {
+
+@if (detailResults().length > 0) {
+<div class="hint-bar mb-3">
+    <div class="hint-icon"><i class="fa fa-info-circle"></i></div>
+    <div class="hint-text">راهنما: با نگه داشتن نشانگر موس روی سلول‌ها، متن کامل نمایش داده می‌شود.</div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+            <i class="fas fa-table me-2"></i>نتایج گزارش تفصیلی
+            <span class="badge badge-accent ms-2">{{ detailResults().length }} مورد</span>
+        </span>
+        <div class="d-flex gap-2">
+            <button class="btn btn-secondary btn-sm" (click)="onExportExcel()">Excel</button>
+            <button class="btn btn-success btn-sm" (click)="printReport()">چاپ</button>
+            <button class="btn btn-info btn-sm" (click)="printReportWithDecisions()">چاپ با تصمیمات</button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="grid-container">
+            <ag-grid-angular #agGrid id="resolutionReportGrid" [components]="components"
+                class="ag-theme-material font-sahel modern-grid" style="height: calc(100vh - 450px); min-height: 400px;"
+                [rowData]="detailResults()" [gridOptions]="gridOptions()" [modules]="modules()"
+                (gridReady)="onGridReady($event)" (firstDataRendered)="onFirstDataRendered($event)">
+            </ag-grid-angular>
+        </div>
+    </div>
+</div>
+}
+
+@if (isDetailTabEmpty) {
+<div class="empty-state">
+    <div class="empty-icon"><i class="fa fa-search-minus"></i></div>
+    <h3>هیچ نتیجه‌ای یافت نشد</h3>
+    <p>لطفاً معیارهای جستجوی خود را تغییر دهید</p>
+    <button class="btn btn-primary mt-3" (click)="clearFilters()">
+        <i class="fa fa-redo me-1"></i>جستجوی جدید
+    </button>
+</div>
+}
+}
+
+<!-- ===== TAB: خلاصه آماری ===== -->
+@if (activeTab() === 'stats') {
+
+@if (statsReport()) {
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fa fa-chart-bar me-2"></i>خلاصه آماری نتایج</span>
+        <button class="btn btn-warning btn-sm" (click)="printStats()">
+            <i class="fa fa-print me-1"></i>چاپ آمار
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <table class="table stats-table mb-0">
+            <thead>
+                <tr>
+                    <th style="width:40%">شاخص</th>
+                    <th class="text-center" style="width:15%">تعداد</th>
+                    <th class="text-center" style="width:15%">درصد</th>
+                    <th style="width:30%">نسبت</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="stats-section-header">
+                    <td colspan="4">اطلاعات کلی</td>
+                </tr>
+                <tr>
+                    <td><span class="stats-dot dot-blue"></span>تعداد جلسات</td>
+                    <td class="text-center fw-bold">{{ statsReport()!.uniqueMeetings }}</td>
+                    <td class="text-center text-muted">—</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td><span class="stats-dot dot-gray"></span>کل مصوبات</td>
+                    <td class="text-center fw-bold">{{ statsReport()!.total }}</td>
+                    <td class="text-center">100%</td>
+                    <td>
+                        <div class="stats-bar-track">
+                            <div class="stats-bar-fill bar-gray" style="width:100%"></div>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr class="stats-section-header">
+                    <td colspan="4">وضعیت اقدام</td>
+                </tr>
+                <tr>
+                    <td><span class="stats-dot dot-orange"></span>در انتظار اقدام</td>
+                    <td class="text-center fw-bold text-warning">{{ statsReport()!.pending }}</td>
+                    <td class="text-center">{{ pct(statsReport()!.pending, statsReport()!.total) }}%</td>
+                    <td>
+                        <div class="stats-bar-track">
+                            <div class="stats-bar-fill bar-orange"
+                                [style.width]="pct(statsReport()!.pending, statsReport()!.total) + '%'"></div>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="stats-dot dot-purple"></span>در حال انجام</td>
+                    <td class="text-center fw-bold" style="color:#8b5cf6">{{ statsReport()!.inProgress }}</td>
+                    <td class="text-center">{{ pct(statsReport()!.inProgress, statsReport()!.total) }}%</td>
+                    <td>
+                        <div class="stats-bar-track">
+                            <div class="stats-bar-fill bar-purple"
+                                [style.width]="pct(statsReport()!.inProgress, statsReport()!.total) + '%'"></div>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr class="stats-section-header">
+                    <td colspan="4">پایان یافته</td>
+                </tr>
+                <tr>
+                    <td><span class="stats-dot dot-teal"></span>پایان یافته — کل</td>
+                    <td class="text-center fw-bold" style="color:#14b8a6">{{ statsReport()!.endTotal }}</td>
+                    <td class="text-center">{{ pct(statsReport()!.endTotal, statsReport()!.total) }}%</td>
+                    <td>
+                        <div class="stats-bar-track">
+                            <div class="stats-bar-fill bar-teal"
+                                [style.width]="pct(statsReport()!.endTotal, statsReport()!.total) + '%'"></div>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="stats-dot dot-green"></span>پایان یافته — انجام شده</td>
+                    <td class="text-center fw-bold text-success">{{ statsReport()!.endDone }}</td>
+                    <td class="text-center">{{ pct(statsReport()!.endDone, statsReport()!.total) }}%</td>
+                    <td>
+                        <div class="stats-bar-track">
+                            <div class="stats-bar-fill bar-green"
+                                [style.width]="pct(statsReport()!.endDone, statsReport()!.total) + '%'"></div>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td><span class="stats-dot dot-red"></span>پایان یافته — انجام نشده</td>
+                    <td class="text-center fw-bold text-danger">{{ statsReport()!.endNotDone }}</td>
+                    <td class="text-center">{{ pct(statsReport()!.endNotDone, statsReport()!.total) }}%</td>
+                    <td>
+                        <div class="stats-bar-track">
+                            <div class="stats-bar-fill bar-red"
+                                [style.width]="pct(statsReport()!.endNotDone, statsReport()!.total) + '%'"></div>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+} @else {
+<div class="empty-state">
+    <div class="empty-icon"><i class="fa fa-chart-bar"></i></div>
+    <h3>داده‌ای برای نمایش وجود ندارد</h3>
+    <p>ابتدا گزارش تفصیلی را تولید کنید</p>
+</div>
+}
+}
+
+<!-- ===== TAB: گزارش خلاصه ===== -->
+@if (activeTab() === 'summary') {
+
+@if (summaryResult()) {
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+            <i class="fa fa-chart-pie me-2"></i>گزارش خلاصه بر اساس سمت
+            <span class="badge badge-accent ms-2">{{ summaryResult()?.positionSummaries?.length || 0 }} سمت</span>
+        </span>
+        <button class="btn btn-outline-primary btn-sm" (click)="printReport()">
+            <i class="fa fa-print me-1"></i>چاپ
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>نام سمت</th>
+                        <th class="text-center">تعداد جلسات</th>
+                        <th class="text-center">تعداد مصوبات</th>
+                        <th class="text-center">در انتظار</th>
+                        <th class="text-center">در حال انجام</th>
+                        <th class="text-center">پایان یافته</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (item of summaryResult()?.positionSummaries; track item.positionGuid) {
+                    <tr>
+                        <td class="fw-bold">{{ item.positionName }}</td>
+                        <td class="text-center">{{ item.totalMeetings }}</td>
+                        <td class="text-center">{{ item.totalResolutions }}</td>
+                        <td class="text-center"><span class="badge bg-secondary">{{ item.notStartedResolutions }}</span>
+                        </td>
+                        <td class="text-center"><span class="badge bg-warning text-dark">{{ item.inProgressResolutions
+                                }}</span></td>
+                        <td class="text-center"><span class="badge bg-success">{{ item.completedResolutions }}</span>
+                        </td>
+                    </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+} @else {
+<div class="empty-state">
+    <div class="empty-icon"><i class="fa fa-chart-pie"></i></div>
+    <h3>داده‌ای برای نمایش وجود ندارد</h3>
+    <p>ابتدا گزارش را تولید کنید</p>
+</div>
+}
+}
+
+<!-- ===== Loading ===== -->
+@if (detailLoading() || summaryLoading()) {
+<div class="loading-state">
+    <div class="spinner-container">
+        <div class="spinner"></div>
+    </div>
+    <p class="loading-text">در حال تولید گزارش...</p>
+</div>
+}

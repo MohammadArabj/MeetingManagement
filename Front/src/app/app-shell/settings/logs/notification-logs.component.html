@@ -1,0 +1,88 @@
+<section class="card">
+  <div class="card-header">
+    <h5 class="mb-0">گزارش ارسال پیامک</h5>
+    <small class="text-muted">وضعیت پیام‌های ارسال‌شده، خطاها و ارسال مجدد</small>
+  </div>
+
+  <div class="card-body">
+    <div class="d-flex flex-wrap gap-2 mb-3 status-filter">
+      <button type="button" class="btn btn-sm" [class.btn-primary]="!search().status" [class.btn-outline-primary]="search().status"
+        (click)="apply({ status: null })">همه</button>
+      @for (s of statuses; track s) {
+        <button type="button" class="btn btn-sm" [class.btn-primary]="search().status === s"
+          [class.btn-outline-primary]="search().status !== s" (click)="apply({ status: s })">
+          {{ statusMeta[s].title }}
+          <span class="badge bg-light text-dark me-1">{{ page().statusCounts[s] ?? 0 }}</span>
+        </button>
+      }
+    </div>
+
+    <div class="row g-2 mb-3">
+      <div class="col-md-4">
+        <select class="form-select form-select-sm" [ngModel]="search().eventCode" (ngModelChange)="apply({ eventCode: $event })">
+          <option [ngValue]="null">همه رویدادها</option>
+          @for (e of events(); track e.code) { <option [ngValue]="e.code">{{ e.title }}</option> }
+        </select>
+      </div>
+      <div class="col-md-4">
+        <input class="form-control form-control-sm" dir="ltr" placeholder="شماره گیرنده" [ngModel]="search().receiver"
+          (keyup.enter)="apply({ receiver: $any($event.target).value })">
+      </div>
+      <div class="col-md-4 text-start">
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="load()">
+          <i class="fas fa-rotate ms-1"></i>به‌روزرسانی
+        </button>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead>
+          <tr><th>زمان</th><th>رویداد</th><th>گیرنده</th><th>متن</th><th>وضعیت</th><th></th></tr>
+        </thead>
+        <tbody>
+          @if (loading()) {
+            <tr><td colspan="6" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>
+          } @else {
+            @for (item of page().items; track item.id) {
+              <tr (click)="toggle(item.id)" role="button">
+                <td class="text-nowrap small">{{ formatDate(item.sentAt) }}</td>
+                <td class="small">{{ item.eventTitle }}</td>
+                <td dir="ltr" class="small text-end">{{ item.receiver }}</td>
+                <td class="small"><div class="text-truncate msg" [title]="item.message">{{ item.message }}</div></td>
+                <td>
+                  <span class="badge {{ statusMeta[item.status].css }}">{{ statusMeta[item.status].title }}</span>
+                  @if (item.attempts > 0) { <small class="text-muted me-1">({{ item.attempts }})</small> }
+                </td>
+                <td class="text-nowrap">
+                  @if (item.status === 'failed' || item.status === 'skipped') {
+                    <button type="button" class="btn btn-sm btn-outline-primary" (click)="resend(item); $event.stopPropagation()">ارسال مجدد</button>
+                  }
+                </td>
+              </tr>
+              @if (expandedId() === item.id) {
+                <tr class="table-light">
+                  <td colspan="6" class="small">
+                    <div class="mb-1"><strong>متن کامل:</strong> {{ item.message }}</div>
+                    @if (item.errorMessage) { <div class="text-danger"><strong>خطا:</strong> {{ item.errorMessage }}</div> }
+                  </td>
+                </tr>
+              }
+            } @empty {
+              <tr><td colspan="6" class="text-center text-muted py-4">رکوردی یافت نشد.</td></tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center">
+      <small class="text-muted">{{ page().total }} رکورد</small>
+      <div class="btn-group btn-group-sm">
+        <button type="button" class="btn btn-outline-secondary" [disabled]="search().page <= 1" (click)="apply({ page: search().page - 1 })">قبلی</button>
+        <span class="btn btn-outline-secondary disabled">{{ search().page }} / {{ totalPages() }}</span>
+        <button type="button" class="btn btn-outline-secondary" [disabled]="search().page >= totalPages()" (click)="apply({ page: search().page + 1 })">بعدی</button>
+      </div>
+    </div>
+  </div>
+</section>

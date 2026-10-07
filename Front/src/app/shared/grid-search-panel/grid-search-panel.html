@@ -1,0 +1,65 @@
+<div class="btn-group">
+  <button type="button" class="btn btn-outline-secondary waves-effect waves-light m-1" data-toggle="dropdown"
+    aria-expanded="false">
+    {{getCurrentMonthName()}} <span class="btn-label"><i class="far fa-calendar-alt"></i></span>
+  </button>
+
+  <div class="dropdown-menu" style="width: max-content; direction: rtl;">
+    <div class="row">
+
+      <div class="col-4" style="border-left: 1px solid #eee;">
+        @for (session of sessions; track session) {
+          <button class="dropdown-item" type="button" (click)="emitSearch(session.id, 2)">
+            @if (calendarType == 1) {
+              <span>{{session.name}}</span>
+            }
+            @if (calendarType == 2) {
+              <span>{{session.miladi}}</span>
+            }
+          </button>
+        }
+        <button class="dropdown-item text-primary" type="button" data-toggle="modal"
+          data-target="#select-date-modal-2"> شرط سفارشی
+        </button>
+        <button class="dropdown-item text-danger" type="button" (click)="emitSearch(0, 0)">
+          بدون
+          شرط
+        </button>
+      </div>
+
+      <div class="col-4">
+        @for (month of months; track month) {
+          @if (7 > month.id) {
+            <button class="dropdown-item" type="button" (click)="emitSearch(month.id, 1)">
+              @if (calendarType == 1) {
+                <span> {{month.name}} </span>
+              }
+              @if (calendarType == 2) {
+                <span> {{month.miladi}} </span>
+              }
+            </button>
+          }
+        }
+      </div>
+
+      <div class="col-4">
+        @for (month of months; track month) {
+          @if (13 > month.id && month.id > 6) {
+            <button class="dropdown-item" type="button"
+              (click)="emitSearch(month.id, 1)">
+              @if (calendarType == 1) {
+                <span> {{month.name}} </span>
+              }
+              @if (calendarType == 2) {
+                <span> {{month.miladi}} </span>
+              }
+            </button>
+          }
+        }
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<app-select-date [id]="2" [type]="1" (submited)="customSeachSelected($event)"></app-select-date>

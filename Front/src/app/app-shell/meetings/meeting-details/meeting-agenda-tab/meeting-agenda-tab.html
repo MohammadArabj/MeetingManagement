@@ -1,0 +1,277 @@
+<div class="col-md-12">
+    <div class="card">
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- Header -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div class="card-header">
+            <h5 class="mb-0">لیست دستورهای جلسه</h5>
+
+            @if (agendas().length !== 0) {
+            <button class="btn btn-primary btn-sm ms-2 float-end" (click)="print()">
+                <i class="fa fa-print me-1"></i>
+                چاپ
+            </button>
+            }
+
+            @if (canAddAgenda() && agendas().length > 0) {
+            <button class="btn btn-success btn-sm float-end" (click)="openAddAgendaModal()">
+                <i class="fa fa-plus me-1"></i>
+                افزودن دستور
+            </button>
+            }
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- Body -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div class="card-body" style="max-height: 560px; overflow-y: auto; background-color: #a1acb866;">
+
+            <!-- پیام خالی بودن لیست -->
+            @if (canShowEmptyMessage()) {
+            <div class="alert alert-info text-center w-100 d-flex justify-content-center align-items-center flex-column"
+                style="height: 25%; margin-top: 10px;">
+                <i class="fa fa-inbox fa-3x mb-3 text-muted"></i>
+                <strong>موردی ثبت نشده است</strong>
+                <br />
+                @if (canAddAgenda() && agendas().length === 0) {
+                <button (click)="openAddAgendaModal()" class="btn btn-success mt-3">
+                    <i class="fa fa-plus me-1"></i>
+                    افزودن دستور جلسه
+                </button>
+                }
+            </div>
+            }
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- لیست با قابلیت Drag & Drop -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            @if (canDragAgendas()) {
+            <div cdkDropList (cdkDropListDropped)="onDrop($event)" class="list-container">
+
+                @if (agendas().length > 0) {
+                <div class="alert alert-warning text-center mb-3 mt-3" role="alert">
+                    <i class="fa fa-info-circle me-2"></i>
+                    جهت تغییر ترتیب دستورات جلسه، آیتم مورد نظر را گرفته و به مکان دلخواه بکشید و رها کنید
+                </div>
+                }
+
+                @for (agenda of agendas(); let i = $index; track agenda.id) {
+                <div class="card mb-3 shadow-sm border-0 rounded-3" cdkDrag [ngClass]="{'mt-3': i === 0}">
+
+                    <!-- Card Header -->
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fa fa-grip-vertical me-2 text-muted drag-handle"></i>
+                            دستور جلسه شماره {{ i + 1 }}
+                        </h5>
+                        <div>
+                            @if (canEditOrDeleteAgenda()) {
+                            <button class="btn btn-sm btn-primary me-2" (click)="openEditModal(agenda)">
+                                <i class="fa fa-edit me-1"></i>
+                                ویرایش
+                            </button>
+                            <button class="btn btn-sm btn-danger" (click)="deleteAgenda(agenda)">
+                                <i class="fa fa-trash me-1"></i>
+                                حذف
+                            </button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Card Body -->
+                    <div class="card-body">
+                        <p class="text-justify mb-0 space-preline" style="text-align: justify; white-space: pre-line;">
+                            {{ agenda.text }}
+                        </p>
+                    </div>
+
+                    <!-- Card Footer - فایل‌ها -->
+                    <div class="card-footer bg-white">
+                        @if (getFileCount(agenda) > 0) {
+                        <button class="corner-counter-btn" (click)="openFileViewer(agenda.files)">
+                            <span class="counter-badge">{{ getFileCount(agenda) }}</span>
+                            <i class="fa fa-paperclip"></i>
+                            <span>مشاهده فایل‌ها</span>
+                        </button>
+                        } @else {
+                        <span class="text-muted">
+                            <i class="fa fa-paperclip me-1"></i>
+                            بدون پیوست
+                        </span>
+                        }
+                    </div>
+                </div>
+                }
+            </div>
+            } @else {
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- لیست بدون Drag & Drop -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="list-container">
+                @for (agenda of agendas(); let i = $index; track agenda.id) {
+                <div class="card mb-3 shadow-sm border-0 rounded-3" [ngClass]="{'mt-3': i === 0}">
+
+                    <!-- Card Header -->
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">دستور جلسه شماره {{ i + 1 }}</h5>
+                        <div>
+                            @if (canEditOrDeleteAgenda()) {
+                            <button class="btn btn-sm btn-primary me-2" (click)="openEditModal(agenda)">
+                                <i class="fa fa-edit me-1"></i>
+                                ویرایش
+                            </button>
+                            <button class="btn btn-sm btn-danger" (click)="deleteAgenda(agenda)">
+                                <i class="fa fa-trash me-1"></i>
+                                حذف
+                            </button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Card Body -->
+                    <div class="card-body">
+                        <p class="text-justify mb-0" style="text-align: justify; white-space: pre-line;">
+                            {{ agenda.text }}
+                        </p>
+                    </div>
+
+                    <!-- Card Footer - فایل‌ها -->
+                    <div class="card-footer bg-white">
+                        @if (getFileCount(agenda) > 0) {
+                        <button class="corner-counter-btn" (click)="openFileViewer(agenda.files)">
+                            <span class="counter-badge">{{ getFileCount(agenda) }}</span>
+                            <i class="fa fa-paperclip"></i>
+                            <span>مشاهده فایل‌ها</span>
+                        </button>
+                        } @else {
+                        <span class="text-muted">
+                            <i class="fa fa-paperclip me-1"></i>
+                            بدون پیوست
+                        </span>
+                        }
+                    </div>
+                </div>
+                }
+            </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- بخش چاپ (مخفی) -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="printSection" style="display: none;">
+    <div class="header-container">
+        <img src="{{ siteUrl() }}/img/MainLogo.png" alt="لوگو">
+        <div class="header-content">
+            <p>شماره جلسه: {{ meeting().number }}</p>
+            <h2>دستور جلسه</h2>
+            <p>تاریخ جلسه: {{ meeting().mtDate }}</p>
+        </div>
+    </div>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th class="text-center">ردیف</th>
+                <th>متن دستور جلسه</th>
+                <th>پیوست</th>
+            </tr>
+        </thead>
+        <tbody>
+            @for (agenda of agendas(); let i = $index; track agenda.id) {
+            <tr>
+                <td class="text-center">{{ i + 1 }}</td>
+                <td>{{ agenda.text }}</td>
+                <td>{{ getFileCount(agenda) > 0 ? 'دارد (' + getFileCount(agenda) + ' فایل)' : 'ندارد' }}</td>
+            </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- مدال افزودن/ویرایش دستور جلسه -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="addAgendaModal" tabindex="-1" aria-labelledby="addAgendaModalLabel" aria-hidden="true"
+    data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <h5 class="modal-title" id="addAgendaModalLabel">
+                    {{ isEditingAgenda() ? 'ویرایش دستور جلسه' : 'افزودن دستور جدید' }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body">
+                <form [formGroup]="agendaForm">
+                    <custom-input type="textarea" label="متن دستور جلسه" identity="text" formControlName="text"
+                        styleType="simple" [required]="true" size="col-12" rows="5">
+                    </custom-input>
+                </form>
+
+                <!-- نمایش فایل‌های انتخاب شده -->
+                @if (getEditFilesCount() > 0) {
+                <div class="mt-3 p-3 bg-light rounded">
+                    <div class="d-flex align-items-center">
+                        <i class="fa fa-check-circle text-success me-2"></i>
+                        <span>
+                            <strong>{{ getEditFilesCount() }}</strong> فایل انتخاب شده
+                        </span>
+                    </div>
+                </div>
+                }
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer d-flex justify-content-between">
+                <div>
+                    <!-- دکمه مدیریت فایل‌ها -->
+                    <button type="button" class="corner-counter-btn" (click)="openFileManagerForEdit()">
+                        <span class="counter-badge">{{ getEditFilesCount() }}</span>
+                        <i class="fa fa-cloud-upload-alt"></i>
+                        <span>{{ getEditFilesCount() > 0 ? 'مدیریت فایل‌ها' : 'بارگذاری فایل' }}</span>
+                    </button>
+                </div>
+
+                <div>
+                    <button type="button" class="btn btn-success" (click)="saveAgenda()" [disabled]="agendaForm.invalid || isSaving()">
+                        @if (isSaving()) {
+                        <i class="fa fa-spinner fa-spin me-1"></i>
+                        در حال ذخیره...
+                        } @else {
+                        ذخیره
+                        }
+                    </button>
+                    <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">
+                        انصراف
+                    </button>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- File Manager - حالت ویرایش/افزودن -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<app-file-manager-modal #fileManagerEdit modalId="fileManagerEditModal" title="مدیریت فایل‌های پیوست"
+    [folderPath]="uploadFolderPath()" [multiple]="true" [maxFiles]="10" [maxFileSizeMB]="500"
+    acceptedTypes="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar" [autoUpload]="true"
+    [disabled]="false" [canUpload]="true" [canDelete]="true" (confirmed)="onEditFilesConfirmed($event)"
+    (cancelled)="onEditFilesCancelled()">
+</app-file-manager-modal>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- File Manager - حالت فقط مشاهده -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<app-file-manager-modal #fileManagerView modalId="fileManagerViewModal" title="مشاهده فایل‌های پیوست"
+    [folderPath]="uploadFolderPath()" [multiple]="true" [maxFiles]="10" [maxFileSizeMB]="50" acceptedTypes="*"
+    [autoUpload]="false" [disabled]="true" [readOnly]="true" [canUpload]="false" [canDelete]="false"
+    (cancelled)="onViewFilesClosed()">
+</app-file-manager-modal>

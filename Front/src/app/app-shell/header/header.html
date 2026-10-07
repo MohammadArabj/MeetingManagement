@@ -1,0 +1,117 @@
+<!-- header/header.html -->
+
+<header class="top-bar" [class.impersonating]="isImpersonating()">
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- Impersonation Banner -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  @if (isImpersonating()) {
+  <div class="impersonation-banner">
+    <div class="banner-content">
+      <i class="fas fa-user-secret"></i>
+      <span>
+        در حال مشاهده به عنوان:
+        <strong>{{ impersonatedUserName() }}</strong>
+        @if (impersonatedPositionName()) {
+        <span class="position-badge">{{ impersonatedPositionName() }}</span>
+        }
+      </span>
+    </div>
+    <button class="btn-exit-impersonation" (click)="exitImpersonation()">
+      <i class="fas fa-sign-out-alt"></i>
+      <span>بازگشت به اکانت اصلی</span>
+    </button>
+  </div>
+  }
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- Main Header -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div class="top-bar-main">
+    <div class="top-bar-center">
+      <div class="chip">
+        <i class="fa fa-calendar-alt" style="margin-left: 6px;"></i>
+        <span class="fw-semibold">{{ currentDay() }}</span>
+        <span style="margin: 0 4px;">{{ currentDate() }}</span>
+        <span style="margin: 0 4px;">|</span>
+        <i class="fa fa-clock" style="margin-left: 4px;"></i>
+        <span>{{ currentTime() }}</span>
+      </div>
+    </div>
+
+    <div class="top-bar-right">
+      <!-- اعلان‌های داخل سامانه -->
+      <app-notification-bell />
+
+      <!-- سوییچ نقش/سمت -->
+      @if (hasMultipleDelegations()) {
+      <div class="role-switcher" [class.open]="isRoleSwitcherOpen()">
+        <button class="role-switcher-toggle" (click)="toggleRoleSwitcher()">
+          <div class="role-info">
+            <small>سمت فعال</small>
+            <span class="fw-semibold">{{ position() }}</span>
+          </div>
+          <i class="fa fa-chevron-down transition-icon" [class.rotate]="isRoleSwitcherOpen()"></i>
+        </button>
+
+        @if (isRoleSwitcherOpen()) {
+        <div class="role-switcher-dropdown">
+          @for (item of delegations(); track item.positionGuid) {
+          <button class="role-option" [class.active]="selectedDelegationKey() === normalizeGuid(item.positionGuid)"
+            (click)="switchAccount(item)">
+            <div class="role-option-content">
+              <div class="fw-semibold">{{ item.userName }}</div>
+              <div class="text-muted small">{{ item.position }}</div>
+            </div>
+            @if (selectedDelegation() === item.positionGuid) {
+            <i class="fa fa-check text-success"></i>
+            }
+          </button>
+          }
+        </div>
+        }
+      </div>
+      }
+
+      <!-- اطلاعات کاربر -->
+      <div class="user-pill" [class.impersonated]="isImpersonating()">
+        <div class="user-avatar-wrapper" (contextmenu)="$event.preventDefault()">
+          <div class="user-avatar-bg" [style.background-image]="'url(' + fileManagementUrl() + ')'"></div>
+          <div class="user-avatar-shield"></div>
+          @if (isImpersonating()) {
+          <div class="impersonation-indicator">
+            <i class="fas fa-user-secret"></i>
+          </div>
+          }
+        </div>
+        <div class="user-info-text">
+          <strong>{{ information().fullname }}</strong>
+          <small>
+            @if (isImpersonating()) {
+            <span class="text-warning">
+              <i class="fas fa-eye me-1"></i>
+              {{ position() }}
+            </span>
+            } @else if (isDelegate()) {
+            <span class="text-danger">تفویض شده - </span>
+            {{ position() }}
+            } @else {
+            {{ position() }}
+            }
+          </small>
+        </div>
+      </div>
+
+      <!-- دکمه‌های اقدام -->
+      <button class="btn-ghost" (click)="redirectToGrants()" title="بازگشت به سامانه‌ها">
+        <i class="fa fa-th" style="margin-left: 6px;"></i>
+        <span class="btn-text">سامانه‌ها</span>
+      </button>
+
+      <button class="btn-ghost btn-danger" (click)="logout()" title="خروج از سیستم">
+        <i class="fa fa-sign-out-alt" style="margin-left: 6px;"></i>
+        <span class="btn-text">خروج</span>
+      </button>
+    </div>
+  </div>
+</header>

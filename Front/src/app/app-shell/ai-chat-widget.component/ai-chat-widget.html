@@ -1,0 +1,92 @@
+<!-- ===============================================================
+     File: shared/ai-chat-widget/ai-chat-widget.html
+     =============================================================== -->
+
+<!-- ── Toggle FAB ────────────────────────────────────────────────────── -->
+<button class="wcw-fab" [class.wcw-fab--open]="isOpen()" (click)="toggle()" title="دستیار هوش مصنوعی"
+    aria-label="باز کردن چت دستیار">
+    @if (isOpen()) {
+    <span class="wcw-fab-icon">✕</span>
+    } @else {
+    <span class="wcw-fab-icon">✨</span>
+    }
+    <span class="wcw-fab-badge">AI</span>
+</button>
+
+<!-- ── Chat window ────────────────────────────────────────────────────── -->
+@if (isOpen()) {
+<div class="wcw-window" [class.wcw-window--minimized]="isMinimized()">
+
+    <!-- Header -->
+    <div class="wcw-header">
+        <div class="wcw-header-info">
+            <span class="wcw-header-dot"></span>
+            <span class="wcw-header-title">دستیار هوشمند</span>
+        </div>
+        <div class="wcw-header-actions">
+
+            <!-- Model switcher -->
+            <select class="wcw-model-select" [ngModel]="ollamaService.currentModel()"
+                (ngModelChange)="onModelChange($event)">
+                @for (model of ollamaService.availableModels; track model.id) {
+                <option [value]="model.id">{{ model.label }}</option>
+                }
+            </select>
+
+            @if (hasEntries() && !isStreaming()) {
+            <button class="wcw-icon-btn" title="پاک کردن مکالمه" (click)="clearHistory()">🗑</button>
+            }
+            <button class="wcw-icon-btn" [title]="isMinimized() ? 'بازگردانی' : 'کوچک کردن'" (click)="minimize()">
+                {{ isMinimized() ? '▲' : '▼' }}
+            </button>
+            <button class="wcw-icon-btn" title="بستن" (click)="close()">✕</button>
+        </div>
+    </div>
+
+    @if (!isMinimized()) {
+
+    <!-- Messages -->
+    <div class="wcw-messages">
+        @if (!hasEntries()) {
+        <div class="wcw-empty">
+            <div class="wcw-empty-icon">🤖</div>
+            <p>سلام! چطور می‌توانم کمک کنم؟</p>
+        </div>
+        }
+
+        @for (entry of entries(); track entry.id) {
+        <div class="wcw-row" [class.wcw-row--user]="entry.role === 'user'"
+            [class.wcw-row--assistant]="entry.role === 'assistant'">
+            <div class="wcw-bubble" [class.wcw-bubble--user]="entry.role === 'user'"
+                [class.wcw-bubble--assistant]="entry.role === 'assistant'">
+                {{ entry.content }}
+                @if (entry.streaming) {
+                <span class="ai-dots wcw-dots">
+                    <span></span><span></span><span></span>
+                </span>
+                }
+            </div>
+        </div>
+        }
+
+        <!-- Scroll anchor -->
+        <div #messagesEnd></div>
+    </div>
+
+    <!-- Input -->
+    <div class="wcw-input-area">
+        @if (isStreaming()) {
+        <button class="wcw-stop-btn" (click)="stopStream()">■ توقف</button>
+        }
+        <textarea [ngModel]="inputText()" (ngModelChange)="onInputChange($event)" (keydown)="onKeydown($event)"
+            [disabled]="isStreaming()" placeholder="پیام خود را بنویسید..." rows="2" class="wcw-input">
+        </textarea>
+        <button class="wcw-send-btn" [disabled]="!inputText().trim() || isStreaming()" (click)="send()">
+            ↑
+        </button>
+    </div>
+
+    }
+
+</div>
+}

@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Fle.Infrastructure.Configuration</AssemblyName>
+    <RootNamespace>Fle.Infrastructure.Configuration</RootNamespace>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Autofac" Version="9.3.4" />
+		<PackageReference Include="Autofac.Extras.DynamicProxy" Version="7.1.0" />
+		<PackageReference Include="Epc.Autofac" Version="1.2.7" />
+		<PackageReference Include="Quartz" Version="3.18.1" />
+		<PackageReference Include="Quartz.Extensions.Hosting" Version="3.18.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\MeetingManagement.Application\MeetingManagement.Application.csproj" />
+		<ProjectReference Include="..\MeetingManagement.Domain\MeetingManagement.Domain.csproj" />
+		<ProjectReference Include="..\MeetingManagement.Infrastructure.Acl\MeetingManagement.Infrastructure.Acl.csproj" />
+		<ProjectReference Include="..\MeetingManagement.Infrastructure.Persistence\MeetingManagement.Infrastructure.Persistence.csproj" />
+		<ProjectReference Include="..\MeetingManagement.Infrastructure.Query\MeetingManagement.Infrastructure.Query.csproj" />
+		<ProjectReference Include="..\MeetingManagement.Presentation.Facade.Query\MeetingManagement.Presentation.Facade.Query.csproj" />
+		<ProjectReference Include="..\MeetingManagement.Presentation.Facade\MeetingManagement.Presentation.Facade.Command.csproj" />
+	</ItemGroup>
+
+</Project>

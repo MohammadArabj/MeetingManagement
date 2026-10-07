@@ -1,0 +1,371 @@
+/* ═══════════════════════════════════════════════════════════ */
+/* فونت Sahel برای کل AG Grid */
+/* ═══════════════════════════════════════════════════════════ */
+
+.font-sahel,
+.font-sahel * {
+    font-family: 'Sahel', 'Vazir', 'Tahoma', sans-serif !important;
+}
+
+.ag-theme-material,
+.ag-theme-material * {
+    font-family: 'Sahel', 'Vazir', 'Tahoma', sans-serif !important;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Card & Header */
+/* ═══════════════════════════════════════════════════════════ */
+
+.card {
+    border-radius: 12px;
+    overflow: hidden;
+    border: none;
+    font-family: 'Sahel', sans-serif;
+}
+
+.card-header {
+    background: linear-gradient(135deg, #f8faff 0%, #e7eeff 100%);
+    border-bottom: 1px solid #e5e7eb;
+    padding: 1rem 1.25rem;
+    font-family: 'Sahel', sans-serif;
+}
+
+.card-header h5 {
+    color: #1f2937;
+    font-weight: 600;
+    font-family: 'Sahel', sans-serif;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Filter Bar */
+/* ═══════════════════════════════════════════════════════════ */
+
+.filter-bar {
+    background: #f8f9fa;
+    font-family: 'Sahel', sans-serif;
+}
+
+.filter-bar .input-group-text {
+    background: white;
+    border-right: none;
+}
+
+.filter-bar .form-control {
+    border-left: none;
+    font-family: 'Sahel', sans-serif;
+}
+
+.filter-bar .form-control::placeholder {
+    font-family: 'Sahel', sans-serif;
+}
+
+.filter-bar .form-control:focus {
+    box-shadow: none;
+    border-color: #ced4da;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Hint Bar */
+/* ═══════════════════════════════════════════════════════════ */
+
+.hint-bar {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    background: linear-gradient(135deg, #e8f4fd 0%, #d1e9fa 100%);
+    border-radius: 8px;
+    border-right: 4px solid #2196f3;
+    font-family: 'Sahel', sans-serif;
+}
+
+.hint-icon {
+    font-size: 1.2rem;
+    color: #2196f3;
+    margin-left: 10px;
+}
+
+.hint-text {
+    font-size: 0.85rem;
+    color: #1565c0;
+    font-family: 'Sahel', sans-serif;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* AG Grid Customization */
+/* ═══════════════════════════════════════════════════════════ */
+
+.modern-grid {
+    border-radius: 0 0 8px 8px;
+}
+
+.modern-grid .ag-header {
+    background: linear-gradient(135deg, #f8faff 0%, #e7eeff 100%);
+}
+
+.modern-grid .ag-header-cell {
+    font-weight: 600;
+    color: #374151;
+}
+
+.modern-grid .ag-header-cell-text {
+    font-family: 'Sahel', sans-serif !important;
+    font-weight: 600;
+}
+
+.modern-grid .ag-row {
+    transition: background-color 0.2s ease;
+}
+
+.modern-grid .ag-row:hover {
+    background-color: #f0f7ff !important;
+}
+
+.modern-grid .ag-row-selected {
+    background-color: #e3f2fd !important;
+}
+
+/* Inactive Row Style */
+.modern-grid .inactive-row {
+    background-color: #fff3cd !important;
+    opacity: 0.8;
+}
+
+.modern-grid .inactive-row:hover {
+    background-color: #ffecb5 !important;
+}
+
+/* Floating Filter */
+.modern-grid .ag-floating-filter {
+    font-family: 'Sahel', sans-serif !important;
+}
+
+.modern-grid .ag-floating-filter-input {
+    font-family: 'Sahel', sans-serif !important;
+}
+
+/* Pagination */
+.modern-grid .ag-paging-panel {
+    font-family: 'Sahel', sans-serif !important;
+    direction: rtl;
+}
+
+/* Cell */
+.modern-grid .ag-cell {
+    font-family: 'Sahel', sans-serif !important;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Avatar Styles */
+/* ═══════════════════════════════════════════════════════════ */
+
+.avatar-container {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.avatar-img {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e0e0e0;
+    transition: border-color 0.2s ease;
+}
+
+.avatar-img:hover {
+    border-color: #2196f3;
+}
+
+.avatar-placeholder {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #e0e0e0 0%, #bdbdbd 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #757575;
+    font-size: 1.2rem;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Action Buttons */
+/* ═══════════════════════════════════════════════════════════ */
+
+.action-btn {
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Empty State */
+/* ═══════════════════════════════════════════════════════════ */
+
+.empty-state-icon {
+    opacity: 0.5;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Badge Styles */
+/* ═══════════════════════════════════════════════════════════ */
+
+.badge {
+    font-weight: 500;
+    padding: 5px 10px;
+    font-family: 'Sahel', sans-serif !important;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Modal Styles */
+/* ═══════════════════════════════════════════════════════════ */
+
+.modal-content {
+    border-radius: 12px;
+    overflow: hidden;
+    font-family: 'Sahel', sans-serif;
+}
+
+.modal-header.bg-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+.modal-title {
+    font-family: 'Sahel', sans-serif;
+}
+
+.alert-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-family: 'Sahel', sans-serif;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Image Upload Section */
+/* ═══════════════════════════════════════════════════════════ */
+
+.image-upload-section {
+    text-align: center;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border: 2px dashed #dee2e6;
+}
+
+.image-upload-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.image-preview-wrapper {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    background: #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    border: 3px solid #dee2e6;
+}
+
+.image-preview-wrapper:hover {
+    border-color: #667eea;
+    transform: scale(1.02);
+}
+
+.preview-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.image-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.image-preview-wrapper:hover .image-overlay {
+    opacity: 1;
+}
+
+.image-overlay i {
+    font-size: 1.5rem;
+    margin-bottom: 5px;
+}
+
+.image-overlay span {
+    font-size: 0.85rem;
+    font-family: 'Sahel', sans-serif;
+}
+
+.upload-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #6c757d;
+}
+
+.upload-placeholder span {
+    font-size: 0.85rem;
+    font-family: 'Sahel', sans-serif;
+}
+
+.image-actions .btn {
+    font-family: 'Sahel', sans-serif;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Buttons */
+/* ═══════════════════════════════════════════════════════════ */
+
+.btn {
+    font-family: 'Sahel', sans-serif !important;
+}
+
+.modal-footer .btn {
+    min-width: 100px;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Form Controls */
+/* ═══════════════════════════════════════════════════════════ */
+
+input,
+select,
+textarea,
+button {
+    font-family: 'Sahel', sans-serif !important;
+}
+
+.form-control {
+    font-family: 'Sahel', sans-serif !important;
+}
+
+.form-label {
+    font-family: 'Sahel', sans-serif !important;
+}

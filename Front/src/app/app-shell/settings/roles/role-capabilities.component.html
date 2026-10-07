@@ -1,0 +1,104 @@
+<section class="card">
+  <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+    <div>
+      <h5 class="mb-0">نقش‌ها و دسترسی‌ها در جلسه</h5>
+      <small class="text-muted">تعیین کنید هر نقش (رئیس، دبیر، ناظر، عضو، مهمان، ...) در جلسه چه کارهایی می‌تواند انجام دهد.</small>
+    </div>
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="!dirty() || saving()" (click)="discard()">لغو تغییرات</button>
+      <button type="button" class="btn btn-primary btn-sm" [disabled]="!dirty() || saving()" (click)="save()">
+        @if (saving()) { <span class="spinner-border spinner-border-sm ms-1"></span> } ذخیره
+      </button>
+    </div>
+  </div>
+
+  <div class="card-body">
+    @if (loading()) {
+      <div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary"></div></div>
+    } @else {
+      @if (warnings().length) {
+        <div class="alert alert-warning py-2">
+          @for (w of warnings(); track w) { <div><i class="fas fa-triangle-exclamation ms-1"></i>{{ w }}</div> }
+        </div>
+      }
+
+      <div class="table-responsive matrix-wrapper">
+        <table class="table table-sm align-middle matrix">
+          <thead>
+            <tr>
+              <th class="cap-col">توانایی</th>
+              @for (role of roles(); track role.roleId; let first = $first; let last = $last) {
+                <th class="role-col">
+                  <div class="role-head">
+                    <span class="role-dot" [style.background]="role.color || '#999'"></span>
+                    <span class="fw-bold">{{ role.title }}</span>
+                    @if (!role.isActive) { <span class="badge bg-secondary">غیرفعال</span> }
+                  </div>
+                  <select class="form-select form-select-sm mt-1" [ngModel]="role.key" (ngModelChange)="setKey(role, $event)"
+                    title="کلید سیستمی (برای منطق‌هایی مثل امضای رئیس)">
+                    @for (k of keys(); track k.name) { <option [ngValue]="k.name">{{ k.title }}</option> }
+                  </select>
+                  <div class="d-flex justify-content-center gap-1 mt-1">
+                    <button type="button" class="btn btn-link btn-sm p-0" [disabled]="first" (click)="move(role, -1)" title="جلوتر"><i class="fas fa-arrow-right"></i></button>
+                    <button type="button" class="btn btn-link btn-sm p-0" (click)="resetRole(role)" title="بازنشانی به پیش‌فرض"><i class="fas fa-rotate-left"></i></button>
+                    <button type="button" class="btn btn-link btn-sm p-0" [disabled]="last" (click)="move(role, 1)" title="عقب‌تر"><i class="fas fa-arrow-left"></i></button>
+                  </div>
+                </th>
+              }
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr class="group-row"><td [attr.colspan]="roles().length + 1">ویژگی‌های نقش</td></tr>
+            <tr>
+              <td>فقط یک نفر در هر جلسه</td>
+              @for (role of roles(); track role.roleId) {
+                <td class="text-center"><input type="checkbox" class="form-check-input" [checked]="role.isUnique" (change)="setFlag(role, 'isUnique', $any($event.target).checked)"></td>
+              }
+            </tr>
+            <tr>
+              <td>عضو رسمی (صورتجلسه / حد نصاب)</td>
+              @for (role of roles(); track role.roleId) {
+                <td class="text-center"><input type="checkbox" class="form-check-input" [checked]="role.countsAsMember" (change)="setFlag(role, 'countsAsMember', $any($event.target).checked)"></td>
+              }
+            </tr>
+            <tr>
+              <td>امضای الزامی برای نهایی شدن</td>
+              @for (role of roles(); track role.roleId) {
+                <td class="text-center"><input type="checkbox" class="form-check-input" [checked]="role.requiredSigner" (change)="setFlag(role, 'requiredSigner', $any($event.target).checked)"></td>
+              }
+            </tr>
+
+            @for (group of groups(); track group.name) {
+              <tr class="group-row">
+                <td>{{ group.name }}</td>
+                @for (role of roles(); track role.roleId) {
+                  <td class="text-center">
+                    <button type="button" class="btn btn-link btn-sm p-0" (click)="toggleGroup(role, group.items)">همه/هیچ</button>
+                  </td>
+                }
+              </tr>
+              @for (cap of group.items; track cap.name) {
+                <tr>
+                  <td>{{ cap.title }}</td>
+                  @for (role of roles(); track role.roleId) {
+                    <td class="text-center">
+                      <input type="checkbox" class="form-check-input" [checked]="has(role, cap.name)" (change)="toggle(role, cap.name)"
+                        [attr.aria-label]="cap.title + ' - ' + role.title">
+                    </td>
+                  }
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="alert alert-light border small mb-0 mt-3">
+        <i class="fas fa-circle-info ms-1 text-primary"></i>
+        این تنظیمات هم در سرور (کنترل دسترسی API) و هم در رابط کاربری اعمال می‌شود. مدیر سامانه به همه امکانات دسترسی دارد.
+        برای افزودن نقش جدید از «جلسات › نقش‌ها» استفاده کنید؛ نقش جدید با کلید «سفارشی» و دسترسی مشاهده اینجا ظاهر می‌شود.
+      </div>
+    }
+  </div>
+</section>

@@ -1,0 +1,667 @@
+<div class="assignment-management-modern">
+    <!-- Header Card -->
+    <div class="header-card">
+        <div class="header-title">
+            <h4>
+                {{ assignmentData().meetingTitle }}
+                @if(assignmentData().number){
+                - مصوبه شماره: {{ assignmentData().number}}
+                }
+            </h4>
+            <button class="back-btn" (click)="goBack()">
+                <i class="fas fa-arrow-right ms-1"></i>
+                بازگشت
+            </button>
+        </div>
+
+        <!-- نمایش اطلاعات ارجاع در صورت وجود -->
+        @if(assignmentData().parentAssignmentId) {
+        <div class="alert alert-info referral-info">
+            <div>
+                <strong>این تخصیص از طریق ارجاع به شما واگذار شده است</strong>
+                <div class="referral-details">
+                    ارجاع دهنده: {{ assignmentData().referrerName }} |
+                    تاریخ ارجاع: {{ assignmentData().referralDate }}
+                    @if(assignmentData().referralNote) {
+                    <div class="referral-note">یادداشت: {{ assignmentData().referralNote }}</div>
+                    }
+                </div>
+            </div>
+            @if (canReturnReferral()) {
+            <button type="button" class="btn btn-sm btn-outline-primary me-auto" (click)="returnReferral()">
+                <i class="fas fa-reply ms-1"></i> بازگشت ارجاع به ارجاع‌دهنده
+            </button>
+            }
+        </div>
+        }
+
+        <!-- نمایش وضعیت اقدام -->
+        @if(isActionEnded() && assignmentData().resultDescription) {
+        <div class="result-card">
+            <div class="result-header">
+                <h5>
+                    نتیجه نهایی اقدام
+                </h5>
+                <span class="badge" [ngClass]="{
+                    'bg-success': assignmentData().result === '1',
+                    'bg-danger': assignmentData().result === '2'
+                }">
+                    {{ assignmentData().resultName }}
+                </span>
+            </div>
+            <div class="result-details">
+                <div class="result-item">
+                    <span>تاریخ پایان: {{ assignmentData().resultDate }}</span>
+                </div>
+                <div class="result-item">
+                    <span>{{ assignmentData().resultDescription }}</span>
+                </div>
+            </div>
+        </div>
+        }
+
+        <!-- Compact Meeting/Resolution Meta -->
+        <div class="meeting-meta-card">
+            <div class="meeting-meta-grid">
+                <div class="kv">
+                    <div class="k"> شماره جلسه</div>
+                    <div class="v">{{ assignmentData().meetingNumber || '-' }}</div>
+                </div>
+                <div class="kv">
+                    <div class="k"> تاریخ جلسه</div>
+                    <div class="v">{{ assignmentData().meetingDate || '-' }}</div>
+                </div>
+                <div class="kv">
+                    <div class="k"> زمان سررسید</div>
+                    <div class="v">{{ assignmentData().dueDate || '-' }}</div>
+                </div>
+                @if(assignmentData().isBoardMeeting){
+                <div class="kv kv-wide-12">
+                    <div class="k"> موضوع مصوبه</div>
+                    <div class="v text-truncate-2" [title]="assignmentData().title || assignmentData().resolution">
+                        {{ assignmentData().title || assignmentData().resolution || '-' }}
+                    </div>
+                </div>
+                <div class="kv kv-wide-12">
+                    <div class="k"> تصمیمات متخذه</div>
+                    <div class="v text-truncate-2" [title]="assignmentData().decisionsMade">
+                        {{ assignmentData().decisionsMade || '-' }}
+                    </div>
+                </div>
+                }
+                @else {
+                <div class="kv kv-wide-12">
+                    <div class="k"> متن مصوبه</div>
+                    <div class="v text-truncate-2" [title]="assignmentData().resolution">
+                        {{ assignmentData().resolution || '-' }}
+                    </div>
+                </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Content Card with Top Tabs -->
+    <div class="content-card">
+        <div class="compact-tabs">
+            <button class="compact-tab" [class.active]="activeTab() === 'actions'" (click)="activeTab.set('actions')">
+                <i class="fas fa-tasks"></i>
+                اقدامات و پیگیری
+            </button>
+            <button class="compact-tab" [class.active]="activeTab() === 'referrals'" (click)="setReferralTab()">
+                <i class="fas fa-share"></i>
+                ارجاعات
+                @if(assignmentData().referralsCount > 0) {
+                <span class="tab-count">{{ assignmentData().referralsCount }}</span>
+                }
+            </button>
+            <button class="compact-tab" [class.active]="activeTab() === 'tree'" (click)="setTreeTab()">
+                <i class="fas fa-sitemap"></i>
+                درخت ارجاعات
+            </button>
+        </div>
+
+        <!-- Tab Content Area -->
+        <div class="tab-content-area">
+            <!-- Actions Tab -->
+            @if (activeTab() === 'actions') {
+            @if (isLoading()) {
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+            </div>
+            } @else {
+            <!-- Action Buttons Section -->
+            <div class="action-buttons-section">
+                <div class="action-buttons">
+                    <!-- برای اقدام کننده -->
+                    @if (assignmentData().isActor) {
+                    @if (!isActionEnded()) {
+                    @if (canRegisterAction()) {
+                    <button class="btn-action-primary" (click)="openActionModal('action')">
+                        <span>ثبت اقدام جدید</span>
+                    </button>
+                    }
+                    @if (isMainActor() && actions().length > 0) {
+                    <button class="btn-action-warning" (click)="changeStatus()">
+                        <span>پایان اقدام</span>
+                    </button>
+                    }
+                    @if (assignmentData().parentAssignmentId && actions().length === 0) {
+                    <div class="info-alert">
+                        <i class="fas fa-info-circle"></i>
+                        <span>شما به عنوان اقدام کننده ارجاعی می‌توانید اقدامات خود را ثبت کنید</span>
+                    </div>
+                    }
+                    } @else {
+                    <div class="success-alert">
+                        <i class="fas fa-check-circle"></i>
+                        <span>اقدام توسط اقدام کننده اصلی پایان یافته است. امکان ثبت اقدام جدید وجود ندارد.</span>
+                    </div>
+                    }
+                    }
+
+                    <!-- برای پیگیری کننده -->
+                    @if (assignmentData().isFollower) {
+                    @if (!isActionEnded()) {
+                    <!-- <div class="warning-alert">
+                        <i class="fas fa-hourglass-half"></i>
+                        <span>در انتظار پایان اقدام توسط اقدام کننده اصلی...</span>
+                    </div> -->
+                    } @else {
+                    <!-- @if (canRegisterFollowup()) {
+
+                    } -->
+                    @if (canEndAssignment()) {
+                    <button class="btn-action-warning" (click)="changeStatus()">
+                        <i class="fas fa-check-double"></i>
+                        <span>پایان پیگیری</span>
+                    </button>
+                    }
+                    @if (assignmentData().followStatusId === 3) {
+                    <div class="success-alert">
+                        <i class="fas fa-check-circle"></i>
+                        <span>پیگیری پایان یافته است.</span>
+                    </div>
+                    }
+                    }
+                    <button class="btn-action-info" (click)="openActionModal('follow')">
+                      <i class="fas fa-eye"></i>
+                      <span>ثبت پیگیری جدید</span>
+                  </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Two Column Cards -->
+            <div class="dual-cards-container">
+                <!-- Actions Section -->
+                <div class="activity-card">
+                    <div class="activity-card-header actions-header">
+                        <div class="header-right">
+                            <h3>اقدامات انجام شده</h3>
+                        </div>
+                        <div class="header-left">
+                            <span class="count-badge">{{ actions().length }}</span>
+                            <span class="status-chip" [ngClass]="{
+                                'chip-pending': assignmentData().status === 1,
+                                'chip-progress': assignmentData().status === 2,
+                                'chip-end': assignmentData().status === 3
+                            }">
+                                {{ assignmentData().actionStatus || 'وضعیت اقدام' }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="activity-card-body">
+                        @for (action of actions(); track action.id) {
+                        <div class="activity-item">
+                            @if (!isActionEnded() && assignmentData().isActor) {
+                            <div class="activity-item-actions">
+                                <button class="icon-btn edit" (click)="editAction(action, 'action')" title="ویرایش">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="icon-btn delete" (click)="deleteAction(action.id)" title="حذف">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                            }
+                            <p class="activity-text">{{ action.description }}</p>
+                            <div class="activity-meta">
+                                <span class="meta-item">
+                                    <i class="fas fa-user-circle"></i>
+                                    {{ action.userName }}
+                                </span>
+                                <span class="meta-item">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    {{ action.date }}
+                                </span>
+                                @if(action.status) {
+                                <span class="mini-status">{{ getStatusText(action.status) }}</span>
+                                }
+                            </div>
+                        </div>
+                        } @empty {
+                        <div class="empty-state-compact">
+                            <i class="fas fa-inbox"></i>
+                            <h4>هیچ اقدامی ثبت نشده</h4>
+                            @if (canRegisterAction()) {
+                            <p>برای شروع، روی دکمه "ثبت اقدام جدید" کلیک کنید</p>
+                            }
+                        </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Followups Section -->
+                <div class="activity-card">
+                    <div class="activity-card-header followups-header">
+                        <div class="header-right">
+                            <i class="fas fa-eye"></i>
+                            <h3>پیگیری‌های انجام شده</h3>
+                        </div>
+                        <div class="header-left">
+                            <span class="count-badge info">{{ followups().length }}</span>
+                            @if(assignmentData().isFollower) {
+                            <span class="status-chip" [ngClass]="{
+                                'chip-pending': assignmentData().followStatusId === 1,
+                                'chip-progress': assignmentData().followStatusId === 2,
+                                'chip-end': assignmentData().followStatusId === 3
+                            }">
+                                {{ assignmentData().followStatusStr || 'وضعیت پیگیری' }}
+                            </span>
+                            }
+                        </div>
+                    </div>
+                    <div class="activity-card-body">
+                        @for (followup of followups(); track followup.id) {
+                        <div class="activity-item">
+                            @if (canRegisterFollowup()) {
+                            <div class="activity-item-actions">
+                                <button class="icon-btn edit" (click)="editAction(followup, 'follow')" title="ویرایش">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="icon-btn delete" (click)="deleteAction(followup.id)" title="حذف">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                            }
+                            <p class="activity-text">{{ followup.description }}</p>
+                            <div class="activity-meta">
+                                <span class="meta-item">
+                                    <i class="fas fa-user-circle"></i>
+                                    {{ followup.userName }}
+                                </span>
+                                <span class="meta-item">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    {{ followup.date }}
+                                </span>
+                                @if(followup.followStatus) {
+                                <span class="mini-status">{{ getStatusText(followup.followStatus) }}</span>
+                                }
+                            </div>
+                        </div>
+                        } @empty {
+                        <div class="empty-state-compact">
+                            <i class="fas fa-eye-slash"></i>
+                            <h4>هیچ پیگیری‌ای ثبت نشده</h4>
+                            @if (canRegisterFollowup()) {
+                            <p>برای شروع، روی دکمه "ثبت پیگیری جدید" کلیک کنید</p>
+                            } @else if (!isActionEnded()) {
+                            <p>پیگیری بعد از پایان اقدام امکان‌پذیر است</p>
+                            }
+                        </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            }
+            }
+
+            <!-- Referrals Tab -->
+            @if (activeTab() === 'referrals') {
+            @if (isLoadingReferrals()) {
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+            </div>
+            } @else {
+            <div class="tab-section-header">
+                <div class="section-title">
+                    <i class="fas fa-share-alt"></i>
+                    <h2>مدیریت ارجاعات</h2>
+                </div>
+                @if (assignmentData().canRefer && isMainActor() && !isActionEnded()) {
+                <button class="btn-action-primary" (click)="toggleReferralForm()">
+                    <i class="fas" [class.fa-plus]="!showReferralForm()" [class.fa-times]="showReferralForm()"></i>
+                    <span>{{ showReferralForm() ? 'لغو' : 'ارجاع جدید' }}</span>
+                </button>
+                }
+            </div>
+
+            @if (showReferralForm()) {
+            <div class="referral-form-card">
+                <h6 class="form-title">
+                    <i class="fas fa-plus-circle"></i>
+                    ایجاد ارجاع جدید
+                </h6>
+                <form (ngSubmit)="createReferral()">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">
+                                انتخاب کاربر <span class="required">*</span>
+                            </label>
+                            <ng-select [multiple]="false" bindLabel="userName" bindValue="uniqueKey" appendTo="body"
+                                [(ngModel)]="selectedUserUniqueKey" name="selectedUser"
+                                (change)="onReferralUserChange($event)" placeholder="انتخاب کنید" class="custom-select">
+                                @for (user of usersWithPositions(); track user.uniqueKey) {
+                                <ng-option [value]="user.uniqueKey">
+                                    <div class="user-option">
+                                        <img [src]="getUserPhotoUrl(user.personalNo)" [alt]="user.userName"
+                                            class="user-avatar" (error)="handleImageError($event)">
+                                        <div class="user-info">
+                                            <div class="user-name">{{ user.userName }}</div>
+                                            <div class="user-position">{{ user.positionTitle }}</div>
+                                        </div>
+                                    </div>
+                                </ng-option>
+                                }
+                            </ng-select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">
+                                مهلت جدید <span class="required">*</span>
+                            </label>
+                            <input type="text" class="form-control" data-jdp [(ngModel)]="newDueDate" name="newDueDate"
+                                placeholder="انتخاب تاریخ..." required>
+                        </div>
+                        <div class="form-group full-width">
+                            <label class="form-label">یادداشت ارجاع</label>
+                            <textarea class="form-control" rows="2" [(ngModel)]="referralNote" name="referralNote"
+                                placeholder="دلیل و توضیحات ارجاع را وارد کنید..."></textarea>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-action-secondary" (click)="toggleReferralForm()">
+                            انصراف
+                        </button>
+                        <button type="submit" class="btn-action-primary">
+                            <i class="fas fa-check"></i>
+                            ایجاد ارجاع
+                        </button>
+                    </div>
+                </form>
+            </div>
+            }
+            @else {
+            @if (referrals().length > 0) {
+            <div class="table-container">
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th>ردیف</th>
+                            <th>مجری</th>
+                            <th>ارجاع دهنده</th>
+                            <th>تاریخ ارجاع</th>
+                            <th>مهلت</th>
+                            <th>وضعیت اقدام</th>
+                            <th>وضعیت پیگیری</th>
+                            <th>یادداشت</th>
+                            @if(isMainActor() && !isActionEnded()) {
+                            <th>عملیات</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (referral of referrals(); track referral.id; let i = $index) {
+                        <tr>
+                            <td>{{ i + 1 }}</td>
+                            <td><strong>{{ referral.actorName }}</strong></td>
+                            <td>{{ referral.referrerName }}</td>
+                            <td>{{ referral.referralDate }}</td>
+                            <td>{{ referral.dueDate }}</td>
+                            <td>
+                                <span class="status-badge" [ngClass]="getStatusClass(referral.actionStatus)">
+                                    {{ referral.actionStatus }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="status-badge" [ngClass]="getStatusClass(referral.followStatus)">
+                                    {{ referral.followStatus }}
+                                </span>
+                            </td>
+                            <td class="text-truncate" [title]="referral.referralNote">
+                                {{ referral.referralNote }}
+                            </td>
+                            @if(isMainActor() && !isActionEnded()) {
+                            <td>
+                                <button class="icon-btn delete" (click)="deleteReferral(referral.id)" title="فراخوانی ارجاع">
+                                    <i class="fas fa-undo-alt"></i>
+                                </button>
+                            </td>
+                            }
+                        </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            } @else {
+            <div class="empty-state-large">
+                <i class="fas fa-share-alt"></i>
+                <h3>هیچ ارجاعی ایجاد نشده است</h3>
+                @if (isMainActor() && !isActionEnded()) {
+                <p>برای ایجاد اولین ارجاع، روی دکمه "ارجاع جدید" کلیک کنید.</p>
+                }
+            </div>
+            }
+            }
+
+            }
+            }
+
+            <!-- Tree Tab -->
+            @if (activeTab() === 'tree') {
+            @if (isLoadingTree()) {
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+            </div>
+            } @else {
+            <div class="tab-section-header">
+                <div class="section-title">
+                    <i class="fas fa-sitemap"></i>
+                    <h2>درخت ارجاعات</h2>
+                </div>
+                <div class="view-toggle-group">
+                    <button class="toggle-btn" [class.active]="treeViewMode() === 'list'"
+                        (click)="treeViewMode.set('list')">
+                        <i class="fas fa-list"></i>
+                        نمای درختی
+                    </button>
+                    <button class="toggle-btn" [class.active]="treeViewMode() === 'org'" (click)="setOrgChartMode()">
+                        <i class="fas fa-sitemap"></i>
+                        نمای سازمانی
+                    </button>
+                </div>
+            </div>
+
+            @if (treeViewMode() === 'list' && treeData()) {
+            <div class="tree-view-container">
+                <app-assignment-org-chart [assignmentId]="assignmentId()"></app-assignment-org-chart>
+            </div>
+            } @else if (treeViewMode() === 'org') {
+            <div class="org-chart-view-container">
+                <app-assignment-tree [assignmentId]="assignmentId()"></app-assignment-tree>
+            </div>
+            } @else {
+            <div class="empty-state-large">
+                <i class="fas fa-sitemap"></i>
+                <h3>درخت ارجاعات موجود نیست</h3>
+                <p>این تخصیص هنوز هیچ ارجاعی ندارد.</p>
+            </div>
+            }
+            }
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Action Modal (Bootstrap like addAgendaModal) -->
+<div class="modal fade" id="actionModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static"
+    data-bs-keyboard="false">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fa me-2" [ngClass]="editMode() ? 'fa-edit' : 'fa-plus'"></i>
+                    {{ modalTitle() }}
+                </h5>
+
+                <!-- اگر می‌خواهی هم dismiss شود هم cleanup انجام شود -->
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
+                    (click)="closeActionModal()"></button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body">
+                <form (ngSubmit)="saveAction()" #actionForm="ngForm">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">
+                                تاریخ <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" autocomplete="off" [(ngModel)]="actionDate"
+                                name="actionDate" data-jdp placeholder="انتخاب تاریخ..." required>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">
+                                توضیحات <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control" rows="5" [(ngModel)]="actionDescription"
+                                name="actionDescription" placeholder="توضیحات دقیق خود را وارد کنید..."
+                                required></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Modal Footer -->
+                    <div class="modal-footer d-flex justify-content-end mt-3">
+                        <button type="submit" class="btn btn-success" [disabled]="actionForm.invalid || isSaving()">
+                            @if (isSaving()) {
+                            <i class="fa fa-spinner fa-spin me-1"></i>
+                            در حال ذخیره...
+                            } @else {
+                            ذخیره
+                            }
+                        </button>
+                        <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal"
+                            (click)="closeActionModal()">
+                            انصراف
+                        </button>
+
+
+                    </div>
+
+                </form>
+            </div>
+
+        </div>
+    </div>
+</div>
+<!-- Result Modal (Bootstrap like addAgendaModal) -->
+<div class="modal fade" id="resultModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static"
+    data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fa fa-check-circle me-2"></i>
+                    ثبت نتیجه اقدام
+                </h5>
+
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
+                    (click)="closeResultModal()"></button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body">
+                <form (ngSubmit)="submitResult()" #resultForm="ngForm">
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            نتیجه اقدام <span class="text-danger">*</span>
+                        </label>
+
+                        <div class="d-flex gap-2 flex-wrap">
+                            <input type="radio" class="btn-check" name="resultStatus" id="res-done" value="done"
+                                [(ngModel)]="resultStatus" required>
+                            <label class="btn btn-outline-success" for="res-done">
+                                <i class="fa fa-check-circle me-1"></i>
+                                انجام شده
+                            </label>
+
+                            <input type="radio" class="btn-check" name="resultStatus" id="res-notdone" value="notdone"
+                                [(ngModel)]="resultStatus" required>
+                            <label class="btn btn-outline-danger" for="res-notdone">
+                                <i class="fa fa-times-circle me-1"></i>
+                                انجام نشده
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            تاریخ <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" [(ngModel)]="resultDate" name="resultDate" data-jdp
+                            autocomplete="off" placeholder="تاریخ را انتخاب کنید..." required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            توضیحات
+                            @if(resultStatus === 'notdone') {
+                            <span class="text-danger">*</span>
+                            }
+                        </label>
+                        <textarea class="form-control" rows="5" [(ngModel)]="resultDescription" name="resultDescription"
+                            placeholder="توضیحات کامل نتیجه اقدام را وارد کنید..."
+                            [required]="resultStatus === 'notdone'"></textarea>
+
+                        <small class="text-muted d-block mt-2">
+                            <i class="fa fa-info-circle me-1"></i>
+                            @if(resultStatus === 'notdone') {
+                            لطفاً دلیل انجام نشدن را توضیح دهید
+                            } @else {
+                            توضیحات تکمیلی می‌توانید وارد کنید
+                            }
+                        </small>
+                    </div>
+
+                    <!-- Modal Footer -->
+                    <div class="modal-footer d-flex justify-content-end">
+
+
+                        <button type="submit" class="btn btn-success" [disabled]="!resultStatus || !resultDate ||
+                                    (resultStatus === 'notdone' && !resultDescription.trim()) ||
+                                    isSavingResult()">
+                            @if (isSavingResult()) {
+                            <i class="fa fa-spinner fa-spin me-1"></i>
+                            در حال ثبت...
+                            } @else {
+                            ثبت نتیجه
+                            }
+                        </button>
+                        <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal"
+                            (click)="closeResultModal()">
+                            انصراف
+                        </button>
+                    </div>
+
+                </form>
+            </div>
+
+        </div>
+    </div>
+</div>

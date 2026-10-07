@@ -1,0 +1,56 @@
+/* users/user.css */
+
+.info-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(79, 70, 229, 0.05) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 8px;
+    color: #4f46e5;
+}
+
+.info-card i {
+    font-size: 1.25rem;
+    margin-top: 2px;
+}
+
+.info-card strong {
+    color: #3730a3;
+}
+
+/* User Avatar Cell */
+.user-avatar-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.user-avatar-cell img {
+    border: 2px solid #e5e7eb;
+    transition: all 0.2s ease;
+}
+
+.user-avatar-cell img:hover {
+    border-color: #6366f1;
+    transform: scale(1.1);
+}
+
+/* Grid Enhancements */
+.ag-grid-custom .ag-row.user-row:hover {
+    background-color: rgba(99, 102, 241, 0.05);
+}
+
+/* Alert Styling */
+.alert-warning {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #92400e;
+    border-radius: 8px;
+}
+
+.alert-warning i {
+    color: #d97706;
+}

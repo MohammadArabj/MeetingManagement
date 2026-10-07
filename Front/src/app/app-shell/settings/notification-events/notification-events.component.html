@@ -1,0 +1,112 @@
+<section class="card">
+  <div class="card-header d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h5 class="mb-0">رویدادهای اطلاع‌رسانی</h5>
+      <small class="text-muted">مشخص کنید هر اتفاق در سامانه از چه کانالی و برای چه کسانی اطلاع‌رسانی شود.</small>
+    </div>
+    <div class="d-flex gap-2">
+      <input class="form-control form-control-sm" style="width: 200px" placeholder="جستجوی رویداد..."
+        [ngModel]="filter()" (ngModelChange)="filter.set($event)">
+      <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">عملیات گروهی</button>
+        <ul class="dropdown-menu">
+          <li><button class="dropdown-item" (click)="setAll('inApp', true)">فعال‌سازی همه اعلان‌ها</button></li>
+          <li><button class="dropdown-item" (click)="setAll('inApp', false)">غیرفعال‌سازی همه اعلان‌ها</button></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><button class="dropdown-item" (click)="setAll('sms', true)">فعال‌سازی همه پیامک‌ها</button></li>
+          <li><button class="dropdown-item text-danger" (click)="setAll('sms', false)">غیرفعال‌سازی همه پیامک‌ها</button></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-body">
+    <div class="stats mb-3">
+      <div class="stat"><span>{{ summary().total }}</span>رویداد</div>
+      <div class="stat"><span>{{ summary().sms }}</span>با پیامک</div>
+      <div class="stat"><span>{{ summary().inApp }}</span>با اعلان</div>
+      <div class="stat" [class.text-danger]="summary().failed > 0"><span>{{ summary().failed }}</span>ارسال ناموفق (۳۰ روز)</div>
+    </div>
+
+    @if (loading()) {
+      <div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary"></div></div>
+    } @else if (events().length === 0) {
+      <div class="alert alert-warning">
+        رویدادی یافت نشد. پس از استقرار نسخه جدید سرور، رویدادها به‌صورت خودکار ساخته می‌شوند.
+      </div>
+    } @else {
+      @for (group of groups(); track group.name) {
+        <h6 class="group-title">{{ group.name }}</h6>
+        <div class="table-responsive">
+          <table class="table align-middle events-table">
+            <thead>
+              <tr>
+                <th>رویداد</th>
+                <th>گیرندگان پیش‌فرض</th>
+                <th class="text-center">پیامک</th>
+                <th class="text-center">اعلان</th>
+                <th class="text-center">همه اعضا</th>
+                <th>قالب</th>
+                <th class="text-center">۳۰ روز</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (e of group.items; track e.code) {
+                <tr [class.opacity-50]="savingCode() === e.code">
+                  <td>
+                    <div class="fw-semibold">{{ e.title }}</div>
+                    @if (e.isScheduled) { <span class="badge bg-info-subtle text-info-emphasis">زمان‌بندی‌شده</span> }
+                  </td>
+                  <td>
+                    @for (r of e.defaultRecipients; track r) { <span class="chip">{{ r }}</span> }
+                  </td>
+                  <td class="text-center">
+                    <div class="form-check form-switch d-inline-block m-0">
+                      <input class="form-check-input" type="checkbox" [checked]="e.isSmsEnabled"
+                        [disabled]="savingCode() === e.code" (change)="update(e, { isSmsEnabled: $any($event.target).checked })">
+                    </div>
+                  </td>
+                  <td class="text-center">
+                    <div class="form-check form-switch d-inline-block m-0">
+                      <input class="form-check-input" type="checkbox" [checked]="e.isNotificationEnabled"
+                        [disabled]="savingCode() === e.code" (change)="update(e, { isNotificationEnabled: $any($event.target).checked })">
+                    </div>
+                  </td>
+                  <td class="text-center">
+                    @if (e.supportsAllParticipants) {
+                      <div class="form-check form-switch d-inline-block m-0"
+                        title="خاموش = فقط رئیس و دبیر جلسه">
+                        <input class="form-check-input" type="checkbox" [checked]="e.sendToAllParticipants"
+                          [disabled]="savingCode() === e.code" (change)="update(e, { sendToAllParticipants: $any($event.target).checked })">
+                      </div>
+                    } @else { <span class="text-muted">—</span> }
+                  </td>
+                  <td style="min-width: 220px">
+                    <div class="d-flex gap-1">
+                      <select class="form-select form-select-sm" [ngModel]="e.templateId"
+                        (ngModelChange)="update(e, { templateId: +$event })" [disabled]="savingCode() === e.code">
+                        @for (t of e.templates; track t.id) { <option [ngValue]="t.id">{{ t.title }}</option> }
+                      </select>
+                      <a class="btn btn-sm btn-outline-primary" [routerLink]="['../templates']" [queryParams]="{ event: e.code }"
+                        title="ویرایش قالب‌ها"><i class="fas fa-pen"></i></a>
+                    </div>
+                    @if (e.templateContent) { <small class="text-muted d-block text-truncate preview" [title]="e.templateContent">{{ e.templateContent }}</small> }
+                  </td>
+                  <td class="text-center small">
+                    <span class="text-success">{{ e.sentLast30Days }}</span> /
+                    <span [class.text-danger]="e.failedLast30Days > 0">{{ e.failedLast30Days }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      <div class="alert alert-light border small mb-0">
+        <i class="fas fa-circle-info ms-1 text-primary"></i>
+        پیامک‌ها از طریق صف ارسال می‌شوند (تلاش مجدد خودکار و رعایت ساعات سکوت). خرابی پنل پیامک هیچ‌گاه ثبت جلسه یا مصوبه را مختل نمی‌کند.
+        پیامک همه رویدادها پس از استقرار به‌صورت پیش‌فرض خاموش است.
+      </div>
+    }
+  </div>
+</section>

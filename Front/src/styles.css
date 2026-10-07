@@ -1,0 +1,167 @@
+:root {
+    /* اگر در پروژه‌تان هدر/سایدبار z-index خیلی بالا دارد، این عدد را بزرگتر کنید */
+    --z-ng-select: 3000;
+}
+:root {
+    --ag-font-family: 'Sahel', sans-serif;
+    --ag-header-font-family: 'Sahel', sans-serif;
+    --ag-header-font-weight:700;
+    --ag-cell-font-family:'Sahel', sans-serif;
+}
+/* خود dropdown panel */
+.ng-dropdown-panel {
+    z-index: max(var(--z-ng-select), calc(var(--bs-modal-zindex, 1055) + 50)) !important;
+}
+
+/* وقتی appendTo="body" است */
+body>.ng-dropdown-panel {
+    z-index: max(var(--z-ng-select), calc(var(--bs-modal-zindex, 1055) + 50)) !important;
+}
+
+/* اگر جایی appendTo نبود، خود کنترل روی همسایه‌ها نیفتد زیرش */
+.ng-select.ng-select-opened,
+.ng-select.ng-select-focused {
+    position: relative;
+    z-index: var(--z-ng-select) !important;
+}
+
+/* FINAL: ng-select dropdown ALWAYS on top (beats inline z-index too) */
+ng-dropdown-panel.ng-dropdown-panel,
+body>ng-dropdown-panel.ng-dropdown-panel,
+.ng-dropdown-panel,
+body>.ng-dropdown-panel {
+    position: fixed !important;
+    /* مطمئن شو z-index اثر دارد */
+    z-index: 2147483647 !important;
+    /* max safe 32-bit */
+    pointer-events: auto !important;
+}
+
+.app-fly-tooltip {
+    position: fixed;
+    z-index: 999999;
+    pointer-events: none;
+    /* کلید اصلی جلوگیری از پرش */
+    transform: translateX(-50%);
+    max-width: min(520px, calc(100vw - 24px));
+    min-width: 260px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.10);
+    direction: rtl;
+    font-family: 'Sahel', Tahoma, sans-serif;
+    animation: aftIn .15s ease-out;
+}
+
+
+.aft-header {
+    padding: 10px 14px;
+    font-weight: 700;
+    font-size: 13px;
+    color: #fff;
+    background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+}
+
+
+.aft-content {
+    padding: 14px;
+    font-size: 13px;
+    line-height: 2;
+    color: #e3f2fd;
+    background: linear-gradient(135deg, #1e3a5f 0%, #0d2137 100%);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 340px;
+    overflow: hidden;
+    /* چون pointer-events:none است اسکرول معنی ندارد */
+}
+
+
+@keyframes aftIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-6px) scale(.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
+
+:root {
+    --accent: #f0bd05;
+    --accent-700: #c99d00;
+    --accent-200: #ffe59a;
+    --accent-100: #fff3c8;
+    --accent-50: #fffdf2;
+    --text: #1f2937;
+    --muted: #6b7280;
+}
+
+.fly-tooltip {
+    width: min(560px, calc(100vw - 24px));
+    border-radius: 16px;
+    overflow: hidden;
+
+    /* بدنه روشن و شیک */
+    background: linear-gradient(180deg, var(--accent-50), #ffffff);
+    border: 1px solid rgba(240, 189, 5, .55);
+
+    box-shadow:
+        0 18px 60px rgba(17, 24, 39, .18),
+        0 2px 10px rgba(17, 24, 39, .06);
+
+    direction: rtl;
+    font-family: 'Sahel', Tahoma, sans-serif;
+    pointer-events: auto;
+    backdrop-filter: blur(6px);
+}
+
+.fly-tooltip__header {
+    /* هدر با اکسنته */
+    background: linear-gradient(135deg, var(--accent), #ffd86b);
+    color: #1a1a1a;
+    padding: 10px 14px;
+    font-weight: 900;
+    border-bottom: 1px solid rgba(201, 157, 0, .25);
+}
+
+.fly-tooltip__title {
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.fly-tooltip__body {
+    padding: 12px 14px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 2;
+    white-space: pre-wrap;
+
+    max-height: 320px;
+    overflow: auto;
+
+    /* جلوگیری از اسکرول گرفتن grid */
+    overscroll-behavior: contain;
+}
+
+/* اسکرول‌بار ظریف و هماهنگ */
+.fly-tooltip__body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.fly-tooltip__body::-webkit-scrollbar-track {
+    background: rgba(17, 24, 39, .05);
+    border-radius: 10px;
+}
+
+.fly-tooltip__body::-webkit-scrollbar-thumb {
+    background: rgba(240, 189, 5, .55);
+    border-radius: 10px;
+}
+
+.fly-tooltip__body::-webkit-scrollbar-thumb:hover {
+    background: rgba(240, 189, 5, .75);
+}
+

@@ -1,0 +1,11 @@
+﻿using Epc.Application.Command;
+using System;
+
+namespace MeetingManagement.Application.Contracts.Action;
+
+public class AssignmentChangeStatusDto:ICommand
+{
+    public int Id { get; set; }
+    public Guid PositionGuid { get; set; }
+    public bool IsFollower { get; set; }
+}

@@ -1,0 +1,186 @@
+/* دکمه طلایی اصلی */
+.btn-golden {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #f0bd05 0%, #e6b200 100%);
+    border: 1px solid;
+    border-radius: 8px;
+    color: #1a1a2e;
+    font-family: 'Sahel', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-golden:hover {
+    background: linear-gradient(135deg, #e6b200 0%, #d4a400 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(240, 189, 5, 0.4);
+}
+
+.btn-golden:active {
+    transform: translateY(0);
+}
+
+.btn-golden i {
+    font-size: 16px;
+}
+
+/* دکمه outline طلایی */
+.btn-outline-golden {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: transparent;
+    border: 2px solid #f0bd05;
+    border-radius: 8px;
+    color: #f0bd05;
+    font-family: 'Sahel', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-outline-golden:hover {
+    background: #fff8e1;
+    border-color: #e6b200;
+    color: #1a1a2e;
+}
+
+/* دکمه گزارش کوچک */
+.btn-golden-sm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #f0bd05 0%, #e6b200 100%);
+    border: none;
+    border-radius: 8px;
+    color: #1a1a2e;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-golden-sm:hover {
+    background: linear-gradient(135deg, #e6b200 0%, #d4a400 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(240, 189, 5, 0.4);
+}
+
+/* ستون گزارش در جدول */
+.report-column {
+    width: 60px;
+    text-align: center;
+}
+
+/* دکمه گزارش در جدول */
+.table-report-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: rgba(240, 189, 5, 0.15);
+    border: 1px solid #f0bd05;
+    border-radius: 6px;
+    color: #f0bd05;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.table-report-btn:hover {
+    background: #f0bd05;
+    color: #1a1a2e;
+    transform: scale(1.1);
+}
+
+/* Badge اقدامات */
+.actions-count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: #fff8e1;
+    border: 1px solid #f0bd05;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1a1a2e;
+}
+
+.actions-count-badge i {
+    color: #f0bd05;
+    font-size: 11px;
+}
+
+/* Tooltip برای دکمه‌ها */
+[data-tooltip] {
+    position: relative;
+}
+
+[data-tooltip]:hover::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 12px;
+    background: #1a1a2e;
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 6px;
+    white-space: nowrap;
+    margin-bottom: 6px;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+[data-tooltip]:hover::after {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #1a1a2e;
+    margin-bottom: -6px;
+    z-index: 100;
+}
+
+.btn-purple {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    border: none;
+    color: white;
+}
+
+.btn-purple:hover {
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+}
+
+.btn-purple:focus {
+    box-shadow: 0 0 0 0.25rem rgba(139, 92, 246, 0.25);
+}
+
+.btn-outline-purple {
+    border: 1px solid #8b5cf6;
+    color: #8b5cf6;
+    background: transparent;
+}
+
+.btn-outline-purple:hover {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    border-color: #7c3aed;
+    color: white;
+}

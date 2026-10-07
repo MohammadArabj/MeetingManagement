@@ -1,0 +1,79 @@
+<section class="card settings-card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <h5 class="mb-0">{{ title() }}</h5>
+    @if (dirtyCount() > 0) {
+      <span class="badge bg-warning-subtle text-warning-emphasis">{{ dirtyCount() }} تغییر ذخیره‌نشده</span>
+    }
+  </div>
+
+  <div class="card-body">
+    @if (loading()) {
+      <div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary"></div></div>
+    } @else if (fields().length === 0) {
+      <div class="text-center text-muted py-5">تنظیمی در این بخش وجود ندارد.</div>
+    } @else {
+      @for (field of fields(); track field.setting.key; let i = $index) {
+        @if (i === 0 || fields()[i - 1].setting.category !== field.setting.category) {
+          <h6 class="section-title">{{ categoryTitle(field.setting.category) }}</h6>
+        }
+
+        <div class="setting-row" [class.dirty]="field.value !== field.original">
+          <div class="setting-label">
+            <label [for]="'s-' + field.setting.key" class="fw-semibold">{{ field.setting.displayName }}</label>
+            @if (field.setting.description) {
+              <small class="text-muted d-block">{{ field.setting.description }}</small>
+            }
+          </div>
+
+          <div class="setting-control">
+            @switch (field.setting.valueType) {
+              @case (Type.Boolean) {
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input" type="checkbox" role="switch" [id]="'s-' + field.setting.key"
+                    [checked]="field.value === 'true'" (change)="setValue(field, $any($event.target).checked)">
+                </div>
+              }
+              @case (Type.Integer) {
+                <input class="form-control" type="number" min="0" dir="ltr" [id]="'s-' + field.setting.key"
+                  [ngModel]="field.value" (ngModelChange)="setValue(field, $event)">
+              }
+              @case (Type.Time) {
+                <input class="form-control" type="time" dir="ltr" [id]="'s-' + field.setting.key"
+                  [ngModel]="field.value" (ngModelChange)="setValue(field, $event)">
+              }
+              @case (Type.Guid) {
+                @if (field.source) {
+                  <ng-select [items]="options(field)" bindLabel="title" bindValue="guid" [clearable]="true"
+                    [labelForId]="'s-' + field.setting.key" placeholder="انتخاب کنید"
+                    [ngModel]="field.value || null" (ngModelChange)="setValue(field, $event)" />
+                } @else {
+                  <input class="form-control font-monospace" dir="ltr" [id]="'s-' + field.setting.key"
+                    [ngModel]="field.value" (ngModelChange)="setValue(field, $event)">
+                }
+              }
+              @default {
+                <input class="form-control" [id]="'s-' + field.setting.key"
+                  [attr.dir]="field.setting.keyName.endsWith('Url') || field.setting.keyName.endsWith('Extensions') ? 'ltr' : null"
+                  [ngModel]="field.value" (ngModelChange)="setValue(field, $event)">
+              }
+            }
+            @if (validate(field); as error) {
+              <small class="text-danger">{{ error }}</small>
+            }
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+  <div class="card-footer d-flex gap-2 justify-content-end">
+    <button type="button" class="btn btn-outline-secondary" (click)="reset()" [disabled]="dirtyCount() === 0 || saving()">
+      بازنشانی
+    </button>
+    <button type="button" class="btn btn-primary" (click)="save()"
+      [disabled]="dirtyCount() === 0 || saving() || invalidKeys().size > 0">
+      @if (saving()) { <span class="spinner-border spinner-border-sm ms-1"></span> }
+      ذخیره تغییرات
+    </button>
+  </div>
+</section>

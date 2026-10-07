@@ -1,0 +1,96 @@
+<section class="card">
+  <div class="card-header">
+    <h5 class="mb-0">قالب پیام‌ها</h5>
+    <small class="text-muted">متن پیامک و اعلان هر رویداد را با متغیرهای پویا تنظیم کنید.</small>
+  </div>
+
+  @if (loading()) {
+    <div class="card-body d-flex justify-content-center py-5"><div class="spinner-border text-primary"></div></div>
+  } @else {
+    <div class="card-body templates-layout">
+      <!-- رویدادها -->
+      <aside class="events-list">
+        @for (e of events(); track e.code) {
+          <button type="button" class="event-item" [class.active]="e.code === selectedCode()" (click)="selectEvent(e.code)">
+            <span>{{ e.title }}</span>
+            <small class="text-muted">{{ e.templates.length }} قالب</small>
+          </button>
+        }
+      </aside>
+
+      <!-- ویرایشگر -->
+      <div class="editor-pane">
+        @if (selectedEvent(); as ev) {
+          <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+            @for (t of templates(); track t.id) {
+              <div class="btn-group btn-group-sm">
+                <button type="button" class="btn" [class.btn-primary]="draft().id === t.id"
+                  [class.btn-outline-primary]="draft().id !== t.id" (click)="edit(t)">
+                  @if (ev.templateId === t.id) { <i class="fas fa-check-circle ms-1"></i> }
+                  {{ t.title }}
+                </button>
+                @if (!t.inUse) {
+                  <button type="button" class="btn btn-outline-danger" title="حذف" (click)="remove(t)"><i class="fas fa-trash"></i></button>
+                }
+              </div>
+            }
+            <button type="button" class="btn btn-sm btn-outline-success" (click)="newTemplate()">
+              <i class="fas fa-plus ms-1"></i>قالب جدید
+            </button>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="tpl-title">عنوان قالب</label>
+            <input id="tpl-title" class="form-control" [ngModel]="draft().title" (ngModelChange)="setTitle($event)">
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label fw-semibold" for="tpl-content">متن پیام</label>
+            <textarea #editor id="tpl-content" class="form-control" rows="5" [ngModel]="draft().content"
+              (ngModelChange)="setContent($event)"></textarea>
+          </div>
+
+          <div class="placeholders mb-3">
+            <small class="text-muted ms-2">درج متغیر:</small>
+            @for (p of placeholders(); track p.key) {
+              <button type="button" class="chip-btn" (click)="insert(p.key)" [title]="'{' + p.key + '}'">{{ p.title }}</button>
+            }
+          </div>
+
+          <div class="preview-box">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <strong><i class="fas fa-eye ms-1"></i>پیش‌نمایش (با داده نمونه)</strong>
+              @if (preview(); as p) {
+                <small>
+                  {{ p.length }} کاراکتر —
+                  <span [class]="partsClass()">{{ p.smsParts }} بخش پیامک</span>
+                </small>
+              }
+            </div>
+            @if (preview(); as p) {
+              <div class="sms-bubble">{{ p.rendered || '—' }}</div>
+              @if (p.unknownPlaceholders.length) {
+                <div class="text-danger small mt-2">
+                  متغیرهای ناشناخته: {{ p.unknownPlaceholders.join('، ') }}
+                </div>
+              }
+            } @else {
+              <div class="text-muted small">متن را وارد کنید...</div>
+            }
+          </div>
+
+          <div class="d-flex gap-2 justify-content-end mt-3">
+            <button type="button" class="btn btn-outline-primary" [disabled]="!canSave() || saving()" (click)="save(false)">ذخیره</button>
+            <button type="button" class="btn btn-primary" [disabled]="!canSave() || saving()" (click)="save(true)">
+              @if (saving()) { <span class="spinner-border spinner-border-sm ms-1"></span> }
+              ذخیره و استفاده برای این رویداد
+            </button>
+          </div>
+          @if (isActive()) { <small class="text-success d-block text-start mt-1">این قالب هم‌اکنون برای رویداد استفاده می‌شود.</small> }
+        } @else {
+          <div class="text-muted text-center py-5">رویدادی انتخاب نشده است.</div>
+        }
+      </div>
+    </div>
+  }
+</section>

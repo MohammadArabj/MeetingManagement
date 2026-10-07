@@ -1,0 +1,373 @@
+<div class="followup-container">
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- Header -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div class="followup-header">
+        <div class="header-title">
+            <i class="fas fa-tasks"></i>
+            <h5>پیگیری مصوبات</h5>
+        </div>
+        <div class="header-actions">
+            <!-- <button class="btn btn-sm btn-outline-secondary" (click)="refreshData()" [disabled]="loading()"
+                title="به‌روزرسانی">
+                <i class="fas fa-sync-alt" [class.fa-spin]="loading()"></i>
+            </button> -->
+            <button class="btn btn-sm btn-success" (click)="exportToExcel()"
+                [disabled]="loading() || !hasData()" title="خروجی Excel">
+            Excel
+            </button>
+            <button class="btn btn-sm btn-secondary" (click)="printReport()" [disabled]="loading() || !hasData()"
+                title="چاپ">
+            چاپ
+            </button>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- Statistics Cards -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    @if (!loading() && hasData()) {
+    <div class="stats-container">
+        <div class="stat-card total">
+            <div class="stat-icon">
+                <i class="fas fa-clipboard-list"></i>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value">{{ statistics().totalAssignments }}</div>
+                <div class="stat-label">کل تخصیص‌ها</div>
+            </div>
+        </div>
+
+        <div class="stat-card completed" (click)="onStatusFilterChange('completed')">
+            <div class="stat-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value">{{ statistics().completed }}</div>
+                <div class="stat-label">پایان یافته</div>
+            </div>
+            <div class="stat-progress">
+                <div class="progress-bar" [style.width.%]="statistics().completionRate"></div>
+            </div>
+        </div>
+
+        <div class="stat-card in-progress" (click)="onStatusFilterChange('inProgress')">
+            <div class="stat-icon">
+                <i class="fas fa-spinner"></i>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value">{{ statistics().inProgress }}</div>
+                <div class="stat-label">در حال انجام</div>
+            </div>
+        </div>
+
+        <div class="stat-card pending" (click)="onStatusFilterChange('pending')">
+            <div class="stat-icon">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value">{{ statistics().pending }}</div>
+                <div class="stat-label">در انتظار اقدام</div>
+            </div>
+        </div>
+
+        <div class="stat-card overdue" (click)="onStatusFilterChange('overdue')">
+            <div class="stat-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value">{{ statistics().overdue }}</div>
+                <div class="stat-label">دیرکرد</div>
+            </div>
+        </div>
+    </div>
+    }
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- Filters -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    @if (!loading() && hasData()) {
+    <div class="filters-container">
+        <div class="filter-group">
+            <label>وضعیت:</label>
+            <select class="form-select form-select-sm" [ngModel]="statusFilter()"
+                (ngModelChange)="onStatusFilterChange($event)">
+                <option value="all">همه</option>
+                <option value="completed">پایان یافته</option>
+                <option value="inProgress">در حال انجام</option>
+                <option value="pending">در انتظار اقدام</option>
+                <option value="overdue">دیرکرد</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label>اقدام‌کننده:</label>
+            <select class="form-select form-select-sm" [ngModel]="actorFilter()"
+                (ngModelChange)="onActorFilterChange($event)">
+                <option value="all">همه</option>
+                @for (actor of uniqueActors(); track actor) {
+                <option [value]="actor">{{ actor }}</option>
+                }
+            </select>
+        </div>
+
+        <div class="filter-group search-group">
+            <label>جستجو:</label>
+            <div class="search-input-wrapper">
+                <i class="fas fa-search"></i>
+                <input type="text" class="form-control form-control-sm" placeholder="جستجو در مصوبات و اقدامات..."
+                    [ngModel]="searchText()" (ngModelChange)="onSearchChange($event)">
+                @if (searchText()) {
+                <button class="clear-search" (click)="onSearchChange('')">
+                    <i class="fas fa-times"></i>
+                </button>
+                }
+            </div>
+        </div>
+
+        @if (hasActiveFilters()) {
+        <button class="btn btn-sm btn-outline-danger clear-filters-btn" (click)="clearFilters()">
+            <i class="fas fa-filter-circle-xmark"></i>
+            پاک کردن فیلترها
+        </button>
+        }
+
+        <div class="filter-actions">
+            <button class="btn btn-sm btn-outline-secondary" (click)="expandAll()" title="باز کردن همه">
+                <i class="fas fa-expand-alt"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" (click)="collapseAll()" title="بستن همه">
+                <i class="fas fa-compress-alt"></i>
+            </button>
+        </div>
+    </div>
+    }
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- Content -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div class="followup-content">
+
+        <!-- Loading State -->
+        @if (loading()) {
+        <div class="loading-state">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">در حال بارگذاری...</span>
+            </div>
+            <p>در حال بارگذاری گزارش پیگیری...</p>
+        </div>
+        }
+
+        <!-- Error State -->
+        @else if (error()) {
+        <div class="error-state">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p>{{ error() }}</p>
+            <button class="btn btn-primary" (click)="refreshData()">
+                <i class="fas fa-redo me-2"></i>
+                تلاش مجدد
+            </button>
+        </div>
+        }
+
+        <!-- Empty State -->
+        @else if (!hasData()) {
+        <div class="empty-state">
+            <i class="fas fa-clipboard-check"></i>
+            <h5>هیچ مصوبه‌ای یافت نشد</h5>
+            <p>با فیلترهای انتخاب شده هیچ نتیجه‌ای وجود ندارد</p>
+            @if (hasActiveFilters()) {
+            <button class="btn btn-outline-primary" (click)="clearFilters()">
+                پاک کردن فیلترها
+            </button>
+            }
+        </div>
+        }
+
+        <!-- Resolutions List -->
+        @else {
+        <div class="resolutions-list">
+            @for (resolution of filteredResolutions(); track trackByResolution($index, resolution); let i = $index) {
+            <div class="resolution-card">
+
+                <!-- Resolution Header -->
+                <div class="resolution-header" (click)="toggleResolution(resolution.resolutionId)">
+                    <div class="resolution-info">
+                        <span class="resolution-number">{{ resolution.resolutionNumber || (i + 1) }}</span>
+                        <span class="resolution-title">{{ resolution.resolutionTitle || 'مصوبه' }}</span>
+                    </div>
+                    <div class="resolution-meta">
+                        <span class="badge bg-secondary">{{ resolution.assignments.length }} تخصیص</span>
+                        <i class="fas toggle-icon"
+                            [class.fa-chevron-down]="!isResolutionExpanded(resolution.resolutionId)"
+                            [class.fa-chevron-up]="isResolutionExpanded(resolution.resolutionId)">
+                        </i>
+                    </div>
+                </div>
+
+                <!-- Resolution Content -->
+                @if (isResolutionExpanded(resolution.resolutionId)) {
+                <div class="resolution-content">
+
+                    <!-- Resolution Text -->
+                    @if (resolution.resolutionText) {
+                    <div class="content-section">
+                        <div class="section-header">
+                            <i class="fas fa-file-alt"></i>
+                            <span>متن مصوبه</span>
+                        </div>
+                        <div class="section-body" [innerHTML]="resolution.resolutionText"></div>
+                    </div>
+                    }
+
+                    <!-- Decisions Made -->
+                    @if (resolution.decisionsMade) {
+                    <div class="content-section">
+                        <div class="section-header">
+                            <i class="fas fa-gavel"></i>
+                            <span>تصمیمات متخذه</span>
+                        </div>
+                        <div class="section-body" [innerHTML]="resolution.decisionsMade"></div>
+                    </div>
+                    }
+
+                    <!-- Assignments -->
+                    <div class="assignments-section">
+                        @if (resolution.assignments.length === 0) {
+                        <div class="no-assignments">
+                            <i class="fas fa-info-circle"></i>
+                            <span>هیچ تخصیصی تعریف نشده است</span>
+                        </div>
+                        } @else {
+                        @for (assignment of resolution.assignments; track trackByAssignment($index, assignment)) {
+                        <div class="assignment-card" [class.overdue]="assignment.isOverdue">
+
+                            <!-- Assignment Header -->
+                            <div class="assignment-header" (click)="toggleAssignment(assignment.assignmentId)">
+                                <div class="assignment-info">
+                                    <div class="info-row">
+                                        <div class="info-item">
+                                            <i class="fas fa-user"></i>
+                                            <span class="label">اقدام‌کننده:</span>
+                                            <span class="value">{{ assignment.actorName }}</span>
+                                        </div>
+                                        <div class="info-item">
+                                            <i class="fas fa-user-check"></i>
+                                            <span class="label">پیگیری:</span>
+                                            <span class="value">{{ assignment.followerName }}</span>
+                                        </div>
+                                        <div class="info-item">
+                                            <i class="fas fa-tag"></i>
+                                            <span class="label">نوع:</span>
+                                            <span class="value">{{ assignment.type }}</span>
+                                        </div>
+                                        <div class="info-item" [class.overdue-date]="assignment.isOverdue">
+                                            <i class="fas fa-calendar-alt"></i>
+                                            <span class="label">سررسید:</span>
+                                            <span class="value">{{ assignment.dueDate }}</span>
+                                            @if (assignment.isOverdue) {
+                                            <span class="overdue-badge">
+                                                <i class="fas fa-exclamation-triangle"></i>
+                                                دیرکرد
+                                            </span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="assignment-status">
+                                    <span class="status-badge" [class]="getActionStatusClass(assignment.actionStatus)">
+                                        <i class="fas" [class]="getActionStatusIcon(assignment.actionStatus)"></i>
+                                        {{ getActionStatusText(assignment.actionStatus) }}
+                                    </span>
+                                    @if (assignment.actionStatus === ActionStatus.End && assignment.result) {
+                                    <span class="result-badge" [class]="getResultClass(assignment.result)">
+                                        {{ getResultText(assignment.result) }}
+                                    </span>
+                                    }
+                                    <span class="actions-count">
+                                        <i class="fas fa-list-ol"></i>
+                                        {{ assignment.totalActions }} اقدام
+                                    </span>
+                                    <i class="fas toggle-icon"
+                                        [class.fa-angle-down]="!isAssignmentExpanded(assignment.assignmentId)"
+                                        [class.fa-angle-up]="isAssignmentExpanded(assignment.assignmentId)">
+                                    </i>
+                                </div>
+                            </div>
+
+                            <!-- Actions List -->
+                            @if (isAssignmentExpanded(assignment.assignmentId)) {
+                            <div class="actions-list">
+                                @if (assignment.actions && assignment.actions.length > 0) {
+                                <table class="actions-table">
+                                    <thead>
+                                        <tr>
+                                            <th width="5%">ردیف</th>
+                                            <th width="12%">تاریخ</th>
+                                            <th>شرح اقدام</th>
+                                            <!-- <th width="12%">وضعیت</th> -->
+                                            <!-- <th width="10%">نتیجه</th> -->
+                                            <th width="12%">ثبت‌کننده</th>
+                                            <!-- <th width="7%">پیوست</th> -->
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (action of assignment.actions; track trackByAction($index, action); let j =
+                                        $index) {
+                                        <tr>
+                                            <td>{{ j + 1 }}</td>
+                                            <td>{{ action.actionDate || '-' }}</td>
+                                            <td class="action-text">{{ action.actionText || '-' }}</td>
+                                            <!-- <td>
+                                                <span class="status-badge small"
+                                                    [class]="getActionStatusClass(action.actionStatus)">
+                                                    {{ getActionStatusText(action.actionStatus) }}
+                                                </span>
+                                            </td> -->
+                                            <!-- <td>
+                                                @if (action.actionStatus === ActionStatus.End) {
+                                                <span class="result-badge small"
+                                                    [class]="getResultClass(action.result)">
+                                                    {{ getResultText(action.result) }}
+                                                </span>
+                                                } @else {
+                                                -
+                                                }
+                                            </td> -->
+                                            <td>{{ action.createdBy || '-' }}</td>
+                                            <!-- <td>
+                                                @if (action.attachmentsCount > 0) {
+                                                <span class="badge bg-info">
+                                                    <i class="fas fa-paperclip"></i>
+                                                    {{ action.attachmentsCount }}
+                                                </span>
+                                                } @else {
+                                                -
+                                                }
+                                            </td> -->
+                                        </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                                } @else {
+                                <div class="no-actions">
+                                    <i class="fas fa-inbox"></i>
+                                    <span>هیچ اقدامی ثبت نشده است</span>
+                                </div>
+                                }
+                            </div>
+                            }
+                        </div>
+                        }
+                        }
+                    </div>
+                </div>
+                }
+            </div>
+            }
+        </div>
+        }
+    </div>
+</div>

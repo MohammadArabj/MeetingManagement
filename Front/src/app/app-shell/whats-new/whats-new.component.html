@@ -1,0 +1,205 @@
+<!-- ═══════════════════════════════════════════════════════════════════════════════
+     What's New Modal - نسخه 3
+     ═══════════════════════════════════════════════════════════════════════════════ -->
+
+@if (isVisible()) {
+<div class="whats-new-overlay" @fadeIn (click)="close()">
+  <div class="whats-new-modal" @slideIn (click)="$event.stopPropagation()">
+
+    <!-- Header -->
+    <div class="modal-header">
+      <div class="header-content">
+        <div class="version-badge">
+          <i class="fa fa-rocket"></i>
+          <span>نسخه {{ releaseNotes.version }}</span>
+        </div>
+        <h1 class="modal-title">
+          <span class="title-icon">✨</span>
+         راهنما
+        </h1>
+        <p class="modal-subtitle">{{ releaseNotes.title }}</p>
+      </div>
+      <button class="close-btn" (click)="close()" title="بستن">
+        <i class="fa fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Category Tabs -->
+    <div class="category-tabs">
+      <button class="tab-btn" [class.active]="activeCategory() === 'all'" (click)="setCategory('all')">
+        <i class="fa fa-th-large"></i>
+        <span>همه</span>
+        <span class="count">{{ categoryCounts().all }}</span>
+      </button>
+      <button class="tab-btn tab-new" [class.active]="activeCategory() === 'new'" (click)="setCategory('new')">
+        <i class="fa fa-star"></i>
+        <span>جدید</span>
+        <span class="count">{{ categoryCounts().new }}</span>
+      </button>
+      <button class="tab-btn tab-improved" [class.active]="activeCategory() === 'improved'"
+        (click)="setCategory('improved')">
+        <i class="fa fa-arrow-up"></i>
+        <span>بهبود</span>
+        <span class="count">{{ categoryCounts().improved }}</span>
+      </button>
+      <button class="tab-btn tab-fixed" [class.active]="activeCategory() === 'fixed'" (click)="setCategory('fixed')">
+        <i class="fa fa-wrench"></i>
+        <span>رفع اشکال</span>
+        <span class="count">{{ categoryCounts().fixed }}</span>
+      </button>
+    </div>
+
+    <!-- Features List -->
+    <div class="features-container">
+
+      @if (activeCategory() === 'all') {
+
+      <!-- بخش ویژگی‌های جدید -->
+      <div class="section-header new">
+        <i class="fa fa-star"></i>
+        <span>ویژگی‌های جدید</span>
+        <span class="section-count">{{ categoryCounts().new }}</span>
+      </div>
+      @for (feature of getFeaturesByCategory('new'); track feature.id) {
+      <div class="feature-item" (click)="toggleFeature(feature.id)">
+        <div class="feature-icon new">
+          <i [class]="feature.icon"></i>
+        </div>
+        <div class="feature-content">
+          <div class="feature-title">{{ feature.title }}</div>
+          <div class="feature-desc">{{ feature.description }}</div>
+        </div>
+        <i class="fa fa-chevron-left feature-arrow"></i>
+      </div>
+      }
+
+      <!-- بخش بهبودها -->
+      <div class="section-header improved">
+        <i class="fa fa-arrow-up"></i>
+        <span>بهبودها</span>
+        <span class="section-count">{{ categoryCounts().improved }}</span>
+      </div>
+      @for (feature of getFeaturesByCategory('improved'); track feature.id) {
+      <div class="feature-item" (click)="toggleFeature(feature.id)">
+        <div class="feature-icon improved">
+          <i [class]="feature.icon"></i>
+        </div>
+        <div class="feature-content">
+          <div class="feature-title">{{ feature.title }}</div>
+          <div class="feature-desc">{{ feature.description }}</div>
+        </div>
+        <i class="fa fa-chevron-left feature-arrow"></i>
+      </div>
+      }
+
+      <!-- بخش رفع اشکالات -->
+      <div class="section-header fixed">
+        <i class="fa fa-wrench"></i>
+        <span>رفع اشکالات</span>
+        <span class="section-count">{{ categoryCounts().fixed }}</span>
+      </div>
+      @for (feature of getFeaturesByCategory('fixed'); track feature.id) {
+      <div class="feature-item" (click)="toggleFeature(feature.id)">
+        <div class="feature-icon fixed">
+          <i [class]="feature.icon"></i>
+        </div>
+        <div class="feature-content">
+          <div class="feature-title">{{ feature.title }}</div>
+          <div class="feature-desc">{{ feature.description }}</div>
+        </div>
+        <i class="fa fa-chevron-left feature-arrow"></i>
+      </div>
+      }
+
+      } @else {
+
+      <!-- نمایش فیلتر شده -->
+      @for (feature of filteredFeatures(); track feature.id) {
+      <div class="feature-card" [class.expanded]="isExpanded(feature.id)">
+        <div class="feature-header" (click)="toggleFeature(feature.id)">
+          <div class="feature-icon" [ngClass]="feature.category">
+            <i [class]="feature.icon"></i>
+          </div>
+          <div class="feature-info">
+            <h3 class="feature-title">{{ feature.title }}</h3>
+            <p class="feature-description">{{ feature.description }}</p>
+          </div>
+          <button class="expand-btn" type="button">
+            <i class="fa" [class.fa-chevron-down]="!isExpanded(feature.id)"
+              [class.fa-chevron-up]="isExpanded(feature.id)"></i>
+          </button>
+        </div>
+
+        @if (isExpanded(feature.id)) {
+        <div class="feature-details">
+          <ul class="details-list">
+            @for (detail of feature.details; track $index) {
+            <li>
+              <i class="fa fa-check-circle"></i>
+              <span>{{ detail }}</span>
+            </li>
+            }
+          </ul>
+          <div class="feature-date">
+            <i class="fa fa-calendar"></i>
+            <span>{{ feature.date }}</span>
+          </div>
+        </div>
+        }
+      </div>
+      }
+
+      }
+
+    </div>
+
+    <!-- Footer -->
+    <div class="modal-footer">
+      <div class="footer-info">
+        <i class="fa fa-info-circle"></i>
+        <span>برای جزئیات بیشتر، روی هر مورد کلیک کنید</span>
+      </div>
+      <button class="start-btn" (click)="close()">
+        <span>متوجه شدم</span>
+        <i class="fa fa-check"></i>
+      </button>
+    </div>
+
+  </div>
+</div>
+}
+
+<!-- مودال جزئیات -->
+@if (selectedFeature()) {
+<div class="detail-overlay" @fadeIn (click)="closeDetail()">
+  <div class="detail-modal" @slideIn (click)="$event.stopPropagation()">
+    <div class="detail-header" [ngClass]="selectedFeature()!.category">
+      <div class="detail-icon">
+        <i [class]="selectedFeature()!.icon"></i>
+      </div>
+      <div class="detail-title-wrap">
+        <span class="detail-badge">{{ getCategoryLabel(selectedFeature()!.category) }}</span>
+        <h2 class="detail-title">{{ selectedFeature()!.title }}</h2>
+      </div>
+      <button class="detail-close" (click)="closeDetail()">
+        <i class="fa fa-times"></i>
+      </button>
+    </div>
+    <div class="detail-body">
+      <p class="detail-desc">{{ selectedFeature()!.description }}</p>
+      <ul class="detail-list">
+        @for (detail of selectedFeature()!.details; track $index) {
+        <li>
+          <i class="fa fa-check"></i>
+          <span>{{ detail }}</span>
+        </li>
+        }
+      </ul>
+      <div class="detail-date">
+        <i class="fa fa-calendar"></i>
+        {{ selectedFeature()!.date }}
+      </div>
+    </div>
+  </div>
+</div>
+}

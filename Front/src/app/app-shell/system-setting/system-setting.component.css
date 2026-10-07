@@ -1,0 +1,147 @@
+/* ═══════════════════════════════════════════════════════════ */
+/* General Styles */
+/* ═══════════════════════════════════════════════════════════ */
+
+.font-monospace {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Hint Bar */
+/* ═══════════════════════════════════════════════════════════ */
+
+.hint-bar {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    background: linear-gradient(135deg, #e8f4fd 0%, #d1e9fa 100%);
+    border-radius: 8px;
+    border-right: 4px solid #2196f3;
+}
+
+.hint-icon {
+    font-size: 1.2rem;
+    color: #2196f3;
+    margin-left: 10px;
+}
+
+.hint-text {
+    font-size: 0.85rem;
+    color: #1565c0;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Modal Styles */
+/* ═══════════════════════════════════════════════════════════ */
+
+.modal-header.bg-primary {
+    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+}
+
+.modal-content {
+
+    border: none;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Alert Light */
+/* ═══════════════════════════════════════════════════════════ */
+
+.alert-light.border {
+    background: #f8f9fa;
+    border-color: #e9ecef !important;
+    border-radius: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Form Switch */
+/* ═══════════════════════════════════════════════════════════ */
+
+.form-switch .form-check-input {
+    width: 3em;
+    height: 1.5em;
+}
+
+.form-switch .form-check-input:checked {
+    background-color: #10b981;
+    border-color: #10b981;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Grid Styles */
+/* ═══════════════════════════════════════════════════════════ */
+
+.modern-grid {
+    border-radius: 0 0 8px 8px;
+}
+
+.modern-grid .ag-header {
+    background: linear-gradient(135deg, #f8faff 0%, #e7eeff 100%);
+}
+
+.modern-grid .ag-row {
+    transition: background-color 0.2s ease;
+}
+
+.modern-grid .ag-row:hover {
+    background-color: #f0f7ff !important;
+}
+
+.modern-grid .ag-row-selected {
+    background-color: #e3f2fd !important;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Buttons */
+/* ═══════════════════════════════════════════════════════════ */
+
+.btn-outline-primary.edit-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 6px;
+}
+
+.btn-outline-primary.edit-btn:hover {
+    background: #4f46e5;
+    color: white;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Badge Styles */
+/* ═══════════════════════════════════════════════════════════ */
+
+.badge {
+    font-weight: 500;
+    padding: 4px 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Card Header */
+/* ═══════════════════════════════════════════════════════════ */
+
+.card-header {
+    background: linear-gradient(135deg, #f8faff 0%, #e7eeff 100%);
+    border-bottom: 1px solid #e5e7eb;
+    padding: 1rem 1.25rem;
+}
+
+.card-header h5 {
+    color: #1f2937;
+    font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* Radio Buttons */
+/* ═══════════════════════════════════════════════════════════ */
+
+.form-check-input:checked {
+    background-color: #4f46e5;
+    border-color: #4f46e5;
+}

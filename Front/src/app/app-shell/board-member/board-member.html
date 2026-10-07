@@ -1,0 +1,265 @@
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- Card Header -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-users-cog me-2 text-primary"></i>
+                    <h5 class="mb-0">لیست اعضای هیئت مدیره</h5>
+                    <span class="badge bg-primary ms-2">{{ totalRecords() }} عضو</span>
+                    <span class="badge bg-success ms-1">{{ activeRecords() }} فعال</span>
+                </div>
+
+                <div class="header-actions d-flex align-items-center gap-2">
+                    @if (loading()) {
+                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                        <span class="visually-hidden">در حال بارگذاری...</span>
+                    </div>
+                    }
+
+                    <!-- <button class="btn btn-outline-secondary btn-sm" (click)="refreshGrid()" title="به‌روزرسانی">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+
+                    <button class="btn btn-outline-success btn-sm" (click)="exportToExcel()" title="خروجی اکسل">
+                        <i class="fas fa-file-excel"></i>
+                    </button> -->
+
+                    <app-label-button identifier="addBtn" label="افزودن عضو" variant="success"
+                        (clicked)="openCreateModal()" permission="MT_BoardMembers_Add">
+                    </app-label-button>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- Card Body -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <div class="card-body p-0">
+
+                <!-- Quick Search & Filter Controls -->
+                <div class="filter-bar p-3 bg-light border-bottom">
+                    <div class="row align-items-center">
+                        <div class="col-md-4">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <input type="text" class="form-control" placeholder="جستجوی سریع در همه فیلدها..."
+                                    [value]="quickFilterText()" (input)="onQuickFilterChange($event)">
+                                @if (quickFilterText()) {
+                                <button class="btn btn-outline-secondary" type="button" (click)="clearFilters()">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="col-md-8 text-end">
+                            <button class="btn btn-outline-danger btn-sm" (click)="clearFilters()">
+                                <i class="fas fa-filter-circle-xmark me-1"></i>
+                                پاک کردن فیلترها
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hint Bar -->
+                <div class="hint-bar mx-3 mt-3">
+                    <div class="hint-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <div class="hint-text">
+                        راهنما: برای جستجو در هر ستون از فیلتر زیر عنوان ستون استفاده کنید. برای مرتب‌سازی روی عنوان
+                        ستون کلیک کنید.
+                    </div>
+                </div>
+
+                <!-- AG Grid -->
+                @if (loading() && !hasRecords()) {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">در حال بارگذاری...</span>
+                    </div>
+                    <p class="mt-2 text-muted">در حال بارگذاری داده‌ها...</p>
+                </div>
+                } @else if (!hasRecords()) {
+                <div class="text-center py-5">
+                    <div class="empty-state-icon mb-3">
+                        <i class="fas fa-users fa-3x text-muted"></i>
+                    </div>
+                    <h5 class="text-muted">هیچ عضوی یافت نشد</h5>
+                    <p class="text-muted">برای شروع، یک عضو جدید اضافه کنید.</p>
+                    <app-label-button identifier="addFirstBtn" label="افزودن اولین عضو" variant="primary"
+                        (clicked)="openCreateModal()" permission="MT_BoardMembers_Add">
+                    </app-label-button>
+                </div>
+                } @else {
+                <ag-grid-angular class="ag-theme-material font-sahel modern-grid"
+                    style="height: calc(100vh - 350px); min-height: 400px;" [rowData]="records()"
+                    (firstDataRendered)="onFirstDataRendered($event)" [gridOptions]="gridOptions()">
+                </ag-grid-angular>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Modal for CRUD operations -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="boardMemberModal" tabindex="-1" aria-labelledby="boardMemberModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="boardMemberModalLabel">
+                    <i class="fas fa-user-tie me-2"></i>
+                    {{ modalConfig().modalTitle }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" (click)="closeModal()"></button>
+            </div>
+
+            <div class="modal-body">
+                @if (form(); as currentForm) {
+                <form [formGroup]="currentForm" id="boardMemberForm" class="row g-3" novalidate>
+
+                    <div class="col-12">
+                        <div class="alert alert-info alert-sm">
+                            <i class="fas fa-info-circle me-2"></i>
+                            فیلدهای ستاره‌دار (*) الزامی هستند.
+                        </div>
+                    </div>
+
+                    <!-- Profile Image Section -->
+                    <div class="col-12">
+                        <div class="image-upload-section">
+                            <label class="form-label">
+                                <i class="fas fa-image me-1"></i>
+                                تصویر پروفایل
+                            </label>
+
+                            <div class="image-upload-container">
+                                <!-- Preview -->
+                                <div class="image-preview-wrapper" (click)="!isImageUploading() && triggerFileInput()">
+                                    @if (previewUrl()) {
+                                    <img [src]="previewUrl()" alt="پیش‌نمایش" class="preview-image">
+                                    @if (!isImageUploading()) {
+                                    <div class="image-overlay">
+                                        <i class="fas fa-camera"></i>
+                                        <span>تغییر تصویر</span>
+                                    </div>
+                                    }
+                                    } @else {
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
+                                        <span>انتخاب تصویر</span>
+                                    </div>
+                                    }
+
+                                    <!-- ✅ Progress bar در حین آپلود -->
+                                    @if (isImageUploading()) {
+                                    <div class="upload-overlay">
+                                        <div class="progress" style="width: 80%; height: 6px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                                [style.width.%]="imageUploadProgress()">
+                                            </div>
+                                        </div>
+                                        <small class="text-white mt-1">{{ imageUploadProgress() }}%</small>
+                                    </div>
+                                    }
+                                </div>
+
+                                <!-- دکمه‌های action -->
+                                <div class="image-actions mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-primary me-2"
+                                        (click)="triggerFileInput()" [disabled]="isImageUploading()">
+                                        @if (isImageUploading()) {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                        {{ imageUploadProgress() }}%
+                                        } @else {
+                                        <i class="fas fa-upload me-1"></i>
+                                        {{ previewUrl() ? 'تغییر' : 'انتخاب' }}
+                                        }
+                                    </button>
+                                    @if (previewUrl() && !isImageUploading()) {
+                                    <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeImage()">
+                                        <i class="fas fa-trash me-1"></i>حذف
+                                    </button>
+                                    }
+                                </div>
+
+                                <input type="file" #fileInput class="d-none" accept="image/*"
+                                    (change)="onImageSelected($event)">
+
+                                <small class="text-muted d-block mt-1">
+                                    فرمت‌های مجاز: JPG, PNG (حداکثر 2MB)
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Name Fields -->
+                    <custom-input label="نام" formControlName="firstName" identity="firstName" size="col-6"
+                        [required]="true" styleType="simple">
+                    </custom-input>
+
+                    <custom-input label="نام خانوادگی" formControlName="lastName" identity="lastName" size="col-6"
+                        [required]="true" styleType="simple">
+                    </custom-input>
+
+                    <!-- Position & Company -->
+                    <custom-input label="سمت" formControlName="position" identity="position" size="col-6"
+                        [required]="true" styleType="simple">
+                    </custom-input>
+
+                    <custom-input label="شرکت" formControlName="company" identity="company" size="col-6"
+                        styleType="simple">
+                    </custom-input>
+
+                    <!-- Contact -->
+                    <custom-input label="موبایل" formControlName="mobile" identity="mobile" size="col-6"
+                        styleType="simple" placeholder="09123456789">
+                    </custom-input>
+
+                    <!-- Dates -->
+                    <custom-input label="تاریخ شروع سمت" formControlName="startDate" identity="startDate" size="col-6"
+                        styleType="simple" type="date">
+                    </custom-input>
+
+                    <custom-input label="تاریخ پایان سمت" formControlName="endDate" identity="endDate" size="col-6"
+                        styleType="simple" type="date">
+                    </custom-input>
+
+                    <!-- Form Status Indicator -->
+                    @if (!isFormValid()) {
+                    <div class="col-12">
+                        <div class="alert alert-warning alert-sm d-flex align-items-center mb-0">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            لطفاً تمام فیلدهای الزامی را تکمیل کنید
+                        </div>
+                    </div>
+                    }
+                </form>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" (click)="closeModal()" [disabled]="saving()">
+                    <i class="fas fa-times me-1"></i>
+                    انصراف
+                </button>
+                <button type="button" class="btn btn-success" (click)="submit()"
+                    [disabled]="!isFormValid() || saving() || isImageUploading()">
+                    @if (saving()) {
+                    <span class="spinner-border spinner-border-sm me-1"></span>در حال ذخیره...
+                    } @else if (isImageUploading()) {
+                    <span class="spinner-border spinner-border-sm me-1"></span>در حال آپلود...
+                    } @else {
+                    <i class="fas fa-save me-1"></i>{{ isEditing() ? 'ویرایش' : 'ثبت' }}
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
