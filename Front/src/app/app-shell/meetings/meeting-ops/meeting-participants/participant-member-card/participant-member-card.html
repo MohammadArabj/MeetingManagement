@@ -1,0 +1,97 @@
+<div class="selected-member"
+    [ngStyle]="{'border':'1px solid '+getRoleColor(member.roleId), 'background-color': '#f9f9f9'}">
+    <!-- برچسب روبانی مهمان -->
+    @if (meetingRoles.isGuest(member.roleId)) {
+    <div class="guest-ribbon">
+        مهمان
+    </div>
+    }
+    <div class="d-flex align-items-center w-100 p-2">
+
+        <div class="avatar-protected me-2" (contextmenu)="$event.preventDefault()">
+            <div class="avatar-bg" [style.background-image]="'url(' + member.image + ')'"></div>
+            <div class="avatar-shield"></div>
+        </div>
+        <div class="flex-grow-1">
+            <span class="fw-bold">{{ member.name }}</span>
+            <small class="text-muted d-block">{{member.position}}</small>
+            @if (member.substitute) {
+            <small class="text-muted d-block">جانشین({{ member.substitute }})</small>
+            }
+            @if (hasConflict('Meeting')) {
+            @let meetingConflict = getConflictDetails('Meeting');
+            <small class="text-danger d-block">
+                <i class="fas fa-exclamation-triangle me-1"></i>
+                دعوت شده به جلسه همزمان
+                @if (meetingConflict?.conflictMeetingTitle) {
+                <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-info" style="font-size:0.75rem"
+                    (click)="conflictDetails.emit(meetingConflict!)">
+                    <i class="fas fa-info-circle"></i> جزئیات
+                </button>
+                }
+            </small>
+
+            }
+            <!-- @if (hasConflict('Meeting')) {
+            <small class="text-danger d-block">
+                <i class="fas fa-exclamation-triangle me-1"></i>
+                دعوت شده به جلسه همزمان
+            </small>
+            } -->
+
+            @if (hasConflict('Leave')) {
+            <small class="text-danger d-block">
+                <i class="fas fa-calendar-times me-1"></i>
+                عدم حضور به دلیل مرخصی
+            </small>
+            }
+
+            <!-- ✅ اضافه شد: نمایش تداخل با زمان عدم حضور -->
+            @if (hasConflict('BlockedTime')) {
+            @let blockedConflict = getConflictDetails('BlockedTime');
+            <small class="text-warning d-block">
+                <i class="fas fa-ban me-1"></i>
+                عدم حضور ثبت شده
+                @if (blockedConflict?.startTime && blockedConflict?.endTime) {
+                ({{ blockedConflict?.startTime }} - {{ blockedConflict?.endTime }})
+                }
+                @if (blockedConflict?.description) {
+                : {{ blockedConflict?.description }}
+                }
+            </small>
+            }
+            @if (hasConflict('GuestInfo')) {
+            @let guestInfoConflict = getConflictDetails('GuestInfo');
+            <small class="text-info d-block">
+                <i class="fas fa-info-circle me-1"></i>
+                این فرد به عنوان مهمان در جلسه دیگری حضور دارد
+                @if (guestInfoConflict?.conflictMeetingTitle) {
+                <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-info" style="font-size:0.75rem"
+                    (click)="conflictDetails.emit(guestInfoConflict!)">
+                    <i class="fas fa-info-circle"></i> جزئیات
+                </button>
+                }
+            </small>
+            }
+        </div>
+        @if (!meetingRoles.isGuest(member.roleId)) {
+        <select class="form-select form-select-sm mb-2" [(ngModel)]="member.roleId" style="width: 140px;"
+            (change)="roleChange.emit($event)" [disabled]="!!member.substitute">
+            @for (item of roles(); track item.id) {
+            @if (item.id !== 6) {
+            <option [ngStyle]="{'color':getRoleColor(item.id ?? 0)}" [value]="item.id">
+                {{ item.title }}
+            </option>
+            }
+            }
+        </select>
+        }
+        @else {
+        <button class="btn btn-primary btn-sm ms-2" (click)="edit.emit()">ویرایش</button>
+        }
+
+
+        <button class="btn btn-danger btn-sm ms-2" (click)="remove.emit()">حذف</button>
+    </div>
+
+</div>
