@@ -514,7 +514,7 @@ export class MeetingSearchComponent extends AgGridBaseComponent implements OnIni
       if (signCheck === false) {
         Swal.fire({
           title: 'خطا',
-          text: 'جهت اتمام جلسه وارسال مصوبات ،امضای همه اعضا جلسه الزامی است',
+          text: 'اتمام جلسه و ابلاغ مصوبات پس از امضای صورتجلسه توسط رئیس جلسه امکان‌پذیر است.',
           icon: 'error',
           confirmButtonText: 'باشه',
         });

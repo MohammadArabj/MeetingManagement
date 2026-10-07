@@ -51,7 +51,6 @@ export class RoleCapabilitiesComponent implements OnInit {
     const dupKeys = list.filter(r => r.key !== 'Custom').map(r => r.key).filter((k, i, a) => a.indexOf(k) !== i);
     if (dupKeys.length) w.push('یک کلید سیستمی به بیش از یک نقش داده شده است.');
     if (!list.some(r => r.capabilities.includes('ManageResolutions'))) w.push('هیچ نقشی امکان ثبت مصوبه ندارد.');
-    if (!list.some(r => r.requiredSigner)) w.push('هیچ امضای الزامی برای نهایی شدن صورتجلسه تعریف نشده است.');
     return w;
   });
 
@@ -92,7 +91,7 @@ export class RoleCapabilitiesComponent implements OnInit {
     }));
   }
 
-  setFlag(role: RoleDefinition, flag: 'isUnique' | 'countsAsMember' | 'requiredSigner', value: boolean): void {
+  setFlag(role: RoleDefinition, flag: 'isUnique' | 'countsAsMember', value: boolean): void {
     this.patch(role, r => ({ ...r, [flag]: value }));
   }
 

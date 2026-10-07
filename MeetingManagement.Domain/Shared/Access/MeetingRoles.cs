@@ -26,9 +26,6 @@ public sealed class MeetingRoleDefinition
     /// <summary>در فهرست «اعضای حاضر/غایب» صورتجلسه و حد نصاب شمرده می‌شود</summary>
     [JsonPropertyName("m")] public bool CountsAsMember { get; set; }
 
-    /// <summary>امضای این نقش برای نهایی شدن صورتجلسه الزامی است</summary>
-    [JsonPropertyName("r")] public bool RequiredSigner { get; set; }
-
     /// <summary>ترتیب نمایش</summary>
     [JsonPropertyName("o")] public int Order { get; set; }
 
@@ -86,10 +83,6 @@ public static class MeetingRoles
     public static bool IsAnySecretary(int? roleId) => IsAny(roleId, MeetingRoleKey.Secretary, MeetingRoleKey.NonMemberSecretary);
 
     public static bool CountsAsMember(int? roleId) => Get(roleId)?.CountsAsMember ?? false;
-
-    public static bool IsRequiredSigner(int? roleId) => Get(roleId)?.RequiredSigner ?? false;
-
-    public static int[] RequiredSignerIds => _roles.Where(r => r.RequiredSigner).Select(r => r.RoleId).ToArray();
 
     public static int[] MemberRoleIds => _roles.Where(r => r.CountsAsMember).Select(r => r.RoleId).ToArray();
 
@@ -185,7 +178,6 @@ public static class MeetingRoles
         Capabilities = DefaultCapabilities(key),
         IsUnique = key is MeetingRoleKey.Chairman or MeetingRoleKey.Secretary or MeetingRoleKey.NonMemberSecretary,
         CountsAsMember = key is MeetingRoleKey.Chairman or MeetingRoleKey.Secretary or MeetingRoleKey.Member or MeetingRoleKey.Observer,
-        RequiredSigner = key is MeetingRoleKey.Chairman or MeetingRoleKey.Secretary or MeetingRoleKey.NonMemberSecretary,
         Order = order,
     };
 

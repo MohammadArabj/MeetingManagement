@@ -62,12 +62,6 @@
                 <td class="text-center"><input type="checkbox" class="form-check-input" [checked]="role.countsAsMember" (change)="setFlag(role, 'countsAsMember', $any($event.target).checked)"></td>
               }
             </tr>
-            <tr>
-              <td>امضای الزامی برای نهایی شدن</td>
-              @for (role of roles(); track role.roleId) {
-                <td class="text-center"><input type="checkbox" class="form-check-input" [checked]="role.requiredSigner" (change)="setFlag(role, 'requiredSigner', $any($event.target).checked)"></td>
-              }
-            </tr>
 
             @for (group of groups(); track group.name) {
               <tr class="group-row">

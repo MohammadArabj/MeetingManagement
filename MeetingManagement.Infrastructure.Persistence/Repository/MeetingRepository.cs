@@ -26,4 +26,15 @@ public class MeetingRepository(DbContext commandContext)
                                                                  && m.SignedAt <= cutoffTime))
             .ToListAsync();
     }
+
+    public async Task<List<Meeting>> GetStaleOpenMeetings(DateTime dateBefore)
+    {
+        return await commandContext.Set<Meeting>()
+            .Where(meeting => (meeting.StatusId == MeetingStatusIds.Registered || meeting.StatusId == MeetingStatusIds.Held)
+                              && meeting.IsRemoved != true
+                              && meeting.IsActive == 1
+                              && meeting.Date != null
+                              && meeting.Date < dateBefore)
+            .ToListAsync();
+    }
 }

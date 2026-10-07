@@ -102,6 +102,10 @@ public class SettingInitializationService(
                 "کد دسته‌بندی کمیسیون معاملات"),
 
             // جلسه
+            new(systemGuid, SettingKey.MeetingUndeterminedAfterDays, "0",
+                SettingValueType.Integer, SettingCategory.Meeting,
+                "تعیین تکلیف نشده خودکار (روز)", "جلسات «ثبت اولیه» یا «برگزار شده» که این تعداد روز از تاریخشان گذشته و نهایی نشده‌اند، «تعیین تکلیف نشده» می‌شوند. 0 = غیرفعال"),
+
             new(systemGuid, SettingKey.MeetingAutoCloseMinutes,
                 "30",
                 SettingValueType.Integer, SettingCategory.Meeting,

@@ -233,7 +233,10 @@ public class MeetingCommandHandler(
         var to = command.StatusId;
         if (from == to) return Result<bool>.Success(true);
 
-        var capability = to == MeetingStatusIds.Cancelled ? MeetingCapability.CancelMeeting : MeetingCapability.ChangeStatus;
+        // لغو و فعال‌سازی مجدد هر دو توانایی «لغو جلسه» می‌خواهند
+        var capability = to == MeetingStatusIds.Cancelled || from == MeetingStatusIds.Cancelled
+            ? MeetingCapability.CancelMeeting
+            : MeetingCapability.ChangeStatus;
         var isDraftRegistration = from == MeetingStatusIds.Draft && to == MeetingStatusIds.Registered && access.IsCreator;
         if (!access.Can(capability) && !isDraftRegistration)
             return Result<bool>.Failure(false, MeetingAccess.DeniedMessage(capability));
@@ -250,7 +253,7 @@ public class MeetingCommandHandler(
 
         switch (to)
         {
-            case MeetingStatusIds.Registered when from == MeetingStatusIds.Draft:
+            case MeetingStatusIds.Registered when from is MeetingStatusIds.Draft or MeetingStatusIds.Cancelled:
                 await PublishSafeAsync(NotificationEventCode.MeetingCreated, meeting.Id);
                 break;
             case MeetingStatusIds.Cancelled:

@@ -19,6 +19,8 @@ import { LocalStorageService } from '../../../services/framework-services/local.
 import { IsDeletage, ISSP } from '../../../core/types/configuration';
 import { PasswordFlowService } from '../../../services/framework-services/password-flow.service';
 import { MeetingRoles } from '../../../core/meeting-access/meeting-roles';
+import { MeetingStatus, MeetingStatuses } from '../../../core/meeting-access/meeting-status';
+import { AppSettings } from '../../../services/system-setting.service';
 
 interface MenuItem {
   label: string;
@@ -39,7 +41,6 @@ interface AgGridParams {
   context: {
     componentParent: {
       viewMeetingDetails: (guid: string, roleId: number, statusId: number) => void;
-      changeCancelMeeting: (guid: string, roleId: number, status: number) => void;
       changeStatus: (guid: string, status: number) => void;
       askForDelete: (guid: string) => void;
       clone: (guid: string) => void;
@@ -125,10 +126,14 @@ export class MeetingOptionsCellComponent implements OnDestroy {
 
     if (!data || !this._initialized()) return [];
 
+    const status = data.statusId;
+    const isBoard = this.isBoardMeeting(data);
+    const can = (to: number) => MeetingStatuses.canTransition(status, to as any);
+
     return [
       {
-        label: (data.statusId === 2 && MeetingRoles.isManager(data.roleId)) ? 'ویرایش' : 'مشاهده',
-        icon: (data.statusId === 2 && MeetingRoles.isManager(data.roleId)) ?
+        label: (status === MeetingStatus.Registered && MeetingRoles.isManager(data.roleId)) ? 'ویرایش' : 'مشاهده',
+        icon: (status === MeetingStatus.Registered && MeetingRoles.isManager(data.roleId)) ?
           'fa fa-edit scaleX-n1-rtl' : 'fa fa-eye scaleX-n1-rtl',
         iconClass: '',
         visible: () => true,
@@ -145,50 +150,59 @@ export class MeetingOptionsCellComponent implements OnDestroy {
         label: 'ثبت اولیه جلسه',
         icon: 'fa fa-play scaleX-n1-rtl',
         iconClass: 'text-info',
-        visible: () => this.isSpecialMember('MT_Meetings_InitialRegister') && data.statusId === 1,
-        action: () => this.changeStatus(2)
+        visible: () => this.isSpecialMember('MT_Meetings_InitialRegister') && status === MeetingStatus.Draft,
+        action: () => this.changeStatus(MeetingStatus.Registered)
       },
       {
         label: 'برگزاری جلسه',
         icon: 'fa fa-play scaleX-n1-rtl',
         iconClass: 'text-info',
-        visible: () => this.isSpecialMember('MT_Meetings_Hold') && data.statusId === 2,
-        action: () => this.changeStatus(3)
+        visible: () => this.isSpecialMember('MT_Meetings_Hold') && can(MeetingStatus.Held) && status !== MeetingStatus.Finalized,
+        action: () => this.changeStatus(MeetingStatus.Held)
+      },
+      {
+        label: 'تعیین تکلیف نشده',
+        icon: 'fa fa-hourglass-half scaleX-n1-rtl',
+        iconClass: 'text-secondary',
+        visible: () => this.isSpecialMember('MT_Meetings_Hold') && can(MeetingStatus.Undetermined),
+        action: () => this.changeStatus(MeetingStatus.Undetermined)
       },
       {
         label: 'لغو جلسه',
         icon: 'fa fa-cancel scaleX-n1-rtl',
         iconClass: 'text-warning',
-        visible: () => this.isSpecialMember('MT_Meetings_Cancel') && data.statusId === 2,
-        action: () => this.changeStatus(5)
+        visible: () => this.isSpecialMember('MT_Meetings_Cancel') && can(MeetingStatus.Cancelled),
+        action: () => this.changeStatus(MeetingStatus.Cancelled)
       },
       {
         label: 'ثبت نهایی جلسه',
         icon: 'fa fa-save scaleX-n1-rtl',
         iconClass: 'text-success',
-        visible: () => !isDelegate && this.checkStatus('MT_Meetings_FinalRegister') && data.statusId === 3,
-        action: () => this.changeStatus(4)
+        visible: () => !isBoard && !isDelegate && this.checkStatus('MT_Meetings_FinalRegister') && status === MeetingStatus.Held,
+        action: () => this.changeStatus(MeetingStatus.Finalized)
       },
       {
         label: 'حذف جلسه',
         icon: 'fa fa-trash scaleX-n1-rtl',
         iconClass: 'text-danger',
-        visible: () => this.isSpecialMember('MT_Meetings_Delete') &&(data.statusId === 1 || data.statusId === 2),
+        visible: () => this.isSpecialMember('MT_Meetings_Delete') && MeetingStatuses.is(status, MeetingStatus.Draft, MeetingStatus.Registered),
         action: () => this.deleteMeeting()
       },
       {
-        label: 'فعال کردن',
+        label: 'فعال کردن مجدد',
         icon: 'fa fa-toggle-on scaleX-n1-rtl',
         iconClass: 'text-danger',
-        visible: () => data.statusId === 5,
-        action: () => this.changeCancelMeeting()
+        visible: () => this.isSpecialMember('MT_Meetings_Cancel') && status === MeetingStatus.Cancelled,
+        action: () => this.changeStatus(MeetingStatus.Registered)
       },
       {
         label: 'اتمام جلسه',
         icon: 'fa fa-paper-plane scaleX-n1-rtl',
         iconClass: 'text-success',
-        visible: () => this.isSpecialMember('MT_Meetings_Finalize') && data.statusId === 4,
-        action: () => this.changeStatus(6)
+        // جلسه‌ی عادی پس از ثبت نهایی (و امضای رئیس)؛ هیئت مدیره (بدون صورتجلسه) پس از برگزاری
+        visible: () => this.isSpecialMember('MT_Meetings_Finalize') &&
+          (isBoard ? MeetingStatuses.is(status, MeetingStatus.Registered, MeetingStatus.Held) : status === MeetingStatus.Finalized),
+        action: () => this.changeStatus(MeetingStatus.Completed)
       }
     ] as MenuItem[];
   });
@@ -296,12 +310,17 @@ export class MeetingOptionsCellComponent implements OnDestroy {
       (MeetingRoles.isManager(data.roleId) && !isDelegate);
   }
 
+  private isBoardMeeting(data: MeetingData): boolean {
+    const category = `${(data as any).categoryGuid ?? (data as any).meetingCategoryGuid ?? ''}`.toLowerCase();
+    return !!category && category === AppSettings.boardCategoryGuid.toLowerCase();
+  }
+
   private checkStatus(permission: string): boolean {
     const data = this.currentData();
     if (!data) return false;
 
     return this.hasPermission(permission) ||
-      (MeetingRoles.isManager(data.roleId) && data.statusId === 3);
+      (MeetingRoles.isManager(data.roleId) && data.statusId === MeetingStatus.Held);
   }
 
   toggleMenu(event: MouseEvent): void {
@@ -358,16 +377,6 @@ export class MeetingOptionsCellComponent implements OnDestroy {
 
     if (parent && data) {
       parent.viewMeetingDetails(data.guid, data.roleId, data.statusId);
-    }
-    this.closeMenu();
-  }
-
-  changeCancelMeeting(): void {
-    const data = this.currentData();
-    const parent = this.contextParent();
-
-    if (parent && data) {
-      parent.changeStatus(data.guid, 2);
     }
     this.closeMenu();
   }

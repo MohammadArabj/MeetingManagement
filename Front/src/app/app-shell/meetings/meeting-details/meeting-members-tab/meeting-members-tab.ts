@@ -39,6 +39,7 @@ import { MemberActionsCellComponent } from './member-actions-cell.component';
 import { MemberPhotoCellComponent } from './member-photo-cell.component';
 import { MemberPresenceCellComponent } from './member-presence-cell.component';
 import { MeetingRoles } from '../../../../core/meeting-access/meeting-roles';
+import { MeetingStatus } from '../../../../core/meeting-access/meeting-status';
 
 // Cell Renderers
 
@@ -485,6 +486,7 @@ export class MeetingMembersTabComponent extends AgGridBaseComponent implements O
           onDelete: (member: MemberListItem) => this.askForDelete(member),
           onSubstitute: (member: MemberListItem) => this.openSubstituteModal(member),
           onSign: (member: MemberListItem) => this.openSignatureModal(member),
+          canSign: (member: MemberListItem) => this.isOwnRow(member),
           onRemoveSubstitute: (member: MemberListItem) => this.removeSubstitute(member)
         },
         cellStyle: { textAlign: 'center', overflow: 'visible' }
@@ -1181,11 +1183,32 @@ export class MeetingMembersTabComponent extends AgGridBaseComponent implements O
   // Signature Management
   // ═══════════════════════════════════════════════════════════════
 
+  /** هر عضو فقط صورتجلسه را به نام خودش امضا می‌کند (سرور هم همین را کنترل می‌کند) */
+  isOwnRow(member: MemberListItem): boolean {
+    const userGuid = (this.localStorageService.getItem(USER_ID_NAME) || '').toLowerCase();
+    return !!userGuid && (member.userGuid || '').toLowerCase() === userGuid;
+  }
+
   openSignatureModal(member: MemberListItem): void {
     // مهمان امضا ندارد
     if (member.isExternal) {
       this.toastService.warning('مهمان امکان امضا ندارد');
       return;
+    }
+    if (!this.isOwnRow(member)) {
+      this.toastService.warning('هر عضو فقط می‌تواند صورتجلسه را به نام خودش امضا کند.');
+      return;
+    }
+    if (this.meeting()?.statusId !== MeetingStatus.Finalized) {
+      this.toastService.warning('نظر و امضا فقط پس از ثبت نهایی جلسه امکان‌پذیر است.');
+      return;
+    }
+    const chairmanSigned = this.members().some(m => MeetingRoles.isChairman(m.roleId) && m.isSign);
+    if (!member.isSign && !MeetingRoles.isChairman(member.roleId) && !chairmanSigned) {
+      this.toastService.warning('ابتدا رئیس جلسه باید صورتجلسه را امضا کند.');
+    }
+    if (member.isSign && MeetingRoles.isChairman(member.roleId)) {
+      this.toastService.info('امضای رئیس جلسه قطعی است؛ فقط نظر قابل ویرایش است.');
     }
 
     this.selectedMemberForSignature.set(member);
@@ -1205,7 +1228,14 @@ export class MeetingMembersTabComponent extends AgGridBaseComponent implements O
   }
 
   toggleSign(): void {
+    const member = this.selectedMemberForSignature();
+    if (!member) return;
     const current = this.signatureForm.get('isSign')?.value;
+    const isChairman = MeetingRoles.isChairman(member.roleId);
+    const chairmanSigned = this.members().some(m => MeetingRoles.isChairman(m.roleId) && m.isSign);
+    if (current && isChairman && member.isSign) return;          // امضای رئیس قطعی است
+    if (!current && !isChairman && !chairmanSigned) return;      // پیش از امضای رئیس
+
     this.signatureForm.patchValue({ isSign: !current });
   }
 

@@ -45,7 +45,6 @@ public sealed class RoleDefinitionModel
 
     public bool IsUnique { get; set; }
     public bool CountsAsMember { get; set; }
-    public bool RequiredSigner { get; set; }
     public int Order { get; set; }
 }
 
@@ -159,7 +158,6 @@ public sealed class MeetingRoleConfigService(MeetingManagementCommandContext db)
                 Capabilities = def.Capabilities.GetFlags().Select(c => c.ToString()).ToList(),
                 IsUnique = def.IsUnique,
                 CountsAsMember = def.CountsAsMember,
-                RequiredSigner = def.RequiredSigner,
                 Order = def.Order,
             });
         }
@@ -196,7 +194,6 @@ public sealed class MeetingRoleConfigService(MeetingManagementCommandContext db)
                 Capabilities = caps,
                 IsUnique = item.IsUnique,
                 CountsAsMember = item.CountsAsMember,
-                RequiredSigner = item.RequiredSigner,
                 Order = item.Order,
             });
         }

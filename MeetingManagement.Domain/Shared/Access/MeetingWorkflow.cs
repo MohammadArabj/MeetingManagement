@@ -26,6 +26,7 @@ public static class MeetingStatusIds
     {
         (Draft, Registered) => true,
         (Draft or Registered or Undetermined, Cancelled) => true,
+        (Cancelled, Registered) => true,    // فعال‌سازی مجدد جلسه‌ی لغو شده
         (Registered or Undetermined, Held) => true,
         (Registered or Held, Undetermined) => true,
         (Held, Finalized) => true,

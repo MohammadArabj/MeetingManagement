@@ -38,6 +38,7 @@ import { AppSettings } from '../../../services/system-setting.service';
 import { MeetingFollowupTabComponent } from "./meeting-followup-tab/meeting-followup-tab";
 import { NavigationService } from '../../../services/framework-services/navigation.service';
 import { MeetingRoles } from '../../../core/meeting-access/meeting-roles';
+import { MeetingStatus, MeetingStatuses } from '../../../core/meeting-access/meeting-status';
 import { MeetingAccessService } from '../../../core/meeting-access/meeting-access.service';
 
 declare var $: any;
@@ -144,8 +145,9 @@ export class MeetingDetailsComponent implements OnInit {
       return 'ops';
     }
 
+    // ویرایش اطلاعات جلسه فقط پیش از برگزاری (پیش‌نویس، ثبت اولیه، تعیین تکلیف نشده) — هم‌راستا با سرور
     const canShowMeetingOps =
-      ![3, 4, 5, 6, 7].includes(statusId) &&
+      MeetingStatuses.is(statusId, MeetingStatus.Draft, MeetingStatus.Registered, MeetingStatus.Undetermined) &&
       MeetingRoles.isManager(roleId) &&
       !isDelegate;
 
@@ -154,8 +156,8 @@ export class MeetingDetailsComponent implements OnInit {
     }
 
     const canShowMeetingDetails =
-      ([1, 2, 5, 3, 7].includes(statusId) && (roleId === 0 || (MeetingRoles.isMember(roleId) && !MeetingRoles.isManager(roleId) && !MeetingRoles.isGuest(roleId) && !MeetingRoles.isObserver(roleId)))) ||
-      ([2, 3, 4, 5, 6, 7].includes(statusId) && (roleId === 0 || (MeetingRoles.isMember(roleId) && !MeetingRoles.isGuest(roleId)))) ||
+      (MeetingStatuses.is(statusId, MeetingStatus.Draft, MeetingStatus.Registered, MeetingStatus.Cancelled, MeetingStatus.Held, MeetingStatus.Undetermined) && (roleId === 0 || (MeetingRoles.isMember(roleId) && !MeetingRoles.isManager(roleId) && !MeetingRoles.isGuest(roleId) && !MeetingRoles.isObserver(roleId)))) ||
+      (statusId !== MeetingStatus.Draft && (roleId === 0 || (MeetingRoles.isMember(roleId) && !MeetingRoles.isGuest(roleId)))) ||
       (MeetingRoles.isManager(roleId) && isDelegate);
 
     if (canShowMeetingDetails) {
@@ -271,14 +273,15 @@ export class MeetingDetailsComponent implements OnInit {
     // اگر کاربر رئیس جلسه است و هنوز امضا نکرده
     const isUnsignedChairman = (MeetingRoles.isChairman(roleId) && !hasChairmanSigned);
 
+    const S = MeetingStatus;
     const accessRules: { [key: string]: () => boolean } = {
-      meetingDetails: () => [1, 2, 3, 4, 5, 6, 7].includes(statusId),
-      adminAttendance: () => (isSuperAdmin && statusId > 2 && statusId != 5),
-      agendas: () => (([2, 3, 4, 6].includes(statusId)) && roleId != 0),
-      attendance: () => ((statusId === 2 && !isBoardMeeting) && roleId != 0),
-      content: () => ((([3, 4, 6].includes(statusId)) && roleId != 0) || (isBoardMeeting && statusId === 2)),
-      minutes: () => (([3, 4, 6].includes(statusId)) && roleId != 0 && !isBoardMeeting),
-      followup: () => (hasChairmanSigned && !isBoardMeeting) || (isBoardMeeting && statusId === 6)
+      meetingDetails: () => statusId >= S.Draft && statusId <= S.Undetermined,
+      adminAttendance: () => isSuperAdmin && MeetingStatuses.isHeldOrLater(statusId),
+      agendas: () => MeetingStatuses.is(statusId, S.Registered, S.Held, S.Finalized, S.Completed, S.Undetermined) && roleId != 0,
+      attendance: () => MeetingStatuses.is(statusId, S.Registered, S.Undetermined) && !isBoardMeeting && roleId != 0,
+      content: () => (MeetingStatuses.isHeldOrLater(statusId) && roleId != 0) || (isBoardMeeting && statusId === S.Registered),
+      minutes: () => MeetingStatuses.isHeldOrLater(statusId) && roleId != 0 && !isBoardMeeting,
+      followup: () => (hasChairmanSigned && !isBoardMeeting) || (isBoardMeeting && statusId === S.Completed)
     };
 
     return accessRules[tab]?.() ?? false;
@@ -295,48 +298,26 @@ export class MeetingDetailsComponent implements OnInit {
     // اگر رئیس جلسه است و هنوز امضا نکرده، همه دکمه‌ها فعال باشند
     const isUnsignedChairman = (MeetingRoles.isChairman(roleId) && !hasChairmanSigned);
 
-    switch (statusId) {
-      case 1:
-        this._buttonText.set('ثبت اولیه');
-        this._buttonStatus.set(2);
-        this._showButton.set(
-          isUnsignedChairman ||
-          (isDelegateValue && permissions.has("MT_Meetings_Hold")) ||
-          (MeetingRoles.isManager(roleId) && statusId === 1)
-        );
-        break;
-      case 2:
-        this._buttonText.set('برگزاری جلسه');
-        this._buttonStatus.set(3);
-        this._showButton.set(
-          isUnsignedChairman ||
-          (isDelegateValue && permissions.has("MT_Meetings_FinalRegister")) ||
-          (MeetingRoles.isManager(roleId) && statusId === 2)
-        );
-        break;
-      case 3:
-        this._buttonText.set('ثبت نهایی');
-        this._buttonStatus.set(4);
-        this._showButton.set(
-          isUnsignedChairman ||
-          (isDelegateValue && permissions.has("MT_Meetings_Hold")) ||
-          (MeetingRoles.isManager(roleId) && statusId === 3)
-        );
-        break;
-      case 4:
-        this._buttonText.set('اتمام جلسه');
-        this._buttonStatus.set(6);
-        this._showButton.set(
-          isUnsignedChairman ||
-          (isDelegateValue && permissions.has("MT_Meetings_Finalize")) ||
-          (MeetingRoles.isManager(roleId) && statusId === 4)
-        );
-        break;
-      default:
-        this._buttonText.set('');
-        this._showButton.set(false);
-        break;
+    const S = MeetingStatus;
+    const isManager = MeetingRoles.isManager(roleId) && !isDelegateValue;
+    // مرحله‌ی بعدی هر وضعیت و دسترسی لازم برای آن (هیئت مدیره صورتجلسه ندارد: برگزار شده ← اتمام)
+    const next: { text: string; status: number; permission: string } | null =
+      statusId === S.Draft ? { text: 'ثبت اولیه', status: S.Registered, permission: 'MT_Meetings_InitialRegister' }
+        : statusId === S.Registered || statusId === S.Undetermined ? { text: 'برگزاری جلسه', status: S.Held, permission: 'MT_Meetings_Hold' }
+          : statusId === S.Held && this.isBoardMeeting() ? { text: 'اتمام جلسه', status: S.Completed, permission: 'MT_Meetings_Finalize' }
+            : statusId === S.Held ? { text: 'ثبت نهایی', status: S.Finalized, permission: 'MT_Meetings_FinalRegister' }
+              : statusId === S.Finalized ? { text: 'اتمام جلسه', status: S.Completed, permission: 'MT_Meetings_Finalize' }
+                : null;
+
+    if (!next) {
+      this._buttonText.set('');
+      this._showButton.set(false);
+      return;
     }
+
+    this._buttonText.set(next.text);
+    this._buttonStatus.set(next.status);
+    this._showButton.set(isUnsignedChairman || isManager || (isDelegateValue && permissions.has(next.permission)));
   }
 
   private hasPermission(permission: string): boolean {
@@ -351,15 +332,15 @@ export class MeetingDetailsComponent implements OnInit {
     const statusId = this.statusId();
     const hasChairmanSigned = this.hasChairmanSigned();
 
+    const S = MeetingStatus;
     const visibilityRules: Record<string, () => boolean> = {
-      main: () => [1, 2, 3, 4, 5, 6, 7].includes(statusId),
-      adminAttendance: () => isSuperAdmin && statusId > 2,
-      attendance: () => statusId === 2,
-      agenda: () => [1, 2, 3, 4, 6].includes(statusId),
-      content: () => ([3, 4, 6].includes(statusId)) || (isBoardMeeting && statusId === 2),
-      minutes: () => [3, 4, 6].includes(statusId) && !isBoardMeeting,
-      followup: () => (hasChairmanSigned && !isBoardMeeting) || (isBoardMeeting && statusId === 6)
-
+      main: () => statusId >= S.Draft && statusId <= S.Undetermined,
+      adminAttendance: () => isSuperAdmin && MeetingStatuses.isHeldOrLater(statusId),
+      attendance: () => MeetingStatuses.is(statusId, S.Registered, S.Undetermined),
+      agenda: () => !MeetingStatuses.is(statusId, S.Cancelled),
+      content: () => MeetingStatuses.isHeldOrLater(statusId) || (isBoardMeeting && statusId === S.Registered),
+      minutes: () => MeetingStatuses.isHeldOrLater(statusId) && !isBoardMeeting,
+      followup: () => (hasChairmanSigned && !isBoardMeeting) || (isBoardMeeting && statusId === S.Completed)
     };
 
     return visibilityRules[tab]?.() ?? false;
@@ -371,7 +352,7 @@ export class MeetingDetailsComponent implements OnInit {
     const meetingGuid = this._meetingGuid();
 
     // ✅ بررسی برگزاری جلسه (status = 3)
-    if (status === 3) {
+    if (status === MeetingStatus.Held) {
       if (!this.meetingBehaviorService.canHoldMeeting()) {
         const meetingDate = this.meetingBehaviorService.getMeetingDate();
         Swal.fire({
@@ -385,7 +366,7 @@ export class MeetingDetailsComponent implements OnInit {
     }
 
     // ✅ بررسی ثبت نهایی جلسه (status = 4)
-    if (status === 4) {
+    if (status === MeetingStatus.Finalized) {
       // بررسی رئیس و دبیر
       const validation = this.meetingBehaviorService.canFinalizeRegistration();
       if (!validation.canFinalize) {
@@ -426,14 +407,14 @@ export class MeetingDetailsComponent implements OnInit {
     }
 
     // بررسی اتمام جلسه (status = 6)
-    if (status === 6 && !this.isBoardMeeting()) {
+    if (status === MeetingStatus.Completed && !this.isBoardMeeting()) {
       this.meetingService.checkSign(meetingGuid)
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe((data) => {
           if (data === false) {
             Swal.fire({
               title: "خطا",
-              text: "جهت اتمام جلسه ،امضای همه اعضای حاضر جلسه الزامی است",
+              text: "اتمام جلسه پس از امضای صورتجلسه توسط رئیس جلسه امکان‌پذیر است.",
               icon: "error",
               confirmButtonText: "باشه",
             });

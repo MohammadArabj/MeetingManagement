@@ -24,6 +24,8 @@ public static class SettingValues
 
     // ── جلسه ──────────────────────────────────────────────
     public static int MeetingAutoCloseMinutes { get; private set; } = 30;
+    /// <summary>جلسات «ثبت اولیه/برگزار شده» چند روز پس از تاریخشان «تعیین تکلیف نشده» شوند (0 = غیرفعال)</summary>
+    public static int MeetingUndeterminedAfterDays { get; private set; }
     public static int MaxResolutionAttachments { get; private set; } = 10;
     public static int MaxAttachmentSizeMB { get; private set; } = 50;
 
@@ -111,6 +113,7 @@ public static class SettingValues
             case SettingKey.CommitteeCategoryGuid: CommitteeCategoryGuid = ParseGuid(value); break;
 
             case SettingKey.MeetingAutoCloseMinutes: MeetingAutoCloseMinutes = ParseInt(value, 30); break;
+            case SettingKey.MeetingUndeterminedAfterDays: MeetingUndeterminedAfterDays = Math.Max(0, ParseInt(value, 0)); break;
             case SettingKey.MaxResolutionAttachments: MaxResolutionAttachments = ParseInt(value, 10); break;
             case SettingKey.MaxAttachmentSizeMB: MaxAttachmentSizeMB = ParseInt(value, 50); break;
 

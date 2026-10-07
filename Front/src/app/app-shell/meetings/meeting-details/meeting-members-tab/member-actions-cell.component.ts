@@ -16,6 +16,8 @@ interface ActionsCellParams extends ICellRendererParams {
     onDelete: (member: MemberListItem) => void;
     onSubstitute: (member: MemberListItem) => void;
     onSign: (member: MemberListItem) => void;
+    /** امضا/نظر فقط برای ردیف خود کاربر */
+    canSign?: (member: MemberListItem) => boolean;
     onRemoveSubstitute: (member: MemberListItem) => void;
 }
 
@@ -50,7 +52,7 @@ interface ActionsCellParams extends ICellRendererParams {
       }
       
       <!-- دکمه امضا (فقط برای غیر مهمان خارجی) -->
-      @if (!isExternal) {
+      @if (!isExternal && canSign) {
         <button class="action-btn btn-sign" 
                 (click)="onSign()" 
                 title="ثبت نظر و امضا">
@@ -130,6 +132,7 @@ export class MemberActionsCellComponent implements ICellRendererAngularComp {
     isGuest = false;
     isExternal = false;
     hasSubstitute = false;
+    canSign = false;
 
     agInit(params: ActionsCellParams): void {
         this.params = params;
@@ -137,6 +140,7 @@ export class MemberActionsCellComponent implements ICellRendererAngularComp {
         this.isGuest = MeetingRoles.isGuest(this.data?.roleId);
         this.isExternal = this.data?.isExternal || false;
         this.hasSubstitute = !!this.data?.replacementUserGuid;
+        this.canSign = !!this.data && (this.params.canSign?.(this.data) ?? false);
     }
 
     refresh(params: ActionsCellParams): boolean {
@@ -145,6 +149,7 @@ export class MemberActionsCellComponent implements ICellRendererAngularComp {
         this.isGuest = MeetingRoles.isGuest(this.data?.roleId);
         this.isExternal = this.data?.isExternal || false;
         this.hasSubstitute = !!this.data?.replacementUserGuid;
+        this.canSign = !!this.data && (this.params.canSign?.(this.data) ?? false);
         return true;
     }
 

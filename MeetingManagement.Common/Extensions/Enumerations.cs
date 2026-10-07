@@ -295,6 +295,9 @@ public enum SettingKey : byte
 
     [Description("قالب‌های سفارشی چاپ (JSON: کلید قالب ← شناسه فایل)")]
     PrintTemplates = 29,
+
+    [Description("تعیین تکلیف نشده خودکار - چند روز پس از تاریخ جلسه (0 = غیرفعال)")]
+    MeetingUndeterminedAfterDays = 30,
 }
 
 public enum SettingValueType : byte

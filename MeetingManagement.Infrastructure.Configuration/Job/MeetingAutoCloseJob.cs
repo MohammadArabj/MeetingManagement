@@ -11,8 +11,9 @@ using System.Threading.Tasks;
 namespace MeetingManagement.Infrastructure.Configuration.Job;
 
 /// <summary>
-/// اتمام خودکار جلسات «ثبت نهایی» که از امضای رئیس آن‌ها بیش از MeetingAutoCloseMinutes گذشته است.
-/// امضای رئیس تنها شرط است؛ سایر اعضا تا آن زمان فرصت امضا دارند.
+/// • اتمام خودکار جلسات «ثبت نهایی» که از امضای رئیس آن‌ها بیش از MeetingAutoCloseMinutes گذشته است
+///   (امضای رئیس تنها شرط است؛ سایر اعضا تا آن زمان فرصت امضا دارند).
+/// • «تعیین تکلیف نشده» کردن جلسات معوق (در صورت فعال بودن MeetingUndeterminedAfterDays).
 /// اجرا: هر ۳۰ دقیقه
 /// </summary>
 [DisallowConcurrentExecution] // ✅ جایگزین LockTimer
@@ -38,65 +39,76 @@ public class MeetingAutoCloseJob : IJob
 
     public async Task Execute(IJobExecutionContext context)
     {
-        var startTime = DateTime.Now;
-
         try
         {
+            var changed = await AutoCloseAsync();
+            changed |= await MarkUndeterminedAsync();
 
-            // ✅ خواندن تنظیم از Static Cache
-            var autoCloseMinutes = SettingValues.MeetingAutoCloseMinutes;
-
-            if (autoCloseMinutes <= 0)//زمانبندی غیر فعال است
+            if (changed)
             {
-                return;
+                // ذخیره تغییرات و سپس ارسال اعلان‌های لحظه‌ای
+                await _meetingRepository.SaveChangesAsync();
+                await _realtime.FlushAsync(context.CancellationToken);
             }
-
-            var cutoffTime = DateTime.Now.AddMinutes(-autoCloseMinutes);
-
-            // ✅ دریافت جلسات واجد شرایط
-            var meetings = await _meetingRepository.GetMeetingsReadyForAutoClose(cutoffTime);
-
-            if (meetings == null || meetings.Count == 0)
-            {
-                return;
-            }
-
-
-            var closedCount = 0;
-            var failedCount = 0;
-            var systemGuid = SettingValues.SystemGuid;
-
-            foreach (var meeting in meetings)
-            {
-                try
-                {
-                    meeting.ChangeStatus(systemGuid, MeetingStatusIds.Completed);
-                    _meetingRepository.Update(meeting);
-                    await _publisher.PublishAsync(NotificationEventCode.MeetingFinalized, new NotificationPayload { MeetingId = meeting.Id });
-                    closedCount++;
-
-                    _logger.LogInformation("Meeting {MeetingId} ({Number}) auto-closed", meeting.Id, meeting.Number);
-                }
-                catch (Exception ex)
-                {
-                    failedCount++;
-                    _logger.LogError(ex, "Failed to auto-close meeting {MeetingId}", meeting.Id);
-                }
-            }
-
-            // ذخیره تغییرات و سپس ارسال اعلان‌های لحظه‌ای
-            await _meetingRepository.SaveChangesAsync();
-            await _realtime.FlushAsync(context.CancellationToken);
-            _logger.LogInformation("MeetingAutoCloseJob closed {Closed} meetings ({Failed} failed)", closedCount, failedCount);
-
-
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "MeetingAutoCloseJob failed");
-
             throw; // Quartz می‌تواند retry کند
         }
     }
 
+    /// <summary>اتمام جلسات «ثبت نهایی» که از امضای رئیس آن‌ها بیش از مدت تنظیم‌شده گذشته است</summary>
+    private async Task<bool> AutoCloseAsync()
+    {
+        var autoCloseMinutes = SettingValues.MeetingAutoCloseMinutes;
+        if (autoCloseMinutes <= 0) return false; // زمان‌بندی غیرفعال است
+
+        var meetings = await _meetingRepository.GetMeetingsReadyForAutoClose(DateTime.Now.AddMinutes(-autoCloseMinutes));
+        if (meetings.Count == 0) return false;
+
+        var systemGuid = SettingValues.SystemGuid;
+        var closed = 0;
+        foreach (var meeting in meetings)
+        {
+            try
+            {
+                meeting.ChangeStatus(systemGuid, MeetingStatusIds.Completed);
+                _meetingRepository.Update(meeting);
+                await _publisher.PublishAsync(NotificationEventCode.MeetingFinalized, new NotificationPayload { MeetingId = meeting.Id });
+                closed++;
+                _logger.LogInformation("Meeting {MeetingId} ({Number}) auto-closed", meeting.Id, meeting.Number);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to auto-close meeting {MeetingId}", meeting.Id);
+            }
+        }
+
+        _logger.LogInformation("MeetingAutoCloseJob closed {Closed} of {Total} meetings", closed, meetings.Count);
+        return closed > 0;
+    }
+
+    /// <summary>
+    /// جلسات «ثبت اولیه/برگزار شده» که MeetingUndeterminedAfterDays روز از تاریخشان گذشته و نهایی نشده‌اند ← «تعیین تکلیف نشده».
+    /// از این وضعیت می‌توان جلسه را برگزار یا لغو کرد.
+    /// </summary>
+    private async Task<bool> MarkUndeterminedAsync()
+    {
+        var afterDays = SettingValues.MeetingUndeterminedAfterDays;
+        if (afterDays <= 0) return false;
+
+        var meetings = await _meetingRepository.GetStaleOpenMeetings(DateTime.Today.AddDays(-afterDays));
+        if (meetings.Count == 0) return false;
+
+        var systemGuid = SettingValues.SystemGuid;
+        foreach (var meeting in meetings)
+        {
+            meeting.ChangeStatus(systemGuid, MeetingStatusIds.Undetermined);
+            _meetingRepository.Update(meeting);
+        }
+
+        _logger.LogInformation("MeetingAutoCloseJob marked {Count} meetings as undetermined", meetings.Count);
+        return true;
+    }
 }

@@ -28,7 +28,6 @@ export interface RoleDefinition {
   capabilities: MeetingCapability[];
   isUnique: boolean;
   countsAsMember: boolean;
-  requiredSigner: boolean;
   order: number;
 }
 
@@ -46,12 +45,12 @@ const VIEW_ALL: MeetingCapability[] = ['ViewMeeting', 'ViewAgenda', 'ViewResolut
 
 /** پیش‌فرض = قرارداد قبلی پروژه؛ فقط تا وقتی پیکربندی سرور بارگذاری شود استفاده می‌شود. */
 const DEFAULT_ROLES: RoleDefinition[] = [
-  { roleId: 3, key: 'Chairman', capabilities: [...ALL_MANAGE, 'FinalApprove'], isUnique: true, countsAsMember: true, requiredSigner: true, order: 1 },
-  { roleId: 1, key: 'Secretary', capabilities: ALL_MANAGE, isUnique: true, countsAsMember: true, requiredSigner: true, order: 2 },
-  { roleId: 2, key: 'NonMemberSecretary', capabilities: ALL_MANAGE, isUnique: true, countsAsMember: false, requiredSigner: true, order: 3 },
-  { roleId: 4, key: 'Observer', capabilities: [...VIEW_ALL, 'CommentOnMinutes', 'Print', 'ReceiveNotifications'], isUnique: false, countsAsMember: true, requiredSigner: false, order: 4 },
-  { roleId: 5, key: 'Member', capabilities: [...VIEW_ALL, 'SignMinutes', 'CommentOnMinutes', 'AppointSubstitute', 'Print', 'ReceiveNotifications'], isUnique: false, countsAsMember: true, requiredSigner: false, order: 5 },
-  { roleId: 6, key: 'Guest', capabilities: ['ViewMeeting', 'ViewAgenda', 'ReceiveNotifications'], isUnique: false, countsAsMember: false, requiredSigner: false, order: 6 },
+  { roleId: 3, key: 'Chairman', capabilities: [...ALL_MANAGE, 'FinalApprove'], isUnique: true, countsAsMember: true, order: 1 },
+  { roleId: 1, key: 'Secretary', capabilities: ALL_MANAGE, isUnique: true, countsAsMember: true, order: 2 },
+  { roleId: 2, key: 'NonMemberSecretary', capabilities: ALL_MANAGE, isUnique: true, countsAsMember: false, order: 3 },
+  { roleId: 4, key: 'Observer', capabilities: [...VIEW_ALL, 'CommentOnMinutes', 'Print', 'ReceiveNotifications'], isUnique: false, countsAsMember: true, order: 4 },
+  { roleId: 5, key: 'Member', capabilities: [...VIEW_ALL, 'SignMinutes', 'CommentOnMinutes', 'AppointSubstitute', 'Print', 'ReceiveNotifications'], isUnique: false, countsAsMember: true, order: 5 },
+  { roleId: 6, key: 'Guest', capabilities: ['ViewMeeting', 'ViewAgenda', 'ReceiveNotifications'], isUnique: false, countsAsMember: false, order: 6 },
 ];
 
 const NONE = -1;
@@ -110,8 +109,6 @@ class MeetingRolesRegistry {
 
   /** در فهرست اعضای صورتجلسه/حد نصاب شمرده می‌شود (مهمان و دبیر غیرعضو: خیر) */
   countsAsMember(roleId: number | null | undefined): boolean { return this.get(roleId)?.countsAsMember ?? false; }
-
-  isRequiredSigner(roleId: number | null | undefined): boolean { return this.get(roleId)?.requiredSigner ?? false; }
 
   /** عضو جلسه هست (شناسه نقش معتبر؛ 0 = عضو نیست، 999 = بیننده با دسترسی کل) */
   isMember(roleId: number | null | undefined): boolean { return this.get(roleId) !== undefined; }
