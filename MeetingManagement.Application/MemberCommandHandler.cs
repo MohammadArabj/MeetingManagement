@@ -220,7 +220,7 @@ public class MemberCommandHandler(
 
         var meeting = await meetingRepository.LoadAsync(member.MeetingId ?? 0, "MeetingMembers");
         var access = await accessService.GetAsync(meeting.Id);
-        if (access.StatusId != MeetingStatusIds.Registered)
+        if (access.StatusId != MeetingStatusIds.Registered && !access.IsSuperAdmin)
             return Result<bool>.Failure(false, "اعلام حضور فقط پیش از برگزاری جلسه امکان‌پذیر است.");
 
         var identity = await identityResolver.ResolveAsync();

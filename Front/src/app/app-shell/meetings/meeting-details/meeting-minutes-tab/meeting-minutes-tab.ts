@@ -1,3 +1,4 @@
+import { readIsMeetingAdmin } from '../../../../core/auth/session.store';
 // meeting-minutes-tab.component.ts
 
 import {
@@ -22,7 +23,7 @@ import { MeetingDetails, MeetingMember } from '../../../../core/models/Meeting';
 import { MeetingService } from '../../../../services/meeting.service';
 import { CommonModule } from '@angular/common';
 import { LocalStorageService } from '../../../../services/framework-services/local.storage.service';
-import { Main_USER_ID, USER_ID_NAME, IsDeletage, ISSP } from '../../../../core/types/configuration';
+import { Main_USER_ID, USER_ID_NAME, IsDeletage } from '../../../../core/types/configuration';
 import { Resolution } from '../../../../core/models/Resolution';
 import { MeetingMemberService } from '../../../../services/meeting-member.service';
 import { FileMeetingService } from '../../../../services/file-meeting.service';
@@ -221,7 +222,7 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
   );
 
   readonly isSuperAdmin = computed(() =>
-    this.localStorageService.getItem(ISSP) === 'true'
+    readIsMeetingAdmin()
   );
 
   // ✅ دسترسی آپلود فایل
@@ -390,8 +391,7 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
 
   // Permission check method
   hasPermission(permission: string): boolean {
-    const permissions = this.passwordFlowService.getPermissions();
-    return permissions?.includes(permission) || false;
+    return this.passwordFlowService.hasPermission(permission);
   }
 
   // Data loading methods

@@ -1,3 +1,4 @@
+import { readIsMeetingAdmin } from '../../../../core/auth/session.store';
 import { NgClass } from '@angular/common';
 import { Component, ElementRef, ViewChild, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { CustomInputComponent } from "../../../../shared/custom-controls/custom-input";
@@ -10,7 +11,7 @@ import { CdkDrag, CdkDragDrop, CdkDropList, moveItemInArray } from '@angular/cdk
 import { Resolution } from '../../../../core/models/Resolution';
 import { Modal } from 'bootstrap';
 import { AgendaItem, MeetingMember } from '../../../../core/models/Meeting';
-import { IsDeletage, ISSP } from '../../../../core/types/configuration';
+import { IsDeletage } from '../../../../core/types/configuration';
 import { PasswordFlowService } from '../../../../services/framework-services/password-flow.service';
 import { MeetingBehaviorService } from '../meeting-behavior-service';
 import { FileManagerModalComponent } from "../../../../shared/file-manager/file-manger-modal.component";
@@ -240,7 +241,7 @@ export class MeetingAgendaTabComponent {
   // ═══════════════════════════════════════════════════════════
 
   constructor() {
-    this.isSuperAdmin.set(this.localStorageService.getItem(ISSP) === 'true');
+    this.isSuperAdmin.set(readIsMeetingAdmin());
     this.isDelegate.set(this.localStorageService.getItem(IsDeletage) === 'true');
 
     effect(() => {

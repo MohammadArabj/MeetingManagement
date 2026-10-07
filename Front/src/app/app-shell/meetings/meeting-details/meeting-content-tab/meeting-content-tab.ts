@@ -1,3 +1,4 @@
+import { readIsMeetingAdmin } from '../../../../core/auth/session.store';
 // ===============================================================
 // File: meeting-content-tab.component.ts
 // ===============================================================
@@ -32,7 +33,7 @@ import { PasswordFlowService } from '../../../../services/framework-services/pas
 import { MeetingBehaviorService } from '../meeting-behavior-service';
 
 import { getClientSettings } from '../../../../services/framework-services/code-flow.service';
-import { IsDeletage, ISSP, ReportMode, toggleBootstrapModal } from '../../../../core/types/configuration';
+import { IsDeletage, ReportMode, toggleBootstrapModal } from '../../../../core/types/configuration';
 
 // Child components
 import { MeetingDescriptionComponent } from './meeting-description/meeting-description';
@@ -301,7 +302,7 @@ export class MeetingContentTabComponent implements AfterViewInit {
   // Lifecycle
   // -----------------------------
   constructor() {
-    this.isSuperAdmin.set(this.localStorageService.getItem(ISSP) === 'true');
+    this.isSuperAdmin.set(readIsMeetingAdmin());
     this.isDelegate.set(this.localStorageService.getItem(IsDeletage) === 'true');
 
     // Route -> meetingGuid

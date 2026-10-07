@@ -1,3 +1,4 @@
+using MeetingManagement.Common.Security;
 using MeetingManagement.Domain.Shared.Access;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
@@ -106,8 +107,8 @@ public sealed class ActingIdentityResolver(
             if (permissions is null) return Fallback();
 
             return new ActingIdentity(tokenUser, actingUser, position, match.IsDelegate,
-                // مدیر سامانه بودن در تفویض به تفویض‌گیرنده منتقل نمی‌شود
-                IsSuperAdmin: match.IsSuperAdmin && !match.IsDelegate,
+                // مدیر کل یا سمت دارای «ادمین مدیریت جلسات»؛ هیچ‌کدام در تفویض به تفویض‌گیرنده منتقل نمی‌شود
+                IsSuperAdmin: !match.IsDelegate && (match.IsSuperAdmin || permissions.Contains(Permissions.MeetingAdmin)),
                 Verified: true, permissions);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

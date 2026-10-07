@@ -1,3 +1,4 @@
+import { readIsMeetingAdmin } from '../../../../core/auth/session.store';
 // meeting-details-tab.component.ts
 
 import { NgClass, CommonModule } from '@angular/common';
@@ -205,7 +206,7 @@ export class MeetingDetailsTabComponent {
       !currentMember?.isDelegate &&
       meeting?.statusId !== 4 &&
       meeting?.statusId !== 6;
-    return isUnsignedChairman || normalEditConditions;
+    return readIsMeetingAdmin() || isUnsignedChairman || normalEditConditions;
   });
 
   readonly canChangeAttendance = computed(() => {
@@ -214,7 +215,7 @@ export class MeetingDetailsTabComponent {
     const chairmanSigned = this.hasChairmanSigned();
     const isUnsignedChairman = rId === 3 && !chairmanSigned;
     const normalConditions = MeetingRoles.isManager(rId ?? 0) && sId === 3;
-    return isUnsignedChairman || normalConditions;
+    return readIsMeetingAdmin() || isUnsignedChairman || normalConditions;
   });
 
   /** آیا کاربر جاری اجازه افزودن عضو/مهمان دارد */
@@ -226,7 +227,7 @@ export class MeetingDetailsTabComponent {
       MeetingRoles.isManager(meeting?.roleId ?? 0) &&
       meeting?.statusId !== 4 &&
       meeting?.statusId !== 6;
-    return isUnsignedChairman || normalConditions;
+    return readIsMeetingAdmin() || isUnsignedChairman || normalConditions;
   });
 
   readonly fileManagementUrl = computed(() => {

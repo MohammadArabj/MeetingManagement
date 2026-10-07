@@ -1,3 +1,4 @@
+import { readIsMeetingAdmin } from '../../../../../core/auth/session.store';
 // file-management-modal.component.ts
 
 import { Component, input, output, signal, computed, effect, inject, OnInit } from '@angular/core';
@@ -78,7 +79,7 @@ export class FileManagementModalComponent implements OnInit {
   readonly canDeleteFiles = computed(() => {
     const roleId = this.roleId();
     const statusId = this.statusId();
-    return MeetingRoles.can(roleId, 'UploadFiles') && ![4, 6].includes(statusId);
+    return readIsMeetingAdmin() || (MeetingRoles.can(roleId, 'UploadFiles') && ![4, 6].includes(statusId));
   });
 
   constructor() {

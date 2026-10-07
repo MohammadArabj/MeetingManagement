@@ -1,3 +1,4 @@
+import { readIsMeetingAdmin } from '../../../core/auth/session.store';
 import { Overlay, OverlayRef } from '@angular/cdk/overlay';
 import { TemplatePortal } from '@angular/cdk/portal';
 import { NgClass, NgStyle } from '@angular/common';
@@ -16,7 +17,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { LocalStorageService } from '../../../services/framework-services/local.storage.service';
-import { IsDeletage, ISSP } from '../../../core/types/configuration';
+import { IsDeletage } from '../../../core/types/configuration';
 import { PasswordFlowService } from '../../../services/framework-services/password-flow.service';
 import { MeetingRoles } from '../../../core/meeting-access/meeting-roles';
 import { MeetingStatus, MeetingStatuses } from '../../../core/meeting-access/meeting-status';
@@ -249,7 +250,7 @@ export class MeetingOptionsCellComponent implements OnDestroy {
     try {
       // Set delegate and super admin status
       this._isDelegate.set(this.localStorageService.getItem(IsDeletage) === 'true');
-      this._isSuperAdmin.set(this.localStorageService.getItem(ISSP) === 'true');
+      this._isSuperAdmin.set(readIsMeetingAdmin());
 
       // Load permissions
       await this.loadPermissions();

@@ -6,6 +6,13 @@ namespace MeetingManagement.Common.Security;
 /// </summary>
 public static class Permissions
 {
+    /// <summary>
+    /// «ادمین مدیریت جلسات»: دسترسی کامل به همه‌ی بخش‌های همین سامانه در همه‌ی وضعیت‌ها
+    /// (همه‌ی دسترسی‌های MT_*، عبور از قفل وضعیت جلسه، مشاهده‌ی همه‌ی جلسات و پیش‌نویس‌ها).
+    /// به سمت داده می‌شود و از راه تفویض منتقل نمی‌شود. جلسات هیئت مدیره همچنان <see cref="BoardViewAll"/> صریح می‌خواهند.
+    /// </summary>
+    public const string MeetingAdmin = "MT_Admin";
+
     // ── جلسات ──────────────────────────────────────────────
     public const string Meetings = "MT_Meetings";
     public const string MeetingsInitialRegister = "MT_Meetings_InitialRegister";

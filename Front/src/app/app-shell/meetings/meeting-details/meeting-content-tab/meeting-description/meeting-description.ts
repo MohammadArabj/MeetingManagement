@@ -1,3 +1,4 @@
+import { readIsMeetingAdmin } from '../../../../../core/auth/session.store';
 import { Component, input, output, signal, computed, effect, inject, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MeetingMember } from '../../../../../core/models/Meeting';
@@ -63,7 +64,7 @@ export class MeetingDescriptionComponent implements OnInit {
     const isStatusAllowed = ![4, 6].includes(statusId) ||
       permissions.has('MT_Descriptions_Edit');
 
-    const canEdit = isUnsignedChairman || hasEditPermission || (isAuthorizedRole && isStatusAllowed);
+    const canEdit = readIsMeetingAdmin() || isUnsignedChairman || hasEditPermission || (isAuthorizedRole && isStatusAllowed);
 
     return canEdit && (isEditing || hasDescription === false);
   });

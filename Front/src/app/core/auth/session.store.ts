@@ -5,6 +5,9 @@ import {
   ROLE_TOKEN_NAME, USER_CURRENT_ACTIVE_SESSION_NAME, USER_ID_NAME,
 } from '../types/configuration';
 
+/** «ادمین مدیریت جلسات»: دسترسی کامل به همه‌ی بخش‌ها در همه‌ی وضعیت‌ها (هم‌نام Permissions.MeetingAdmin در سرور) */
+export const MEETING_ADMIN_PERMISSION = 'MT_Admin';
+
 /** کلیدهایی از localStorage که وضعیت جلسه کاری کاربر را نگه می‌دارند */
 const TRACKED_KEYS = new Set([USER_ID_NAME, Main_USER_ID, POSITION_ID, POSITION_NAME, IsDeletage, ISSP, PERMISSIONS_NAME, USER_CURRENT_ACTIVE_SESSION_NAME]);
 
@@ -99,9 +102,12 @@ export class SessionStore {
     this._positionGuid.set(this.storage.getItem(POSITION_ID));
     this._positionName.set(this.storage.getItem(POSITION_NAME));
     this._isDelegate.set(this.storage.getItem(IsDeletage) === 'true');
-    this._isSuperAdmin.set(this.storage.getItem(ISSP) === 'true');
     this._sessionGuid.set(this.storage.getItem(USER_CURRENT_ACTIVE_SESSION_NAME));
-    this._permissions.set(new Set(normalizePermissions(this.storage.getItem(PERMISSIONS_NAME))));
+    const permissions = new Set(normalizePermissions(this.storage.getItem(PERMISSIONS_NAME)));
+    this._permissions.set(permissions);
+    // ادمین = مدیر کل (UserManagement) یا سمت دارای «ادمین مدیریت جلسات»؛ هیچ‌کدام از راه تفویض نمی‌آید (مانند سرور)
+    const isDelegate = this.storage.getItem(IsDeletage) === 'true';
+    this._isSuperAdmin.set(!isDelegate && (this.storage.getItem(ISSP) === 'true' || permissions.has(MEETING_ADMIN_PERMISSION)));
   }
 }
 
@@ -114,4 +120,13 @@ export function normalizePermissions(value: string | readonly string[] | null | 
     try { return normalizePermissions(JSON.parse(text)); } catch { /* ادامه با CSV */ }
   }
   return text.split(/[,\r\n]+/).map(v => v.replace(/^"|"$/g, '').trim()).filter(Boolean);
+}
+
+/**
+ * ادمین بودن کاربر جاری (برای کدهایی که SessionStore را تزریق نکرده‌اند)؛ همان منطق SessionStore.isSuperAdmin.
+ */
+export function readIsMeetingAdmin(): boolean {
+  if (localStorage.getItem(IsDeletage) === 'true') return false;
+  if (localStorage.getItem(ISSP) === 'true') return true;
+  return normalizePermissions(localStorage.getItem(PERMISSIONS_NAME)).includes(MEETING_ADMIN_PERMISSION);
 }

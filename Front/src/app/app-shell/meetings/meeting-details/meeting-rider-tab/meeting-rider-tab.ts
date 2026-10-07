@@ -1,3 +1,4 @@
+import { readIsMeetingAdmin } from '../../../../core/auth/session.store';
 import { Component, ElementRef, NgZone, OnInit, ViewChild, signal, computed, effect, input, untracked } from '@angular/core';
 import { ActivatedRoute, ParamMap } from '@angular/router';
 import { MeetingDetails, MeetingMember } from '../../../../core/models/Meeting';
@@ -63,6 +64,8 @@ export class MeetingRiderTabComponent implements OnInit {
   readonly currentMember = computed(() => this.meetingBehaviorService.currentMember());
   readonly roleId = computed(() => this.meeting()?.roleId);
   readonly statusId = computed(() => this.meeting()?.statusId);
+  /** ادمین مدیریت جلسات در هر وضعیتی الحاقیه را مدیریت می‌کند */
+  readonly isAdmin = readIsMeetingAdmin();
   readonly rider = computed(() => this.meeting()?.rider ?? '');
   readonly file = computed(() => this.meeting()?.riderGuid ?? '');
   // Input for meeting GUID (optional - if passed from parent)

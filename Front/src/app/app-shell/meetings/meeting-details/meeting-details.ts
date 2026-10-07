@@ -1,3 +1,4 @@
+import { readIsMeetingAdmin } from '../../../core/auth/session.store';
 import { PasswordFlowService } from './../../../services/framework-services/password-flow.service';
 import {
   Component,
@@ -33,7 +34,7 @@ import { MeetingAttendanceAnnouncementTabComponent } from './meeting-attendance-
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MeetingAgendaTabComponent } from './meeting-agenda-tab/meeting-agenda-tab.component';
 import { TusUploadService } from '../../../services/framework-services/tus-upload.service';
-import { ISSP, USER_ID_NAME, POSITION_ID } from '../../../core/types/configuration';
+import { USER_ID_NAME, POSITION_ID } from '../../../core/types/configuration';
 import { AppSettings } from '../../../services/system-setting.service';
 import { MeetingFollowupTabComponent } from "./meeting-followup-tab/meeting-followup-tab";
 import { NavigationService } from '../../../services/framework-services/navigation.service';
@@ -135,7 +136,7 @@ export class MeetingDetailsComponent implements OnInit {
   ];
   // Computed properties for UI logic
   readonly visibleMainTab = computed((): 'ops' | 'details' | null => {
-    const isSuperAdmin = this.localStorageService.getItem(ISSP) === 'true';
+    const isSuperAdmin = readIsMeetingAdmin();
     const currentMember = this.currentMember();
     const isDelegate = currentMember?.isDelegate ?? false;
     const statusId = this.statusId();
@@ -262,7 +263,7 @@ export class MeetingDetailsComponent implements OnInit {
 
   // تغییر متد hasAccessToTab
   hasAccessToTab(tab: string): boolean {
-    const isSuperAdmin = this.localStorageService.getItem(ISSP) === 'true';
+    const isSuperAdmin = readIsMeetingAdmin();
     const currentMember = this.currentMember();
     const isDelegate = currentMember?.isDelegate;
     const isBoardMeeting = this.isBoardMeeting();
@@ -274,13 +275,15 @@ export class MeetingDetailsComponent implements OnInit {
     const isUnsignedChairman = (MeetingRoles.isChairman(roleId) && !hasChairmanSigned);
 
     const S = MeetingStatus;
+    // ادمین مدیریت جلسات بدون عضویت هم همه‌ی تب‌ها را می‌بیند
+    const canSeeAsMember = roleId != 0 || isSuperAdmin;
     const accessRules: { [key: string]: () => boolean } = {
       meetingDetails: () => statusId >= S.Draft && statusId <= S.Undetermined,
       adminAttendance: () => isSuperAdmin && MeetingStatuses.isHeldOrLater(statusId),
-      agendas: () => MeetingStatuses.is(statusId, S.Registered, S.Held, S.Finalized, S.Completed, S.Undetermined) && roleId != 0,
-      attendance: () => MeetingStatuses.is(statusId, S.Registered, S.Undetermined) && !isBoardMeeting && roleId != 0,
-      content: () => (MeetingStatuses.isHeldOrLater(statusId) && roleId != 0) || (isBoardMeeting && statusId === S.Registered),
-      minutes: () => MeetingStatuses.isHeldOrLater(statusId) && roleId != 0 && !isBoardMeeting,
+      agendas: () => MeetingStatuses.is(statusId, S.Registered, S.Held, S.Finalized, S.Completed, S.Undetermined) && canSeeAsMember,
+      attendance: () => MeetingStatuses.is(statusId, S.Registered, S.Undetermined) && !isBoardMeeting && canSeeAsMember,
+      content: () => (MeetingStatuses.isHeldOrLater(statusId) && canSeeAsMember) || (isBoardMeeting && statusId === S.Registered),
+      minutes: () => MeetingStatuses.isHeldOrLater(statusId) && canSeeAsMember && !isBoardMeeting,
       followup: () => (hasChairmanSigned && !isBoardMeeting) || (isBoardMeeting && statusId === S.Completed)
     };
 
@@ -327,7 +330,7 @@ export class MeetingDetailsComponent implements OnInit {
   getTabVisibility(tab: string): boolean {
     const currentMember = this.currentMember();
     const isDelegate = !!currentMember?.isDelegate;
-    const isSuperAdmin = this.localStorageService.getItem(ISSP) === 'true';
+    const isSuperAdmin = readIsMeetingAdmin();
     const isBoardMeeting = this.isBoardMeeting();
     const statusId = this.statusId();
     const hasChairmanSigned = this.hasChairmanSigned();
@@ -451,7 +454,7 @@ export class MeetingDetailsComponent implements OnInit {
   getMeetingDetails(): void {
     const userGuid = this.localStorageService.getItem(USER_ID_NAME);
     const positionGuid = this.localStorageService.getItem(POSITION_ID);
-    const isSuperAdmin = this.localStorageService.getItem(ISSP) === 'true';
+    const isSuperAdmin = readIsMeetingAdmin();
     const meetingGuid = this._meetingGuid();
 
     if (!meetingGuid) return;
@@ -581,7 +584,7 @@ export class MeetingDetailsComponent implements OnInit {
   }
   // در بخش computed signals
   readonly isSuperAdmin = computed(() =>
-    this.localStorageService.getItem(ISSP) === 'true'
+    readIsMeetingAdmin()
   );
 
   readonly statusFlow = [1, 2, 3, 4, 6]; // ترتیب وضعیت‌ها

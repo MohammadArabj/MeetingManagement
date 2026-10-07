@@ -35,7 +35,8 @@ public static class MeetingGuard
             return new Check(access, "جلسه مورد نظر یافت نشد.");
         if (!access.Can(capability))
             return new Check(access, MeetingAccess.DeniedMessage(capability));
-        if (requireOpen && MeetingStatusIds.Closed.Contains(access.StatusId))
+        // ادمین (مدیر سامانه/ادمین مدیریت جلسات) در هر وضعیتی می‌تواند اصلاح کند
+        if (requireOpen && MeetingStatusIds.Closed.Contains(access.StatusId) && !access.IsSuperAdmin)
             return new Check(access, ClosedMessage);
         return new Check(access, null);
     }

@@ -34,9 +34,12 @@ public static class QueryScopes
         var boardGuid = SettingValues.BoardCategoryGuid;
         var viewAll = identity.HasPermission(Permissions.MeetingsViewAll);
         var viewBoard = identity.HasExplicitPermission(Permissions.BoardViewAll);
+        // ادمین همه‌ی جلسات (حتی پیش‌نویس دیگران) را می‌بیند؛ هیئت مدیره فقط با دسترسی صریح
+        var admin = identity.IsSuperAdmin;
 
         return query.Where(m => m.IsRemoved != true && (
-            m.CreatedBy == user || (m.CreatorPositionGuid == position && position != Guid.Empty)
+            (admin && (m.Category!.Guid != boardGuid || viewBoard))
+            || m.CreatedBy == user || (m.CreatorPositionGuid == position && position != Guid.Empty)
             || (m.StatusId != MeetingStatusIds.Draft && (
                 m.MeetingMembers.Any(mm =>
                     (includeGuests || mm.RoleId != guestId) &&

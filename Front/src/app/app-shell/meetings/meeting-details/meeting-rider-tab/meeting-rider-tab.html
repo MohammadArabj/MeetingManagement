@@ -3,7 +3,7 @@
         <div class="card flex-fill">
             <div class="card-header">
                 الحاقیه
-                @if (meetingRoles.isManager(roleId()) && !currentMember().isDelegate && statusId() != 6) {
+                @if (isAdmin || (meetingRoles.isManager(roleId()) && !currentMember().isDelegate && statusId() != 6)) {
                 @if (!isEditingRider() && rider()) {
                 <button class="btn btn-primary btn-sm float-end" (click)="editMeetingRider()">ویرایش</button>
                 }
@@ -22,12 +22,12 @@
                                 (click)="viewFile(file(),$event)">
                                 <i class="fa fa-eye"></i> مشاهده
                             </button>
-                            @if (meetingRoles.isManager(roleId()) && meeting().statusId != 6) {
+                            @if (isAdmin || (meetingRoles.isManager(roleId()) && meeting().statusId != 6)) {
                             <button class="btn btn-outline-info" (click)="download(file())">
                                 <i class="fa fa-download"></i> دانلود
                             </button>
                             }
-                            @if (meetingRoles.isManager(roleId()) && meeting().statusId != 6) {
+                            @if (isAdmin || (meetingRoles.isManager(roleId()) && meeting().statusId != 6)) {
                             <button class="btn btn-outline-danger" (click)="deleteFile(file)">
                                 <i class="fa fa-trash"></i> حذف
                             </button>
@@ -95,12 +95,12 @@
                                         (click)="viewFile(file,$event)">
                                         <i class="fa fa-eye"></i> مشاهده
                                     </button>
-                                    @if (meetingRoles.isManager(roleId()) && statusId() !== 6) {
+                                    @if (isAdmin || (meetingRoles.isManager(roleId()) && statusId() !== 6)) {
                                     <button class="btn btn-outline-info" (click)="download(file)">
                                         <i class="fa fa-download"></i> دانلود
                                     </button>
                                     }
-                                    @if (meetingRoles.isManager(roleId()) && statusId() != 6) {
+                                    @if (isAdmin || (meetingRoles.isManager(roleId()) && statusId() != 6)) {
                                     <button class="btn btn-outline-danger" (click)="deleteFile(file)">
                                         <i class="fa fa-trash"></i> حذف
                                     </button>
