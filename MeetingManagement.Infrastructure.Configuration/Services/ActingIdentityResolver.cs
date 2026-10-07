@@ -125,6 +125,10 @@ public sealed class ActingIdentityResolver(
             var match = rows.FirstOrDefault(x => x.PositionGuid == position && x.UserGuid == actingUser);
             if (match is null)
             {
+                // سمت/کاربر درخواستی متعلق به خود کاربر یا تفویض‌شده به او نیست → شاید «ورود به جای کاربر» باشد
+                var impersonated = await TryImpersonateAsync(client, rows, tokenUser, tokenPosition, actingUser, position, ct);
+                if (impersonated is not null) return (impersonated, VerifiedCacheDuration);
+
                 logger.LogWarning("User {User} requested unverified acting identity {Acting}/{Position}", tokenUser, actingUser, position);
                 return Fallback();
             }
@@ -155,6 +159,48 @@ public sealed class ActingIdentityResolver(
         // فقط هویت خود توکن، بدون هیچ ارتقای دسترسی
         (ActingIdentity, TimeSpan) Fallback(TimeSpan? cacheFor = null) => (TokenOnly(tokenUser, tokenPosition,
             verified: actingUser == tokenUser && tokenPosition == position, tokenPermissions), cacheFor ?? FailedCacheDuration);
+    }
+
+    /// <summary>
+    /// «ورود به جای کاربر»: فقط برای مدیر کل یا سمت دارای MT_Admin / MT_Impersonate (سمت خود کاربر، نه تفویض).
+    /// UserManagement هم همین شرط را مستقل بررسی می‌کند و تعلق سمت به کاربر هدف را تأیید می‌کند.
+    /// دسترسی‌ها دقیقاً دسترسی‌های سمت کاربر هدف است (مدیر چیزی بیش از او نمی‌بیند).
+    /// </summary>
+    private async Task<ActingIdentity?> TryImpersonateAsync(HttpClient client, List<IdentityRow> ownRows,
+        Guid tokenUser, Guid? tokenPosition, Guid actingUser, Guid position, CancellationToken ct)
+    {
+        if (actingUser == tokenUser) return null;
+
+        var own = ownRows.Where(r => !r.IsDelegate && r.UserGuid == tokenUser).ToList();
+        if (own.Count == 0) return null;
+
+        var allowed = own.Any(r => r.IsSuperAdmin);
+        if (!allowed)
+        {
+            var adminPosition = own.FirstOrDefault(r => r.PositionGuid == tokenPosition) ?? own[0];
+            var adminPermissions = await GetPermissionsAsync(client, "api/Permission/GetPositionPermissions",
+                new { ClientId, PositionGuid = adminPosition.PositionGuid }, ct);
+            allowed = adminPermissions is not null
+                      && (adminPermissions.Contains(Permissions.MeetingAdmin) || adminPermissions.Contains(Permissions.Impersonate));
+        }
+        if (!allowed) return null;
+
+        using var response = await client.PostAsJsonAsync("api/Delegation/GetActiveDelegationsForDelegatee",
+            new { UserGuid = actingUser, PositionGuid = position }, ct);
+        if (!response.IsSuccessStatusCode) return null;
+
+        var targetRows = await response.Content.ReadFromJsonAsync<List<IdentityRow>>(cancellationToken: ct) ?? [];
+        var target = targetRows.FirstOrDefault(r => !r.IsDelegate && r.UserGuid == actingUser && r.PositionGuid == position);
+        if (target is null) return null;
+
+        var permissions = await GetPermissionsAsync(client, "api/Permission/GetPositionPermissions",
+            new { ClientId, PositionGuid = position }, ct);
+        if (permissions is null) return null;
+
+        logger.LogInformation("User {Admin} is impersonating {User} with position {Position}", tokenUser, actingUser, position);
+        return new ActingIdentity(tokenUser, actingUser, position, IsDelegate: false,
+            IsSuperAdmin: target.IsSuperAdmin || permissions.Contains(Permissions.MeetingAdmin),
+            Verified: true, permissions, IsImpersonated: true);
     }
 
     private ActingIdentity TokenOnly(Guid tokenUser, Guid? tokenPosition, bool verified, IReadOnlySet<string>? permissions = null) =>

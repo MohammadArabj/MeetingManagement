@@ -95,8 +95,11 @@
 .mm-status-7 { background: var(--mm-warning-50); color: var(--mm-warning); }
 
 /* ── ورود عناصر ────────────────────────────────────────── */
+/* ⚠️ بدون fill-mode (both/forwards): انیمیشن opacity/transform که پس از پایان «اعمال‌شده» بماند، صفحه را به
+   stacking context دائمی تبدیل می‌کند؛ مودال‌های Bootstrap داخل صفحه زیر backdrop (که به body اضافه می‌شود)
+   گیر می‌افتند و هیچ کلیکی به آن‌ها نمی‌رسد. */
 @keyframes mm-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-router-outlet + * { animation: mm-fade-up .28s var(--mm-ease) both; }
+router-outlet + * { animation: mm-fade-up .28s var(--mm-ease); }
 
 @media (max-width: 992px) {
   .content-wrapper { padding: .85rem .75rem 1.25rem !important; }

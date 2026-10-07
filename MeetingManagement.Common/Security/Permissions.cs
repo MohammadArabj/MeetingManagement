@@ -12,6 +12,8 @@ public static class Permissions
     /// به سمت داده می‌شود و از راه تفویض منتقل نمی‌شود. جلسات هیئت مدیره همچنان <see cref="BoardViewAll"/> صریح می‌خواهند.
     /// </summary>
     public const string MeetingAdmin = "MT_Admin";
+    /// <summary>«ورود به جای کاربر»: مشاهده و کار با سامانه دقیقاً با سمت و دسترسی‌های کاربر دیگر (پشتیبانی)</summary>
+    public const string Impersonate = "MT_Impersonate";
 
     // ── جلسات ──────────────────────────────────────────────
     public const string Meetings = "MT_Meetings";

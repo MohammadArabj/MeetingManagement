@@ -176,6 +176,10 @@ public class MemberCommandHandler(
     {
         if (wantSign is null || wantSign == (member.IsSign == true)) return null;
 
+        // امضا کار شخصی است؛ در «ورود به جای کاربر» مدیر نمی‌تواند به نام او امضا کند یا امضایش را بردارد
+        if (identity.IsImpersonated)
+            return "در حالت «ورود به جای کاربر» امکان امضا یا برداشتن امضا وجود ندارد.";
+
         var isChairman = MeetingRoles.Is(member.RoleId, MeetingRoleKey.Chairman);
 
         if (wantSign == false)

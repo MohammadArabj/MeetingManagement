@@ -14,7 +14,9 @@ public sealed record ActingIdentity(
     /// <summary>مدیر کل (سمت مدیر سامانه در UserManagement) یا «ادمین مدیریت جلسات» (MT_Admin)؛ هرگز از راه تفویض</summary>
     bool IsSuperAdmin,
     bool Verified,
-    IReadOnlySet<string> Permissions)
+    IReadOnlySet<string> Permissions,
+    /// <summary>«ورود به جای کاربر»: TokenUserGuid مدیر واقعی است و UserGuid/PositionGuid کاربر هدف</summary>
+    bool IsImpersonated = false)
 {
     /// <summary>دسترسی سیستمی برای سمت/تفویض فعال (مدیر سامانه و ادمین مدیریت جلسات همه را دارند)</summary>
     public bool HasPermission(string permission) => IsSuperAdmin || Permissions.Contains(permission);
