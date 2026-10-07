@@ -368,9 +368,29 @@ npm test           # تست‌های واحد (Karma + Jasmine)
 - سیستم طراحی در `Front/src/styles/` (`tokens.css`، `base.css`، `components.css`، `layout.css`، `vendors.css`)، تم ag-grid در `shared/ag-grid-base/grid-theme.ts` و حالت تیره در `core/theme/theme.service.ts`.
 - راهنما: محتوا در `core/help/help-content.ts` (هر موضوع با `match` به مسیر صفحه وصل است)، پنل در `app-shell/help-panel`، دکمه‌ی بخشی `<app-help-button topic="...">`.
 
+## ۹-۱. پایداری، ورود به جای کاربر، واکنش‌گرایی و ویرایشگر
+
+- **Scope درخواست:** `QueryBus`/`CommandBus` پکیج Epc هندلرها را از Container ریشه می‌ساختند؛ پس DbContext فرمان،
+  `MeetingAccessService`، `ActingIdentityResolver` و `CurrentUser` بین همه‌ی درخواست‌ها و کاربران مشترک بودند (خطای
+  «A second operation was started on this context…»، ماندن هویت قبلی و حتی استفاده از دسترسی یک کاربر برای کاربر دیگر).
+  `RequestScopedServiceLocator` هندلرها را از Scope همان درخواست می‌سازد.
+- **راستی‌آزمایی هویت:** فراخوانی UserManagement برای هر کاربر/سمت یک بار (single-flight) و با مهلت مستقل از لغو درخواست
+  انجام می‌شود (رفع «A task was canceled»).
+- **تغییر سمت / تفویض / ورود به جای کاربر:** `core/auth/identity.service.ts` پیش از رندر صفحه سمت را با سمت‌های واقعی
+  کاربر تطبیق می‌دهد و اطلاعات کاربر عامل را بارگذاری می‌کند؛ هر تغییر هویت دسترسی‌ها را می‌گیرد، داده‌های کش‌شده را پاک
+  و برنامه را کامل بارگذاری می‌کند. ورود به جای کاربر را سرور مستقل بررسی می‌کند (مدیر کل، `MT_Admin` یا `MT_Impersonate`)
+  و در این حالت امضا ممکن نیست.
+- **فایل‌ها:** رئیس، دبیر و دبیر غیرعضو فایل‌های یکدیگر را مدیریت می‌کنند (بارگذاری‌کننده ملاک نیست).
+- **مودال‌ها:** انیمیشن ورود صفحه با `fill-mode` صفحه را stacking context می‌کرد و مودال‌ها زیر backdrop می‌ماندند.
+- **واکنش‌گرا:** ≥۱۲۰۰ منوی کامل؛ ۹۹۲–۱۱۹۹ نوار آیکونی که روی محتوا باز می‌شود؛ زیر ۹۹۲ منوی کشویی با دکمه‌ی ☰ سرصفحه.
+- **ویرایشگر متن** (`shared/rich-text-editor`): شرح جلسه، متن/توضیحات مصوبه، مستندات و تصمیمات هیئت مدیره و الحاقیه؛
+  شمارنده‌ی حجم نسبت به سقف ستون پایگاه داده؛ متن‌های قدیمی ساده با همان شکل نمایش و چاپ می‌شوند.
+- **دسترسی‌ها:** اسکریپت `integrations/sql/meeting-permissions.sql` دسترسی‌های جاافتاده (شناسه‌های ۵۰۳ تا ۵۱۴) را اضافه می‌کند.
+
 ## ۱۰. استقرار این نسخه
 
-1. در UserManagement دسترسی‌های `MT_Admin`، `MT_Board_ViewAll` و `MT_PrintTemplates` را تعریف و به سمت‌ها بدهید.
+1. اسکریپت `integrations/sql/meeting-permissions.sql` را روی پایگاه داده‌ی UserManagement اجرا کنید و دسترسی‌های `MT_Admin`،
+   `MT_Board_ViewAll`، `MT_Impersonate`، `MT_PrintTemplates` و ... را به سمت‌ها بدهید.
 2. patchهای `integrations/` را روی SSO، UserManagement و FileManagement اعمال کنید و `Realtime:*` را با کلید مشترک تنظیم کنید.
    کلیدهای فایل (`UrlSigningKey`، `SignatureUrlKey`، `PhotoTokenKey`) را بسازید و پوشه‌ی `wwwroot/EpcSignature` مدیریت فایل را به
    `App_Data/signatures` منتقل کنید (راهنما: `integrations/README.md`).
