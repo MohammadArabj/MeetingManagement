@@ -827,7 +827,10 @@ export class ResolutionFormComponent implements OnInit, OnChanges {
   // Cancel / destroy / reset
   // ═══════════════════════════════════════════════════════════
   async cancelForm(): Promise<void> {
-    await this.files.deleteNewUploadsOnCancel();
+    // await فقط در صورت وجود فایل جدید (مانند قبل؛ در غیر این صورت ریست به‌صورت همگام انجام می‌شود)
+    if (this.files.hasNewUploads()) {
+      await this.files.deleteNewUploadsOnCancel();
+    }
 
     this.resetForm();
     this.modalClosed.emit();

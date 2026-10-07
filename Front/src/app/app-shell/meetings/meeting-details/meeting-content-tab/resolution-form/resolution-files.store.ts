@@ -513,6 +513,10 @@ export class ResolutionFilesStore {
       .map(x => x.fileGuid!);
   }
 
+  hasNewUploads(): boolean {
+    return this.newUploadedGuids().length > 0;
+  }
+
   /** حذف فایل‌های آپلودشده‌ی ذخیره‌نشده هنگام لغو فرم */
   async deleteNewUploadsOnCancel(): Promise<void> {
     const guids = this.newUploadedGuids();

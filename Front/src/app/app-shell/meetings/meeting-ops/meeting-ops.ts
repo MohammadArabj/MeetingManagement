@@ -1,4 +1,3 @@
-import { PasswordFlowService } from './../../../services/framework-services/password-flow.service';
 import {
   Component,
   input,
@@ -29,12 +28,7 @@ import { ComboBase } from '../../../shared/combo-base';
 import { ConflictResult, RoomConflictMeeting, SuggestedSlot } from '../../../core/types/conflict-result';
 import { CreatType } from '../../../core/types/enums';
 
-import { CategoryService } from '../../../services/category.service';
 import { MeetingService } from '../../../services/meeting.service';
-import { RoomService } from '../../../services/room.service';
-import { UserService } from '../../../services/user.service';
-import { BoardMemberService } from '../../../services/board-member.service';
-import { MeetingMemberService } from '../../../services/meeting-member.service';
 import { LocalStorageService } from '../../../services/framework-services/local.storage.service';
 import { BreadcrumbService } from '../../../services/framework-services/breadcrumb.service';
 import { SwalService } from '../../../services/framework-services/swal.service';
@@ -49,11 +43,7 @@ import { MeetingAgendasComponent } from './meeting-agendas/meeting-agendas';
 import { RoomConflictModalComponent } from './room-conflict-modal/room-conflict-modal';
 import { MeetingOpsActionsComponent } from './meeting-ops-actions/meeting-ops-actions';
 
-import {
-  POSITION_ID,
-  USER_ID_NAME
-} from '../../../core/types/configuration';
-import { getClientSettings } from '../../../services/framework-services/code-flow.service';
+import { POSITION_ID } from '../../../core/types/configuration';
 import { environment } from '../../../../environments/environment';
 import { AppSettings } from '../../../services/system-setting.service';
 import { MeetingRoles } from '../../../core/meeting-access/meeting-roles';
@@ -68,8 +58,7 @@ import {
   computeSlotDurationMinutes,
   filterConflictsForMembers,
   hasBlockingConflicts,
-  hasMembershipChanged,
-  processUsersForMultiPosition
+  hasMembershipChanged
 } from './meeting-ops.helpers';
 import {
   applyBoardNumberValidator,
@@ -85,6 +74,7 @@ import {
   replaceFormArrayControls
 } from './meeting-ops-form.helpers';
 import { MeetingOpsMembersService } from './meeting-ops-members.service';
+import { MeetingOpsDataService } from './meeting-ops-data.service';
 
 @Component({
   selector: 'app-meeting-ops',
@@ -101,7 +91,7 @@ import { MeetingOpsMembersService } from './meeting-ops-members.service';
     MeetingOpsActionsComponent,
     NgClass
   ],
-  providers: [MeetingOpsMembersService],
+  providers: [MeetingOpsMembersService, MeetingOpsDataService],
   standalone: true,
   styleUrls: ['./meeting-ops.css']
 })
@@ -111,20 +101,15 @@ export class MeetingOpsComponent implements OnInit {
   // ===== DEPENDENCY INJECTION =====
   private readonly fb = inject(FormBuilder);
   private readonly meetingService = inject(MeetingService);
-  private readonly roomService = inject(RoomService);
-  private readonly categoryService = inject(CategoryService);
-  private readonly userService = inject(UserService);
-  private readonly boardMemberService = inject(BoardMemberService);
-  private readonly memberService = inject(MeetingMemberService);
-  private readonly passwordFlowService = inject(PasswordFlowService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly swalService = inject(SwalService);
   private readonly toastService = inject(ToastService);
   private readonly breadcrumbService = inject(BreadcrumbService);
-  private readonly localStorageService = inject(LocalStorageService);
   private readonly meetingBehaviorService = inject(MeetingBehaviorService);
+  private readonly localStorageService = inject(LocalStorageService);
   private readonly membersService = inject(MeetingOpsMembersService);
+  private readonly dataService = inject(MeetingOpsDataService);
   private readonly destroyRef = inject(DestroyRef);
 
   // ===== INPUT SIGNALS =====
@@ -395,89 +380,39 @@ export class MeetingOpsComponent implements OnInit {
   }
 
   private async loadRooms(): Promise<void> {
-    try {
-      const rooms = await this.roomService.getForCombo<ComboBase[]>().toPromise() || [];
-      this._rooms.set(rooms);
-    } catch (error) {
-      console.error('Error loading rooms:', error);
-      this._rooms.set([]);
-    }
+    this._rooms.set(await this.dataService.loadRooms());
   }
 
   private async loadCategories(): Promise<void> {
-    try {
-      const hasPermission = await this.passwordFlowService.checkPermission('MT_Meetings_ViewAllMeetings');
-      const categories = await this.categoryService.getForComboByCondition<ComboBase[]>(hasPermission).toPromise() || [];
-      this._categories.set(categories);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-      this._categories.set([]);
-    }
+    this._categories.set(await this.dataService.loadCategories());
   }
+
   private async loadAllUsers(): Promise<void> {
-    try {
-      const users = await this.userService.getAll<SystemUser[]>().toPromise() || [];
-
-      const processedUsers = processUsersForMultiPosition(users)
-
-      this._allUsers.set(processedUsers);
-    } catch (error) {
-      console.error('Error loading users:', error);
+    const users = await this.dataService.loadAllUsers();
+    if (users) {
+      this._allUsers.set(users);
+    } else {
+      // رفتار قبلی حفظ شده: در صورت خطا لیست کاربران سیستم خالی می‌شود
       this._systemUsers.set([]);
     }
   }
+
   private async loadSystemUsers(): Promise<void> {
-    try {
-      const clientId = getClientSettings().client_id ?? '';
-      const users = await this.userService.getAllByClientId<SystemUser[]>(clientId).toPromise() || [];
-
-      const processedUsers = processUsersForMultiPosition(users);
-
-      this._systemUsers.set(processedUsers);
+    const users = await this.dataService.loadSystemUsers();
+    if (users) {
+      this._systemUsers.set(users);
       this.updateAvailableUsers();
-    } catch (error) {
-      console.error('Error loading users:', error);
+    } else {
       this._systemUsers.set([]);
     }
   }
-
 
   private async loadBoardMembers(): Promise<void> {
-    try {
-      const boardMembers = await this.boardMemberService.getList<BoardMember[]>().toPromise() || [];
-      this._boardMembers.set(boardMembers);
-    } catch (error) {
-      console.error('Error loading board members:', error);
-      this._boardMembers.set([]);
-    }
+    this._boardMembers.set(await this.dataService.loadBoardMembers());
   }
 
   private async loadMeetingsList(): Promise<void> {
-    try {
-      const userGuid = this.localStorageService.getItem(USER_ID_NAME);
-      const positionGuid = this.localStorageService.getItem(POSITION_ID);
-      const hasPermission = await this.passwordFlowService.checkPermission('MT_Meetings_ViewAllMeetings');
-
-      const filter = {
-        userGuid,
-        positionGuid,
-        filterType: 'All',
-        canViewAll: hasPermission
-      };
-
-      const meetings = (await this.meetingService.getMeetings(filter).toPromise()) as any[] || [];
-      const processedMeetings = meetings
-        .filter((meeting: any) => meeting.guid !== this._meetingGuid())
-        .map((meeting: any) => ({
-          guid: meeting.guid,
-          title: `${meeting.number} - ${meeting.title}`
-        }));
-
-      this._meetings.set(processedMeetings);
-    } catch (error) {
-      console.error('Error loading meetings list:', error);
-      this._meetings.set([]);
-    }
+    this._meetings.set(await this.dataService.loadMeetingsList(() => this._meetingGuid()));
   }
 
   private async loadMeeting(): Promise<void> {
@@ -489,7 +424,12 @@ export class MeetingOpsComponent implements OnInit {
     this._isLoading.set(true);
 
     try {
-      const meetingData = await this.loadMeetingData(meetingGuid);
+      const meetingData = await this.dataService.loadMeetingData(
+        meetingGuid,
+        () => this.createType() === CreatType.Edit,
+        () => this.router.url.includes('/clone/'),
+        () => this.meetingBehaviorService.members()
+      );
       if (meetingData) {
         setTimeout(() => {
           const user = this.allUsers().find(x => x.baseUserGuid === meetingData.meeting.createdBy);
@@ -504,38 +444,6 @@ export class MeetingOpsComponent implements OnInit {
       this.toastService.error('خطا در بارگذاری جلسه');
     } finally {
       this._isLoading.set(false);
-    }
-  }
-
-  private async loadMeetingData(meetingGuid: string): Promise<LoadedMeetingData | null> {
-    try {
-      const meeting = await this.meetingService.getForEdit<any>(meetingGuid).toPromise();
-      if (!meeting) return null;
-
-      const userGuid = this.localStorageService.getItem(USER_ID_NAME);
-      let members: MeetingMember[] = [];
-
-      // بارگذاری اعضا بر اساس حالت عملیات
-      const isCloneOperation = this.router.url.includes('/clone/');
-
-      if (this.createType() === CreatType.Edit) {
-        // برای ویرایش: بارگذاری اعضای واقعی جلسه
-        members = this.meetingBehaviorService.members() || [];
-        // members = await this.memberService.getUserList(meetingGuid, userGuid).toPromise() || [];
-
-      } else if (isCloneOperation) {
-        // برای کپی: بارگذاری اعضا برای کپی کردن
-        members = await this.memberService.getUserList(meetingGuid, userGuid).toPromise() || [];
-      }
-
-      return {
-        meeting,
-        members,
-        agendas: meeting?.agendas
-      };
-    } catch (error) {
-      console.error('Error loading meeting data:', error);
-      return null;
     }
   }
 
