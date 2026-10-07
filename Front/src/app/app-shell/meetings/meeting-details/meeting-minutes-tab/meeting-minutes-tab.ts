@@ -1,3 +1,4 @@
+import { HelpButtonComponent } from '../../../../shared/help-button/help-button.component';
 import { readIsMeetingAdmin } from '../../../../core/auth/session.store';
 // meeting-minutes-tab.component.ts
 
@@ -57,7 +58,7 @@ interface FormattedAssignment {
 @Component({
   selector: 'app-meeting-minutes-tab',
   standalone: true,
-  imports: [
+  imports: [HelpButtonComponent, 
     CommonModule,
     CustomInputComponent,
     ReactiveFormsModule,

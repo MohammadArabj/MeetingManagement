@@ -7,10 +7,11 @@ import { SidebarComponent } from './sidebar/sidebar';
 import { SidebarService } from '../services/framework-services/sidebar.service';
 import { SystemSettingService } from '../services/system-setting.service';
 import { RealtimeService } from '../core/realtime/realtime.service';
+import { HelpPanelComponent } from './help-panel/help-panel.component';
 
 @Component({
   selector: 'app-app-shell',
-  imports: [SidebarComponent, HeaderComponent, BreadcrumbComponent, RouterOutlet],
+  imports: [SidebarComponent, HeaderComponent, BreadcrumbComponent, RouterOutlet, HelpPanelComponent],
   templateUrl: './app-shell.html',
   styleUrl: './app-shell.css',
   standalone: true

@@ -1,3 +1,4 @@
+import { HelpButtonComponent } from '../../../shared/help-button/help-button.component';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { PrintService } from '../../../core/print/print.service';
 import { PrintSettingsModel } from '../../../services/print-settings.service';
@@ -11,12 +12,12 @@ import { PrintTemplateDesignerComponent } from './print-template-designer.compon
  */
 @Component({
   selector: 'app-print-settings',
-  imports: [PrintBrandingFormComponent, PrintTemplateDesignerComponent],
+  imports: [HelpButtonComponent, PrintBrandingFormComponent, PrintTemplateDesignerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="card settings-card">
       <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <h5 class="mb-0"><i class="fas fa-print me-2 text-primary"></i>چاپ و قالب‌ها</h5>
+        <h5 class="mb-0 d-flex align-items-center gap-2"><i class="fas fa-print text-primary"></i>چاپ و قالب‌ها <app-help-button topic="print-settings" /></h5>
         <ul class="nav nav-pills nav-sm">
           <li class="nav-item">
             <button type="button" class="nav-link" [class.active]="tab() === 'branding'" (click)="tab.set('branding')">سربرگ و لوگو</button>

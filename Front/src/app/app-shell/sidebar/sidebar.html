@@ -113,9 +113,13 @@
   </ul>
   <div class="sidebar-footer">
     @if (!isMenuCollapsed()) {
-    <button class="whats-new-btn" (click)="openWhatsNew()" title="مشاهده تغییرات جدید">
-      <i class="fa fa-question-circle"></i>
+    <button class="whats-new-btn" (click)="help.open()" title="راهنمای این صفحه (F1)">
+      <i class="fa fa-life-ring"></i>
       <span>راهنما</span>
+    </button>
+    <button class="whats-new-btn subtle" (click)="openWhatsNew()" title="مشاهده تغییرات نسخه‌ی جدید">
+      <i class="fa fa-gift"></i>
+      <span>تازه‌ها</span>
       @if (hasNewUpdates()) {
       <span class="new-badge">جدید</span>
       }

@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { SidebarService } from '../../services/framework-services/sidebar.service';
 import { HasPermissionDirective } from '../../core/directives/has-permission.directive';
 import { WhatsNewComponent } from '../whats-new/whats-new.component';
+import { HelpService } from '../../core/help/help.service';
 
 @Component({
   selector: 'app-sidebar',
@@ -22,6 +23,7 @@ import { WhatsNewComponent } from '../whats-new/whats-new.component';
 })
 export class SidebarComponent {
   private readonly sidebarService = inject(SidebarService);
+  readonly help = inject(HelpService);
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // Version Configuration

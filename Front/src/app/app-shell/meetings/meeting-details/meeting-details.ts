@@ -1,3 +1,4 @@
+import { HelpButtonComponent } from '../../../shared/help-button/help-button.component';
 import { readIsMeetingAdmin } from '../../../core/auth/session.store';
 import { PasswordFlowService } from './../../../services/framework-services/password-flow.service';
 import {
@@ -50,7 +51,7 @@ declare var Swal: any;
   templateUrl: './meeting-details.html',
   styleUrls: ['./meeting-details.css'],
   standalone: true,
-  imports: [
+  imports: [HelpButtonComponent, 
     FormsModule,
     ReactiveFormsModule,
     MeetingContentTabComponent,
