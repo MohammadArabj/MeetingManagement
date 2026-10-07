@@ -206,138 +206,68 @@ public class QuestionCommandHandler(
 
     #region Private Methods
 
-    private async Task ProcessOptionsAsync(Question question, List<QuestionOptionDto> optionDtos, Guid userId)
+    /// <summary>
+    /// گزینه‌ها با Guid در همان سوال پیدا می‌شوند (قبلاً با مخزن «سوال» جستجو می‌شد و هیچ ویرایش/حذفی اعمال نمی‌شد؛
+    /// افزودن هم غیرفعال بود).
+    /// </summary>
+    private Task ProcessOptionsAsync(Question question, List<QuestionOptionDto> optionDtos, Guid userId)
     {
         if (optionDtos == null || !optionDtos.Any())
-            return;
+            return Task.CompletedTask;
 
-        // حذف گزینه‌های mark شده
-        var toRemove = optionDtos.Where(o => o.IsRemoved && o.Guid.HasValue).ToList();
-        foreach (var dto in toRemove)
-        {
-            var optionId = await questionRepository.GetIdByAsync(dto.Guid.Value);
-            if (optionId > 0)
-            {
-                var option = question.Options.FirstOrDefault(o => o.Id == optionId);
-                if (option != null)
-                {
-                    option.Deactivate(); // استفاده از متد پایه
-                }
-            }
-        }
+        var byGuid = question.Options.GroupBy(o => o.Guid).ToDictionary(g => g.Key, g => g.First());
 
-        // ویرایش و افزودن گزینه‌ها
-        var activeOptions = optionDtos.Where(o => !o.IsRemoved).ToList();
-        foreach (var dto in activeOptions)
+        foreach (var dto in optionDtos.Where(o => o.IsRemoved && o.Guid.HasValue))
+            if (byGuid.TryGetValue(dto.Guid!.Value, out var option))
+                option.Deactivate();
+
+        foreach (var dto in optionDtos.Where(o => !o.IsRemoved))
         {
-            if (dto.Guid.HasValue)
+            var value = dto.Value?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            Guid? image = Guid.TryParse(dto.ImageUrl, out var g) ? g : null;
+
+            if (dto.Guid.HasValue && byGuid.TryGetValue(dto.Guid.Value, out var option))
             {
-                // ویرایش
-                var optionId = await questionRepository.GetIdByAsync(dto.Guid.Value);
-                if (optionId > 0)
-                {
-                    var option = question.Options.FirstOrDefault(o => o.Id == optionId);
-                    if (option != null)
-                    {
-                        //option.Edit(dto.OptionText, dto.SortOrder, dto.Value, dto.ImageUrl);
-                        if (!string.IsNullOrEmpty(dto.Color))
-                            option.SetColor(dto.Color);
-                    }
-                }
+                option.Edit(dto.OptionText, dto.SortOrder, value, image, dto.Color);
             }
             else
             {
-                // افزودن - طبق امضای سازنده: creator, questionId, optionText, sortOrder, value, imageUrl
-                //var newOption = new QuestionOption(
-                //    userId,
-                //    question.Id,
-                //    dto.OptionText,
-                //    dto.SortOrder,
-                //    dto.Value,
-                //    dto.ImageUrl);
-
-                //if (!string.IsNullOrEmpty(dto.Color))
-                //    newOption.SetColor(dto.Color);
-
-                // Note: باید متد AddOption در Question Entity وجود داشته باشد
-                // question.AddOption(newOption);
+                question.Options.Add(new QuestionOption(userId, question.Id, dto.OptionText, dto.SortOrder, value, image, dto.Color));
             }
         }
+        return Task.CompletedTask;
     }
 
+    /// <summary>منطق‌ها؛ سوال مقصد فقط از همین نظرسنجی و گزینه فقط از همین سوال</summary>
     private async Task ProcessLogicsAsync(Question question, List<QuestionLogicDto> logicDtos, Guid userId)
     {
         if (logicDtos == null || !logicDtos.Any())
             return;
 
-        // حذف منطق‌های mark شده
-        var toRemove = logicDtos.Where(l => l.IsRemoved && l.Guid.HasValue).ToList();
-        foreach (var dto in toRemove)
+        var byGuid = question.QuestionLogics.GroupBy(l => l.Guid).ToDictionary(g => g.Key, g => g.First());
+        var surveyQuestions = await questionRepository.GetBySurveyIdAsync(question.SurveyId);
+
+        foreach (var dto in logicDtos.Where(l => l.IsRemoved && l.Guid.HasValue))
+            if (byGuid.TryGetValue(dto.Guid!.Value, out var logic))
+                logic.Deactivate();
+
+        foreach (var dto in logicDtos.Where(l => !l.IsRemoved))
         {
-            var logicId = await questionRepository.GetIdByAsync(dto.Guid.Value);
-            if (logicId > 0)
+            long? targetQuestionId = dto.TargetQuestionGuid.HasValue
+                ? surveyQuestions.FirstOrDefault(q => q.Guid == dto.TargetQuestionGuid.Value)?.Id
+                : null;
+            long? optionId = dto.OptionGuid.HasValue
+                ? question.Options.FirstOrDefault(o => o.Guid == dto.OptionGuid.Value)?.Id
+                : null;
+
+            if (dto.Guid.HasValue && byGuid.TryGetValue(dto.Guid.Value, out var logic))
             {
-                var logic = question.QuestionLogics.FirstOrDefault(l => l.Id == logicId);
-                if (logic != null)
-                {
-                    logic.Deactivate();
-                }
-            }
-        }
-
-        // ویرایش و افزودن منطق‌ها
-        var activeLogics = logicDtos.Where(l => !l.IsRemoved).ToList();
-        foreach (var dto in activeLogics)
-        {
-            if (dto.Guid.HasValue)
-            {
-                // ویرایش
-                var logicId = await questionRepository.GetIdByAsync(dto.Guid.Value);
-                if (logicId > 0)
-                {
-                    var logic = question.QuestionLogics.FirstOrDefault(l => l.Id == logicId);
-                    if (logic != null)
-                    {
-                        var targetQuestionId = dto.TargetQuestionGuid.HasValue
-                            ? await questionRepository.GetIdByAsync(dto.TargetQuestionGuid.Value)
-                            : (long?)null;
-
-                        var optionId = dto.OptionGuid.HasValue
-                            ? await questionRepository.GetIdByAsync(dto.OptionGuid.Value)
-                            : (long?)null;
-
-                        logic.Edit(
-                            targetQuestionId,
-                            dto.LogicType,
-                            dto.ConditionOperator,
-                            dto.ConditionValue,
-                            optionId,
-                            dto.Priority);
-                    }
-                }
+                logic.Edit(targetQuestionId, dto.LogicType, dto.ConditionOperator, dto.ConditionValue, optionId, dto.Priority);
             }
             else
             {
-                // افزودن - امضای سازنده: creator, sourceQuestionId, targetQuestionId, logicType, conditionOperator, conditionValue, optionId
-                var targetQuestionId = dto.TargetQuestionGuid.HasValue
-                    ? await questionRepository.GetIdByAsync(dto.TargetQuestionGuid.Value)
-                    : (long?)null;
-
-                var optionId = dto.OptionGuid.HasValue
-                    ? await questionRepository.GetIdByAsync(dto.OptionGuid.Value)
-                    : (long?)null;
-
-                //var newLogic = new QuestionLogic(
-                //    userId,
-                //    question.Id,
-                //    targetQuestionId,
-                //    dto.LogicType,
-                //    dto.ConditionOperator,
-                //    dto.ConditionValue,
-                //    optionId);
-
-                // Note: Priority باید set شود چون در سازنده نیست
-                // باید یک متد SetPriority در Entity وجود داشته باشد یا با reflection set شود
+                question.QuestionLogics.Add(new QuestionLogic(userId, question.Id, targetQuestionId,
+                    dto.LogicType, dto.ConditionOperator, dto.ConditionValue, optionId, dto.Priority));
             }
         }
     }

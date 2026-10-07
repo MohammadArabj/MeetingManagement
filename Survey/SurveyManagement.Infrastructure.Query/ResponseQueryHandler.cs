@@ -27,6 +27,36 @@ public class ResponseQueryHandler(
     private const int K_ANONYMITY_THRESHOLD = 5;
     private const int MaxPageSize = 200;
 
+    // متن گزینه‌ها یک بار برای همه‌ی سوالات خوانده می‌شود (قبلاً یک کوئری برای هر پاسخ: N+1)
+    private readonly Dictionary<long, string> _optionText = new();
+
+    private async Task PreloadOptionsAsync(IEnumerable<long> questionIds)
+    {
+        var ids = questionIds.Distinct().ToList();
+        if (ids.Count == 0) return;
+        foreach (var o in await context.QuestionOptions.AsNoTracking()
+                     .Where(o => ids.Contains(o.QuestionId))
+                     .Select(o => new { o.Id, o.OptionText })
+                     .ToListAsync())
+            _optionText[o.Id] = o.OptionText;
+    }
+
+    private async Task<string?> OptionTextAsync(long id)
+    {
+        if (_optionText.TryGetValue(id, out var text)) return text;
+        text = await context.QuestionOptions.AsNoTracking().Where(o => o.Id == id).Select(o => o.OptionText).FirstOrDefaultAsync();
+        if (text is not null) _optionText[id] = text;
+        return text;
+    }
+
+    private async Task<List<string>> OptionTextsAsync(IEnumerable<long> ids)
+    {
+        var list = new List<string>();
+        foreach (var id in ids)
+            if (await OptionTextAsync(id) is { } t) list.Add(t);
+        return list;
+    }
+
     /// <summary>نتایج فقط برای مالک، مدیر سامانه یا دارنده‌ی «مشاهده‌ی نتایج» همین نظرسنجی</summary>
     private async Task<bool> CanViewResultsAsync(long surveyId) =>
         (await access.GetAsync(surveyId))?.CanViewResults ?? false;
@@ -144,7 +174,7 @@ public class ResponseQueryHandler(
             StartedAt = response.StartedAt.ToString("yyyy/MM/dd HH:mm"),
             CompletedAt = response.CompletedAt?.ToString("yyyy/MM/dd HH:mm"),
             TimeSpentSeconds = response.TimeSpentSeconds,
-            Answers = await MapAnswersToDto(response.Answers.ToList())
+            Answers = await MapAnswersWithOptionsAsync(response.Answers.ToList())
         };
 
         return Result<ResponseDetailDto>.Success(detail);
@@ -197,9 +227,11 @@ public class ResponseQueryHandler(
             return Result<ResponseMatrixDto>.Failure(null, "شما به نتایج این نظرسنجی دسترسی ندارید.");
 
         var questions = await context.Questions
+            .AsNoTracking()
             .Where(q => q.SurveyId == survey.Id)
             .OrderBy(q => q.SortOrder)
             .ToListAsync();
+        await PreloadOptionsAsync(questions.Select(q => q.Id));
 
         var responses = await context.Responses
             .AsNoTracking()
@@ -255,6 +287,12 @@ public class ResponseQueryHandler(
 
     #region Private Methods
 
+    private async Task<List<ResponseAnswerDetailDto>> MapAnswersWithOptionsAsync(List<Domain.ResponseAgg.ResponseAnswer> answers)
+    {
+        await PreloadOptionsAsync(answers.Select(a => a.QuestionId));
+        return await MapAnswersToDto(answers);
+    }
+
     private async Task<List<ResponseAnswerDetailDto>> MapAnswersToDto(
         List<Domain.ResponseAgg.ResponseAnswer> answers)
     {
@@ -282,23 +320,13 @@ public class ResponseQueryHandler(
             };
 
             if (answer.SelectedOptionId.HasValue)
-            {
-                var option = await context.QuestionOptions
-                    .FirstOrDefaultAsync(o => o.Id == answer.SelectedOptionId.Value);
-                dto.SelectedOption = option?.OptionText;
-            }
+                dto.SelectedOption = await OptionTextAsync(answer.SelectedOptionId.Value);
 
             if (!string.IsNullOrEmpty(answer.SelectedOptionIds))
             {
                 var optionIds = ParseJsonList<long>(answer.SelectedOptionIds);
                 if (optionIds?.Any() == true)
-                {
-                    var options = await context.QuestionOptions
-                        .Where(o => optionIds.Contains(o.Id))
-                        .Select(o => o.OptionText)
-                        .ToListAsync();
-                    dto.SelectedOptions = options;
-                }
+                    dto.SelectedOptions = await OptionTextsAsync(optionIds);
             }
 
             result.Add(dto);
@@ -335,10 +363,9 @@ public class ResponseQueryHandler(
             case QuestionType.Dropdown:
             case QuestionType.YesNo:
                 {
-                    if (!answer.SelectedOptionId.HasValue) return "-";
-                    var option = await context.QuestionOptions
-                        .FirstOrDefaultAsync(o => o.Id == answer.SelectedOptionId.Value);
-                    var text = option?.OptionText ?? "-";
+                    if (!answer.SelectedOptionId.HasValue)
+                        return string.IsNullOrWhiteSpace(answer.OtherAnswer) ? "-" : $"سایر: {answer.OtherAnswer}";
+                    var text = await OptionTextAsync(answer.SelectedOptionId.Value) ?? "-";
                     return string.IsNullOrWhiteSpace(answer.OtherAnswer) ? text : $"{text} (سایر: {answer.OtherAnswer})";
                 }
 
@@ -349,13 +376,7 @@ public class ResponseQueryHandler(
                     {
                         var optionIds = ParseJsonList<long>(answer.SelectedOptionIds);
                         if (optionIds?.Any() == true)
-                        {
-                            var options = await context.QuestionOptions
-                                .Where(o => optionIds.Contains(o.Id))
-                                .Select(o => o.OptionText)
-                                .ToListAsync();
-                            parts.AddRange(options);
-                        }
+                            parts.AddRange(await OptionTextsAsync(optionIds));
                     }
                     if (!string.IsNullOrWhiteSpace(answer.OtherAnswer))
                         parts.Add($"سایر: {answer.OtherAnswer}");

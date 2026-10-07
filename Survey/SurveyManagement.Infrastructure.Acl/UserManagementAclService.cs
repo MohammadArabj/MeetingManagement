@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using System.Collections.Concurrent;
+using Microsoft.Extensions.Configuration;
 using RestSharp;
 using Microsoft.AspNetCore.Http;
 using SurveyManagement.Domain.Shared.Acls.UserManagement;
@@ -7,6 +8,11 @@ namespace SurveyManagement.Infrastructure.Acl;
 
 public class UserManagementAclService : IUserManagementAclService
 {
+    // یک RestClient (و HttpClient زیر آن) برای کل برنامه؛ قبلاً با هر Resolve یک نمونه‌ی جدید ساخته می‌شد
+    // (خطر اتمام سوکت‌ها) و هیچ Timeout نداشت (یک UserManagement کند، ثبت پاسخ‌ها را معطل می‌کرد).
+    private static readonly ConcurrentDictionary<string, RestClient> Clients = new();
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
+
     private readonly RestClient _client;
     private readonly IHttpContextAccessor _httpContextAccessor;
     public UserManagementAclService(IConfiguration configuration,IHttpContextAccessor httpContextAccessor)
@@ -14,10 +20,8 @@ public class UserManagementAclService : IUserManagementAclService
         if (configuration == null)
             throw new ArgumentNullException(nameof(configuration));
         _httpContextAccessor = httpContextAccessor;
-        var userManagementUrl = $"{configuration["UserManagementUrl"]}/api/UserManagementAcl";
-        var options = new RestClientOptions(userManagementUrl);
-
-        _client = new RestClient(options);
+        var userManagementUrl = $"{configuration["UserManagementUrl"]?.TrimEnd('/')}/api/UserManagementAcl";
+        _client = Clients.GetOrAdd(userManagementUrl, url => new RestClient(new RestClientOptions(url) { Timeout = Timeout }));
     }
 
     public async Task<SystemViewHelper> GetSystemByAsync(string clientId)
@@ -148,9 +152,8 @@ public class UserManagementAclService : IUserManagementAclService
         }
         catch (Exception ex)
         {
-            // Log error here (use a logging library)
-            Console.WriteLine($"An error occurred: {ex.Message}");
-            throw; // Re-throw exception
+            System.Diagnostics.Trace.TraceWarning($"UserManagement ACL request {request.Resource} failed: {ex.Message}");
+            throw;
         }
     }
 }

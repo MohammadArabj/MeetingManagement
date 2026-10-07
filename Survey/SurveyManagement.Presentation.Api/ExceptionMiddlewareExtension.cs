@@ -20,7 +20,12 @@ public static class ExceptionMiddlewareExtension
                 if (contextFeature != null)
                 {
                     var error = contextFeature.Error;
-                    if (error is BusinessException)
+                    if (error is MeetingManagement.Common.Extensions.InvalidDateException)
+                    {
+                        context.Response.StatusCode = UserControlledErrorCode;
+                        await context.Response.WriteAsync(error.Message);
+                    }
+                    else if (error is BusinessException)
                     {
                         context.Response.StatusCode = UserControlledErrorCode;
                         // فقط پیام (قبلاً ToString کامل با Stack Trace به کاربر برمی‌گشت)

@@ -588,27 +588,45 @@ public static class DateExtensions
     //    return d.ToPersianDateTimeMonthName();
     //}
 
+    /// <summary>
+    /// تاریخ شمسی (yyyy/MM/dd) یا میلادی ISO. مقدار نامعتبر خطای <see cref="InvalidDateException"/> می‌دهد
+    /// (قبلاً بی‌صدا «اکنون» برمی‌گشت؛ مثلاً اشتباه تایپی در تاریخ پایان، نظرسنجی را همان لحظه می‌بست).
+    /// </summary>
     public static DateTime ToDateTime(this object s)
     {
-        try
-        {
-            return Convert.ToDateTime(s.ToString(), new CultureInfo("fa-IR"));
-        }
-        catch (Exception)
-        {
-            return DateTime.Now;
-        }
+        var raw = s?.ToString()?.Trim() ?? string.Empty;
+        var parsed = ParseFlexible(raw);
+        return parsed ?? throw new InvalidDateException(raw);
     }
-    public static DateTime? ToDateTimeNull(this object s)
+
+    /// <summary>yyyy/MM/dd شمسی (سال کمتر از ۱۷۰۰) یا میلادی، و ISO؛ ارقام فارسی پشتیبانی می‌شود</summary>
+    public static DateTime? ParseFlexible(string? raw)
     {
-        try
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var latin = new string(raw.Trim().Select(c =>
+            c is >= '۰' and <= '۹' ? (char)('0' + (c - '۰')) :
+            c is >= '٠' and <= '٩' ? (char)('0' + (c - '٠')) : c).ToArray());
+
+        var m = System.Text.RegularExpressions.Regex.Match(latin, @"^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?");
+        if (m.Success)
         {
-            if (s == null) return null;
-            return Convert.ToDateTime(s.ToString(), new CultureInfo("fa-IR"));
+            int y = int.Parse(m.Groups[1].Value), mo = int.Parse(m.Groups[2].Value), d = int.Parse(m.Groups[3].Value);
+            int h = m.Groups[4].Success ? int.Parse(m.Groups[4].Value) : 0;
+            int mi = m.Groups[5].Success ? int.Parse(m.Groups[5].Value) : 0;
+            int sec = m.Groups[6].Success ? int.Parse(m.Groups[6].Value) : 0;
+            try
+            {
+                return y < 1700
+                    ? new PersianCalendar().ToDateTime(y, mo, d, h, mi, sec, 0)
+                    : new DateTime(y, mo, d, h, mi, sec);
+            }
+            catch (ArgumentOutOfRangeException) { return null; }
         }
-        catch (Exception)
-        {
-            return null;
-        }
+
+        return DateTime.TryParse(latin, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var dt) ? dt : null;
     }
+    public static DateTime? ToDateTimeNull(this object s) => ParseFlexible(s?.ToString());
 }
+
+/// <summary>تاریخ ورودی کاربر نامعتبر است (پیام قابل نمایش به کاربر)</summary>
+public sealed class InvalidDateException(string value) : FormatException($"تاریخ «{value}» معتبر نیست.");
