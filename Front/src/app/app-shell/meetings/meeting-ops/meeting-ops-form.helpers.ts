@@ -231,3 +231,73 @@ export function markInvalidAgendas(form: FormGroup): boolean {
 
   return hasInvalidAgenda;
 }
+
+// ===== CONFLICT / SUBMIT VALIDATION =====
+
+/** آیا مقادیر تاریخ و ساعت فرم برای بررسی تداخل کافی و معتبر هستند؟ */
+export function isScheduleReadyForConflictCheck(form: FormGroup): boolean {
+  const { date, startTime, endTime } = form.value;
+
+  // ✅ چک وجود مقدار
+  if (!date || !startTime || !endTime) return false;
+
+  // ✅ چک validity کنترل‌ها
+  const startCtrl = form.get('startTime');
+  const endCtrl = form.get('endTime');
+
+  if (startCtrl?.invalid || endCtrl?.invalid) return false;
+
+  // ✅ چک خطای timeInvalid روی group
+  if (form.hasError('timeInvalid')) return false;
+
+  return true;
+}
+
+export interface SubmitValidationState {
+  isBoardMeeting: boolean;
+  isNumberDuplicate: boolean;
+  hasConflicts: boolean;
+  hasSecretary: boolean;
+  hasChairman: boolean;
+}
+
+/**
+ * اعتبارسنجی پیش از ثبت جلسه (به همان ترتیب قبلی).
+ * در صورت نامعتبر بودن فرم، کنترل‌ها touched می‌شوند.
+ * @returns valid و پیام خطای قابل نمایش (در صورت وجود)
+ */
+export function validateMeetingForSubmit(form: FormGroup, state: SubmitValidationState): { valid: boolean; message?: string } {
+  if (state.isBoardMeeting && state.isNumberDuplicate) {
+    return { valid: false, message: 'شماره جلسه تکراری است. لطفاً شماره دیگری وارد کنید.' };
+  }
+
+  if (state.hasConflicts) {
+    return { valid: false, message: 'ثبت جلسه به دلیل وجود تداخل امکان پذیر نیست.' };
+  }
+
+  if (form.invalid) {
+    form.markAllAsTouched(); // ✅ این roomName رو هم touched میکنه
+
+    // پیام خاص برای آدرس
+    const locationType = form.get('locationType')?.value;
+    if (locationType === 'external' && form.get('roomName')?.invalid) {
+      return { valid: false, message: 'لطفاً آدرس مکان برگزاری را وارد کنید.' };
+    }
+    return { valid: false };
+  }
+
+  if (markInvalidAgendas(form)) {
+    return { valid: false, message: 'لطفاً متن همه دستور جلسات را وارد کنید.' };
+  }
+
+  // Validate required roles
+  if (!state.hasSecretary) {
+    return { valid: false, message: "لطفا دبیر جلسه را مشخص کنید." };
+  }
+
+  if (!state.hasChairman) {
+    return { valid: false, message: "لطفا رئیس جلسه را مشخص کنید." };
+  }
+
+  return { valid: true };
+}

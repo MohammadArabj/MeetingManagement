@@ -371,3 +371,45 @@ export function buildSubmissionSuccessMessage(isEdit: boolean, response: any): {
     : `جلسه با موفقیت ثبت گردید<br>شماره جلسه:<a href="/#/meetings/details/${response.guid}" target="_blank">${response.number}</a>`;
   return { title, text };
 }
+
+// ===== درخواست‌های تداخل و ساعت پیشنهادی =====
+
+/** بدنه درخواست بررسی تداخل (اعضا شامل positionGuid) */
+export function buildConflictCheckRequest(form: any, members: MeetingMember[], meetingGuid: string, isBoardMeeting: boolean) {
+  const { date, startTime, endTime, roomGuid } = form;
+  return {
+    meetingGuid: meetingGuid || '',
+    date,
+    startTime,
+    endTime,
+    members: buildConflictCheckMembers(members),
+    roomGuid: roomGuid || '',
+    isBoardMeeting
+  };
+}
+
+/** بدنه درخواست ساعت‌های پیشنهادی بدون تداخل */
+export function buildSuggestedSlotsRequest(form: any, members: MeetingMember[], meetingGuid: string) {
+  const durationMinutes = computeSlotDurationMinutes(form.startTime as string, form.endTime as string);
+  return {
+    date: form.date,
+    members: buildSuggestedSlotMembers(members),
+    roomGuid: form.roomGuid || null,
+    meetingGuid: meetingGuid || null,
+    slotDurationMinutes: durationMinutes
+  };
+}
+
+/** آیا عضو فعالی با نقش مورد نظر در لیست وجود دارد؟ */
+export function hasActiveMemberWithRole(members: MeetingMember[], rolePredicate: (roleId: number) => boolean): boolean {
+  return members.some(member => rolePredicate(member.roleId) && !member.isRemoved);
+}
+
+/** کاربران سیستم برای جلسات عادی (همراه با تصویر پرسنلی) */
+export function withSystemUserImages(users: SystemUser[]): SystemUser[] {
+  return users.map(user => ({
+    ...user,
+    image: user.userName ? buildUserPhotoUrl(user.userName) : DEFAULT_AVATAR,
+    isSystem: true
+  }));
+}

@@ -44,21 +44,21 @@ import { RoomConflictModalComponent } from './room-conflict-modal/room-conflict-
 import { MeetingOpsActionsComponent } from './meeting-ops-actions/meeting-ops-actions';
 
 import { POSITION_ID } from '../../../core/types/configuration';
-import { environment } from '../../../../environments/environment';
 import { AppSettings } from '../../../services/system-setting.service';
 import { MeetingRoles } from '../../../core/meeting-access/meeting-roles';
 
 import { LOCATION_TYPES, LoadedMeetingData, MemberFileStorage } from './meeting-ops.models';
 import {
-  buildConflictCheckMembers,
+  buildConflictCheckRequest,
   buildConflictKey,
   buildMeetingDto,
   buildSubmissionSuccessMessage,
-  buildSuggestedSlotMembers,
-  computeSlotDurationMinutes,
+  buildSuggestedSlotsRequest,
+  hasActiveMemberWithRole,
   filterConflictsForMembers,
   hasBlockingConflicts,
-  hasMembershipChanged
+  hasMembershipChanged,
+  withSystemUserImages
 } from './meeting-ops.helpers';
 import {
   applyBoardNumberValidator,
@@ -68,10 +68,11 @@ import {
   buildMeetingForm,
   createAgendaGroup,
   createTemplateAgendaGroup,
-  markInvalidAgendas,
+  isScheduleReadyForConflictCheck,
   patchCloneForm,
   patchMeetingForm,
-  replaceFormArrayControls
+  replaceFormArrayControls,
+  validateMeetingForSubmit
 } from './meeting-ops-form.helpers';
 import { MeetingOpsMembersService } from './meeting-ops-members.service';
 import { MeetingOpsDataService } from './meeting-ops-data.service';
@@ -96,7 +97,6 @@ import { MeetingOpsDataService } from './meeting-ops-data.service';
   styleUrls: ['./meeting-ops.css']
 })
 export class MeetingOpsComponent implements OnInit {
-
 
   // ===== DEPENDENCY INJECTION =====
   private readonly fb = inject(FormBuilder);
@@ -171,7 +171,6 @@ export class MeetingOpsComponent implements OnInit {
   readonly isNumberDuplicate = this._isNumberDuplicate.asReadonly();
   readonly duplicateMeetingTitle = this._duplicateMeetingTitle.asReadonly();
 
-
   // ═══════════════════════════════════════════════════════════
   // ✅ hasConflicts computed
   // تداخل‌های نوع "GuestInfo" صرفاً اطلاع‌رسانی هستند و مانع ثبت نمی‌شوند
@@ -183,7 +182,6 @@ export class MeetingOpsComponent implements OnInit {
 
     return hasBlockingConflicts(conflicts, this._selectedMembers(), !!roomConflict);
   });
-
 
   // ===== اصلاح onMembersUpdated =====
   onMembersUpdated(updatedMembers: MeetingMember[], skipConflictCheck: boolean = false): void {
@@ -200,27 +198,20 @@ export class MeetingOpsComponent implements OnInit {
     if (!skipConflictCheck && !this.isBoardMeetingCategory()) {
       const membersChanged = hasMembershipChanged(previousMembers, updatedMembers);
       if (membersChanged) {
-        setTimeout(() => {
-          this.triggerConflictCheck();
-        }, 100);
+        this.scheduleConflictCheck(100);
       }
     }
 
     this.membersUpdated.emit(updatedMembers);
   }
 
+  readonly hasSecretary = computed(() =>
+    hasActiveMemberWithRole(this._selectedMembers(), roleId => MeetingRoles.isAnySecretary(roleId))
+  );
 
-  readonly hasSecretary = computed(() => {
-    return this._selectedMembers().some(member =>
-      MeetingRoles.isAnySecretary(member.roleId) && !member.isRemoved
-    );
-  });
-
-  readonly hasChairman = computed(() => {
-    return this._selectedMembers().some(member =>
-      MeetingRoles.isChairman(member.roleId) && !member.isRemoved
-    );
-  });
+  readonly hasChairman = computed(() =>
+    hasActiveMemberWithRole(this._selectedMembers(), roleId => MeetingRoles.isChairman(roleId))
+  );
 
   // ===== FORM MANAGEMENT =====
   meetingForm!: FormGroup;
@@ -259,8 +250,7 @@ export class MeetingOpsComponent implements OnInit {
   // متد چک شماره
   private performNumberCheck(number: string): void {
     if (!number || !this._isBoardMeetingCategory()) {
-      this._isNumberDuplicate.set(false);
-      this._duplicateMeetingTitle.set('');
+      this.resetNumberDuplicate();
       return;
     }
 
@@ -295,9 +285,13 @@ export class MeetingOpsComponent implements OnInit {
     if (this._isBoardMeetingCategory() && number) {
       this.numberCheck$.next(number);
     } else {
-      this._isNumberDuplicate.set(false);
-      this._duplicateMeetingTitle.set('');
+      this.resetNumberDuplicate();
     }
+  }
+
+  private resetNumberDuplicate(): void {
+    this._isNumberDuplicate.set(false);
+    this._duplicateMeetingTitle.set('');
   }
 
   // canSubmit computed
@@ -331,7 +325,6 @@ export class MeetingOpsComponent implements OnInit {
     // ✅ اعمال اولیه بر اساس مقدار پیش‌فرض (internal) در لحظه ساخت فرم
     applyLocationTypeValidators(this.meetingForm, this.meetingForm.get('locationType')?.value);
   }
-
 
   private setupConflictChecking(): void {
     this.conflictCheck$
@@ -450,26 +443,13 @@ export class MeetingOpsComponent implements OnInit {
   // ===== MEMBERS PREPARATION =====
   private async setupAvailableUsersForMeeting(isBoardCategory: boolean, categoryGuid: string): Promise<void> {
     if (isBoardCategory) {
-      try {
-        // برای جلسات هیئت مدیره: ترکیب اعضای هیئت مدیره و کاربران مجاز
-        const [authorizedUsers] = await Promise.all([
-          this.membersService.loadAuthorizedUsers(categoryGuid)
-        ]);
-
-        // ترکیب کاربران سیستم با کاربران مجاز (بدون تکرار)
-        const combinedUsers = this.membersService.mergeSystemAndAuthorizedUsers(this._boardMembers(), authorizedUsers);
-        this._availableUsers.set(await combinedUsers);
-      } catch (error) {
-        console.error('Error setting up board meeting users:', error);
-        this._availableUsers.set([...this._systemUsers()]);
-      }
+      // برای جلسات هیئت مدیره: ترکیب اعضای هیئت مدیره و کاربران مجاز
+      this._availableUsers.set(await this.membersService.buildBoardMeetingUsers(
+        categoryGuid, () => this._boardMembers(), () => this._systemUsers()
+      ));
     } else {
       // برای جلسات عادی: همه کاربران سیستم
-      this._availableUsers.set(this._systemUsers().map(user => ({
-        ...user,
-        image: user.userName ? `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${user.userName}.jpg`)}&w=48&q=75` : 'img/default-avatar.png',
-        isSystem: true
-      })));
+      this._availableUsers.set(withSystemUserImages(this._systemUsers()));
     }
   }
 
@@ -532,7 +512,6 @@ export class MeetingOpsComponent implements OnInit {
       this._availableUsers.set([...this._systemUsers()]);
     }
   }
-
 
   private async autoSelectBoardMembers(): Promise<void> {
     const autoSelectedMembers = await this.membersService.buildAutoSelectedBoardMembers(
@@ -626,35 +605,15 @@ export class MeetingOpsComponent implements OnInit {
   }
 
   private performConflictCheck(): void {
-    const form = this.meetingForm.value;
-    const { date, startTime, endTime, roomGuid } = form;
-
-    // ✅ چک وجود مقدار
-    if (!date || !startTime || !endTime) return;
-
-    // ✅ چک validity کنترل‌ها
-    const startCtrl = this.meetingForm.get('startTime');
-    const endCtrl = this.meetingForm.get('endTime');
-
-    if (startCtrl?.invalid || endCtrl?.invalid) return;
-
-    // ✅ چک خطای timeInvalid روی group
-    if (this.meetingForm.hasError('timeInvalid')) return;
+    // ✅ چک وجود مقدار، validity کنترل‌ها و خطای timeInvalid روی group
+    if (!isScheduleReadyForConflictCheck(this.meetingForm)) return;
 
     if (this.isBoardMeetingCategory()) return;
 
-    // آماده‌سازی لیست اعضا برای بررسی کانفلیکت - شامل positionGuid
-    const members = buildConflictCheckMembers(this._selectedMembers());
-
-    const conflictData = {
-      meetingGuid: this._meetingGuid() || '',
-      date,
-      startTime,
-      endTime,
-      members,
-      roomGuid: roomGuid || '',
-      isBoardMeeting: this._isBoardMeetingCategory()
-    };
+    // آماده‌سازی درخواست بررسی کانفلیکت - اعضا شامل positionGuid
+    const conflictData = buildConflictCheckRequest(
+      this.meetingForm.value, this._selectedMembers(), this._meetingGuid(), this._isBoardMeetingCategory()
+    );
 
     this.meetingService.checkConflicts(conflictData)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -669,7 +628,6 @@ export class MeetingOpsComponent implements OnInit {
       });
   }
 
-
   // بهبود فراخوانی conflict check در event handlerها
   onLocationTypeChange(event: Event): void {
     this.meetingForm.patchValue({
@@ -679,28 +637,20 @@ export class MeetingOpsComponent implements OnInit {
     });
 
     // تاخیر کوتاه برای اطمینان از به‌روزرسانی فرم
-    setTimeout(() => {
-      this.triggerConflictCheck();
-    }, 100);
+    this.scheduleConflictCheck(100);
   }
 
   onRoomChange(): void {
-    setTimeout(() => {
-      this.triggerConflictCheck();
-    }, 100);
+    this.scheduleConflictCheck(100);
   }
 
   onDateChange(): void {
-    setTimeout(() => {
-      this.triggerConflictCheck();
-    }, 100);
+    this.scheduleConflictCheck(100);
   }
 
   onTimeChange(): void {
     this.meetingForm.updateValueAndValidity();
-    setTimeout(() => {
-      this.triggerConflictCheck();
-    }, 100);
+    this.scheduleConflictCheck(100);
   }
   private handleConflictResult(result: ConflictResult): void {
     // ✅ خطای conflict روی کنترل مکان (بدون دست زدن به بقیه خطاها)
@@ -727,20 +677,12 @@ export class MeetingOpsComponent implements OnInit {
     const form = this.meetingForm.value;
     if (!form.date || !form.startTime || !form.endTime) return;
 
-    const durationMinutes = computeSlotDurationMinutes(form.startTime as string, form.endTime as string);
-
-    const members = buildSuggestedSlotMembers(this._selectedMembers());
+    const request = buildSuggestedSlotsRequest(form, this._selectedMembers(), this._meetingGuid());
 
     this._isSuggestedSlotsLoading.set(true);
     this._suggestedSlots.set([]);
 
-    this.meetingService.getSuggestedSlots({
-      date: form.date,
-      members,
-      roomGuid: form.roomGuid || null,
-      meetingGuid: this._meetingGuid() || null,
-      slotDurationMinutes: durationMinutes
-    })
+    this.meetingService.getSuggestedSlots(request)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (slots: SuggestedSlot[]) => {
@@ -758,7 +700,7 @@ export class MeetingOpsComponent implements OnInit {
     this.meetingForm.patchValue({ startTime: slot.startTime, endTime: slot.endTime });
     this._suggestedSlots.set([]);
     // conflict check مجدد
-    setTimeout(() => this.triggerConflictCheck(), 100);
+    this.scheduleConflictCheck(100);
   }
 
   showRoomConflictModal(): void {
@@ -804,50 +746,19 @@ export class MeetingOpsComponent implements OnInit {
   }
 
   private validateMeeting(): boolean {
+    const { valid, message } = validateMeetingForSubmit(this.meetingForm, {
+      isBoardMeeting: this._isBoardMeetingCategory(),
+      isNumberDuplicate: this._isNumberDuplicate(),
+      hasConflicts: this.hasConflicts(),
+      hasSecretary: this.hasSecretary(),
+      hasChairman: this.hasChairman()
+    });
 
-    if (this._isBoardMeetingCategory() && this._isNumberDuplicate()) {
-      this.toastService.error('شماره جلسه تکراری است. لطفاً شماره دیگری وارد کنید.');
-      return false;
+    if (message) {
+      this.toastService.error(message);
     }
-
-
-    if (this.hasConflicts()) {
-      this.toastService.error('ثبت جلسه به دلیل وجود تداخل امکان پذیر نیست.');
-      return false;
-    }
-
-    if (this.meetingForm.invalid) {
-      this.meetingForm.markAllAsTouched(); // ✅ این roomName رو هم touched میکنه
-
-      // پیام خاص برای آدرس
-      const locationType = this.meetingForm.get('locationType')?.value;
-      if (locationType === 'external' && this.meetingForm.get('roomName')?.invalid) {
-        this.toastService.error('لطفاً آدرس مکان برگزاری را وارد کنید.');
-      }
-      return false;
-    }
-
-    if (markInvalidAgendas(this.meetingForm)) {
-      this.toastService.error('لطفاً متن همه دستور جلسات را وارد کنید.');
-      return false;
-    }
-
-
-
-    // Validate required roles
-    if (!this.hasSecretary()) {
-      this.toastService.error("لطفا دبیر جلسه را مشخص کنید.");
-      return false;
-    }
-
-    if (!this.hasChairman()) {
-      this.toastService.error("لطفا رئیس جلسه را مشخص کنید.");
-      return false;
-    }
-
-    return true;
+    return valid;
   }
-
 
   private handleSubmissionSuccess(response: any): void {
     const meetingGuid = this.meetingForm.get('guid')?.value;
@@ -880,7 +791,6 @@ export class MeetingOpsComponent implements OnInit {
         untracked(() => this.handleCategoryChange(selectedCategoryId));
       }
     });
-
 
   }
 
@@ -927,9 +837,7 @@ export class MeetingOpsComponent implements OnInit {
     // بررسی conflict بعد از لود کامل داده‌ها
     // فقط برای جلسات غیر هیئت مدیره
     if (!isBoardCategory) {
-      setTimeout(() => {
-        this.triggerConflictCheck();
-      }, 500);
+      this.scheduleConflictCheck(500);
     }
   }
 
@@ -950,6 +858,13 @@ export class MeetingOpsComponent implements OnInit {
     }
   }
 
+  /** اجرای triggerConflictCheck با تاخیر (برای اطمینان از به‌روزرسانی فرم) */
+  private scheduleConflictCheck(delayMs: number): void {
+    setTimeout(() => {
+      this.triggerConflictCheck();
+    }, delayMs);
+  }
+
   // ===== onCategoryChange =====
   async onCategoryChange(): Promise<void> {
     const selectedCategoryId = this.meetingForm.get('categoryGuid')?.value;
@@ -959,9 +874,7 @@ export class MeetingOpsComponent implements OnInit {
       // بعد از تغییر category، conflict check انجام بده
       // فقط اگر جلسه هیئت مدیره نباشد
       if (!this.isBoardMeetingCategory()) {
-        setTimeout(() => {
-          this.triggerConflictCheck();
-        }, 200);
+        this.scheduleConflictCheck(200);
       }
     }
   }

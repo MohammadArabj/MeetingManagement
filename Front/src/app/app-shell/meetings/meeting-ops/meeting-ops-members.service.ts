@@ -79,6 +79,30 @@ export class MeetingOpsMembersService {
     }
   }
 
+  /**
+   * کاربران در دسترس جلسات هیئت مدیره: ترکیب اعضای هیئت مدیره و کاربران مجاز (بدون تکرار).
+   * در صورت خطا، کپی کاربران سیستم (در لحظه خطا) برگردانده می‌شود.
+   */
+  async buildBoardMeetingUsers(
+    categoryGuid: string,
+    getBoardMembers: () => BoardMember[],
+    getSystemUsers: () => SystemUser[]
+  ): Promise<SystemUser[]> {
+    try {
+      const [authorizedUsers] = await Promise.all([
+        this.loadAuthorizedUsers(categoryGuid)
+      ]);
+
+      // ترکیب کاربران سیستم با کاربران مجاز (بدون تکرار)
+      // (اعضای هیئت مدیره پس از دریافت کاربران مجاز خوانده می‌شوند)
+      const combinedUsers = this.mergeSystemAndAuthorizedUsers(getBoardMembers(), authorizedUsers);
+      return await combinedUsers;
+    } catch (error) {
+      console.error('Error setting up board meeting users:', error);
+      return [...getSystemUsers()];
+    }
+  }
+
   async mergeSystemAndAuthorizedUsers(boardMembers: BoardMember[], authorizedUsers: SystemUser[]): Promise<SystemUser[]> {
     // ✅ جمع‌آوری همه profileGuid ها
     const profileGuidsToLoad: string[] = [];
