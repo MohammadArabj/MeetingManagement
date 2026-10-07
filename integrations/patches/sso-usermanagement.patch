@@ -28,6 +28,43 @@ index fb94d73..5f18441 100644
              c => meetingApiService.GetMyMeetingsAsync(userGuid, positionGuid, c), TimeSpan.FromMinutes(3), StaleWindow, ct));
          var winAppsTask = Safe(async () => string.IsNullOrWhiteSpace(personnelCode)
              ? []
+diff --git a/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs b/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs
+index 25463b5..0d3ed78 100644
+--- a/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs
++++ b/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs
+@@ -111,6 +111,23 @@ public class PhoneDirectoryController(
+         return File(bytes, "image/jpeg");
+     }
+ 
++    /// <summary>
++    /// توکن نمایش عکس سامانه‌ی مدیریت فایل (عکس‌ها دیگر بدون ورود سرو نمی‌شوند).
++    /// mt = "{exp}.{Base64Url(HMAC-SHA256(PhotoTokenKey, "photo|{exp}"))}"؛ کلید مشترک با FileSettings:PhotoTokenKey.
++    /// </summary>
++    private string PhotoTokenParam()
++    {
++        var key = configuration["PhoneDirectory:PhotoTokenKey"] ?? configuration["FileManagement:PhotoTokenKey"];
++        if (string.IsNullOrWhiteSpace(key)) return string.Empty;
++
++        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
++        var exp = now - now % 3600 + 2 * 3600;
++        using var hmac = new System.Security.Cryptography.HMACSHA256(System.Text.Encoding.UTF8.GetBytes(key));
++        var sig = Convert.ToBase64String(hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes($"photo|{exp}")))
++            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
++        return $"&mt={Uri.EscapeDataString($"{exp}.{sig}")}";
++    }
++
+     private async Task<byte[]?> FetchPhotoAsync(string userName, CancellationToken ct)
+     {
+         var baseUrl = configuration["PhoneDirectory:ImageBaseUrl"]
+@@ -123,7 +140,7 @@ public class PhoneDirectoryController(
+             return null;
+ 
+         // عکس کوچک (۹۶ پیکسل): برای نمایش کافی است و برای ذخیره کم‌ارزش
+-        var url = $"{baseUrl.TrimEnd('/')}/api/Image/profile/{Uri.EscapeDataString(safeName + ".jpg")}?w=96&q=70";
++        var url = $"{baseUrl.TrimEnd('/')}/api/Image/profile/{Uri.EscapeDataString(safeName + ".jpg")}?w=96&q=70{PhotoTokenParam()}";
+ 
+         try
+         {
 diff --git a/EPC.SSO/Realtime/PortalRealtime.cs b/EPC.SSO/Realtime/PortalRealtime.cs
 new file mode 100644
 index 0000000..a4df42c
@@ -475,3 +512,115 @@ index 6da3ad4..643c828 100644
              .ToList();
          return string.Join(",", permissions);
      }
+diff --git a/UserManagement/src/app/app-shell/header/header.ts b/UserManagement/src/app/app-shell/header/header.ts
+index 289c5be..f4c6fce 100644
+--- a/UserManagement/src/app/app-shell/header/header.ts
++++ b/UserManagement/src/app/app-shell/header/header.ts
+@@ -1,5 +1,6 @@
+ import { Component, OnInit } from '@angular/core';
+ import { environment } from '../../../environments/environment';
++import { userPhotoUrl } from '../../core/media/media-token';
+ import { CodeFlowService } from '../../services/framework-services/code-flow.service';
+ import {
+   USER_COMPANY_ID_NAME,
+@@ -102,8 +103,8 @@ export class HeaderComponent implements OnInit {
+     this.userService.getUserInformation(userGuid).subscribe({
+       next: (result) => {
+         this.information = result;
+-        this.fileManagementUrl =
+-          environment.fileManagementEndpoint + '/photo/' + result.userName + '.jpg';
++        // عکس پرسنلی با توکن کوتاه‌مدت (سامانه‌ی مدیریت فایل عکس‌ها را بدون ورود نمی‌دهد)
++        void userPhotoUrl(result.userName, 40).then(url => (this.fileManagementUrl = url));
+ 
+         this.localStorageService.setItem(USER_COMPANY_ID_NAME, result.companyGuid);
+         this.localStorageService.setItem(
+diff --git a/UserManagement/src/app/core/media/media-token.ts b/UserManagement/src/app/core/media/media-token.ts
+new file mode 100644
+index 0000000..02c90da
+--- /dev/null
++++ b/UserManagement/src/app/core/media/media-token.ts
+@@ -0,0 +1,63 @@
++import { environment } from '../../../environments/environment';
++import { ACCESS_TOKEN_NAME } from '../types/configuration';
++
++/**
++ * توکن کوتاه‌مدت نمایش عکس‌های پرسنلی سامانه‌ی مدیریت فایل.
++ * عکس‌ها دیگر بدون ورود در دسترس نیستند و تگ img هدر Authorization نمی‌فرستد؛ پس توکن (mt) از
++ * GET api/Media/Token گرفته و به آدرس عکس افزوده می‌شود. توکن در localStorage نگه داشته می‌شود.
++ */
++const STORAGE_KEY = 'um.media.token';
++const REFRESH_MARGIN_MS = 60 * 60 * 1000;
++
++interface StoredToken { token: string; expiresAt: number; }
++
++let inflight: Promise<string> | null = null;
++
++function readStored(): StoredToken | null {
++  try {
++    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') as StoredToken | null;
++    return parsed?.token && parsed.expiresAt > Date.now() ? parsed : null;
++  } catch {
++    return null;
++  }
++}
++
++function accessToken(): string {
++  return localStorage.getItem(ACCESS_TOKEN_NAME) || sessionStorage.getItem(ACCESS_TOKEN_NAME) || '';
++}
++
++/** توکن معتبر (از حافظه یا با یک درخواست)؛ در صورت خطا رشته‌ی خالی */
++export async function getMediaToken(): Promise<string> {
++  const stored = readStored();
++  if (stored && stored.expiresAt - Date.now() > REFRESH_MARGIN_MS) return stored.token;
++
++  inflight ??= (async () => {
++    try {
++      const token = accessToken();
++      if (!token) return stored?.token ?? '';
++      const res = await fetch(`${environment.fileManagementEndpoint}/api/Media/Token`, {
++        headers: { Authorization: `Bearer ${token}` },
++        cache: 'no-store',
++      });
++      if (!res.ok) return stored?.token ?? '';
++      const body = await res.json() as { token?: string; expiresAt?: string };
++      const expiresAt = body.expiresAt ? Date.parse(body.expiresAt) : NaN;
++      if (!body.token || Number.isNaN(expiresAt)) return stored?.token ?? '';
++      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: body.token, expiresAt })); } catch { /* ignore */ }
++      return body.token;
++    } catch {
++      return stored?.token ?? '';
++    } finally {
++      inflight = null;
++    }
++  })();
++  return inflight;
++}
++
++/** آدرس عکس پرسنلی (بندانگشتی WebP/JPEG کش‌شده) */
++export async function userPhotoUrl(userName: string, width = 48): Promise<string> {
++  if (!userName) return '';
++  const token = await getMediaToken();
++  const w = Math.min(512, Math.round(width * 2));
++  return `${environment.fileManagementEndpoint}/photo/${encodeURIComponent(userName)}.jpg?w=${w}${token ? `&mt=${encodeURIComponent(token)}` : ''}`;
++}
+diff --git a/UserManagement/src/app/core/types/imageCachManager.ts b/UserManagement/src/app/core/types/imageCachManager.ts
+index dff1a8d..fc9e626 100644
+--- a/UserManagement/src/app/core/types/imageCachManager.ts
++++ b/UserManagement/src/app/core/types/imageCachManager.ts
+@@ -3,6 +3,7 @@ import { FileService } from "../../services/file.service";
+ import { MeetingMember } from "../models/Meeting";
+ import { base64ToArrayBuffer } from "./configuration";
+ import { FileDetails } from "./file";
++import { userPhotoUrl } from "../media/media-token";
+ 
+ export class ImageCacheManager {
+     private readonly cache = new Map<string, string>();
+@@ -67,7 +68,7 @@ export class ImageCacheManager {
+             }
+ 
+             if (member.userName) {
+-                return `${environment.fileManagementEndpoint}/api/Image?url=${encodeURIComponent(`photo/${member.userName}.jpg`)}&w=48&q=75`;
++                return await userPhotoUrl(member.userName);
+             }
+ 
+             return this.getDefaultImage(member);

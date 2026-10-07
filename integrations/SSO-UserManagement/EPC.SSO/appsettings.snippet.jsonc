@@ -5,5 +5,9 @@
       // SharedSecret باید با Realtime:Sso:SharedSecret در appsettings سامانه جلسات یکی باشد
       { "Name": "MeetManage", "SharedSecret": "" }
     ]
+  },
+  "PhoneDirectory": {
+    // همان FileSettings:PhotoTokenKey سامانه‌ی مدیریت فایل (عکس‌های دفترچه تلفن بدون آن دریافت نمی‌شوند)
+    "PhotoTokenKey": ""
   }
 }

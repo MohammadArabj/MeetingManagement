@@ -1,4 +1,5 @@
 // افزودنی/تغییر در appsettings.json (یا appsettings.Production.json) سامانه مدیریت فایل
+// کلیدها را ترجیحاً از متغیر محیطی یا Secret تنظیم کنید (مثلاً FileSettings__SignatureUrlKey)
 {
   "TusSettings": {
     // ⚠️ نباید زیر wwwroot باشد (فایل‌های نیمه‌کاره بدون احراز هویت قابل دانلود می‌شدند)
@@ -6,11 +7,32 @@
     "MaxFileSizeBytes": 5368709120
   },
   "FileSettings": {
-    // کلید امضای آدرس فایل‌ها (یک رشته‌ی تصادفی طولانی؛ در همه‌ی سرورهای این سامانه یکسان)
-    "UrlSigningKey": "",
-    // مدت اعتبار هر آدرس امضاشده (دقیقه)
-    "UrlLifetimeMinutes": 120,
-    // فقط برای دوره‌ی گذار می‌توان false گذاشت (نامن)
-    "RequireSignedUrls": true
-  }
+    // ── مسیرها (هیچ‌کدام زیر wwwroot نباشند؛ نسبی = نسبت به پوشه‌ی برنامه) ──
+    "FileBasePath": "files",                  // پیوست‌ها
+    "PhotoBasePath": "App_Data/photos",       // عکس‌های پرسنلی  {userName}.jpg   (قبلاً wwwroot/photo)
+    "SignatureBasePath": "App_Data/signatures", // تصاویر امضا   {userName}.jpg   (قبلاً wwwroot/EpcSignature)
+    "CachePath": "App_Data/cache",            // بندانگشتی‌های ساخته‌شده
+    "CacheMaxMegabytes": 2048,
+    "CacheMaxAgeDays": 30,
+
+    // ── آدرس امضاشده‌ی پیوست‌ها ──
+    "UrlSigningKey": "",                      // رشته‌ی تصادفی طولانی؛ در همه‌ی سرورهای این سامانه یکسان
+    "UrlLifetimeMinutes": 180,
+    "RequireSignedUrls": true,                // فقط برای دوره‌ی گذار false (ناامن)
+
+    // ── تصاویر امضا ──
+    // کلید مشترک با FileManagement:SignatureUrlKey در سامانه‌ی جلسات. بدون آن، تصاویر امضا سرو نمی‌شوند.
+    "SignatureUrlKey": "",
+
+    // ── عکس‌های پرسنلی ──
+    // کلید مشترک با PhoneDirectory:PhotoTokenKey در SSO
+    "PhotoTokenKey": "",
+    "PhotoTokenLifetimeHours": 12,
+    "AllowAnonymousPhotos": false,            // دوره‌ی گذار برای سامانه‌هایی که هنوز توکن نمی‌فرستند
+
+    // ── پسوندهای مجاز آپلود (اگر خالی باشد فقط پسوندهای اجرایی ممنوع‌اند) ──
+    "FileExtensions": ".jpg,.jpeg,.png,.gif,.webp,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.zip,.rar,.7z,.mp4,.webm,.mp3,.wav,.m4a,.dwg,.msg"
+  },
+  // ⚠️ در Production خالی بودن AllowedOrigins یعنی هیچ مبدأیی مجاز نیست (قبلاً همه مجاز بودند)
+  "AllowedOrigins": [ "https://<meeting-front>", "https://<user-management-front>" ]
 }

@@ -1,4 +1,5 @@
-using Epc.Core;
+﻿using Epc.Core;
+using FileManagement.Common;
 using FileManagement.Application;
 using FileManagement.Application.Contract.Upload;
 using Microsoft.AspNetCore.Builder;
@@ -39,6 +40,7 @@ public class TusFileService : ITusFileService
     }
     public async Task<Stream?> GetFileStreamAsync(string tusFileId)
     {
+        if (!FileTypePolicy.IsValidTusId(tusFileId)) return null;
         try
         {
             _logger.LogDebug("Getting file stream for TUS file: {FileId}", tusFileId);
@@ -70,6 +72,7 @@ public class TusFileService : ITusFileService
     }
     public async Task<TusUploadStatus?> GetUploadStatusAsync(string tusFileId)
     {
+        if (!FileTypePolicy.IsValidTusId(tusFileId)) return null;
         try
         {
             _logger.LogDebug("Getting upload status for TUS file: {FileId}", tusFileId);
@@ -131,6 +134,7 @@ public class TusFileService : ITusFileService
     }
     public async Task<bool> DeleteFileAsync(string tusFileId)
     {
+        if (!FileTypePolicy.IsValidTusId(tusFileId)) return false;
         try
         {
             _logger.LogInformation("Deleting TUS file: {FileId}", tusFileId);
@@ -173,6 +177,7 @@ public class TusFileService : ITusFileService
     /// </summary> 
     public async Task<Dictionary<string, string>?> GetMetadataAsync(string tusFileId)
     {
+        if (!FileTypePolicy.IsValidTusId(tusFileId)) return null;
         try
         {
             var file = await _store.GetFileAsync(tusFileId, CancellationToken.None);
@@ -214,6 +219,7 @@ public class TusFileService : ITusFileService
     /// </summary> 
     public bool FileExists(string tusFileId)
     {
+        if (!FileTypePolicy.IsValidTusId(tusFileId)) return false;
         var filePath = Path.Combine(_storagePath, tusFileId);
         return File.Exists(filePath);
     }
@@ -232,6 +238,7 @@ public class TusFileService : ITusFileService
     }
     public async Task<bool> DeleteFileWithRetryAsync(string tusFileId, CancellationToken ct = default)
     {
+        if (!FileTypePolicy.IsValidTusId(tusFileId)) return false;
         var delaysMs = new[] { 0, 100, 250, 500, 1000, 2000 };
 
         for (int attempt = 0; attempt < delaysMs.Length; attempt++)

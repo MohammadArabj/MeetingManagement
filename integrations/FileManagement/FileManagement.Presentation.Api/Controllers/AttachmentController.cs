@@ -6,9 +6,10 @@ using System.Threading.Tasks;
 using FileManagement.Infrastructure.Query.Contracts.Attachment;
 using FileManagement.Presentation.Facade.Contracts.Attachment;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Hosting;
+using FileManagement.Common;
+using FileManagement.Presentation.Api.Media;
+using FileManagement.Presentation.Api.Security;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 
 namespace FileManagement.Presentation.Api.Controllers;
 
@@ -18,9 +19,10 @@ namespace FileManagement.Presentation.Api.Controllers;
 public class AttachmentController(
     IAttachmentCommandFacade attachmentCommandFacade,
     IAttachmentQueryFacade attachmentQueryFacade,
-    IWebHostEnvironment webHostEnvironment,
-    IConfiguration configuration,
-    FileManagement.Presentation.Api.Security.SignedFileUrl signedFileUrl)
+    FileStorageLocations locations,
+    SignedFileUrl signedFileUrl,
+    ImageThumbnailService thumbnails,
+    MediaResponses responses)
     : ControllerBase
 {
     [HttpGet("GetList")]
@@ -41,44 +43,50 @@ public class AttachmentController(
         => new JsonResult(await attachmentQueryFacade.GetFileNameBy(guid));
 
     // -----------------------------
-    // Download
+    // Download / Preview (Bearer) — با Range، ETag و 304
     // -----------------------------
     [HttpGet("Download/{guid:guid}")]
     public async Task<IActionResult> Download(Guid guid)
     {
         var info = await attachmentQueryFacade.Download(guid);
-        if (info == null)
+        var physical = info == null ? null : locations.ResolveStoredFile(info.Path);
+        if (info == null || physical == null)
             return NotFound(new { message = "فایل یافت نشد", guid });
 
-        var physicalPath = ToPhysicalPath(info.Path);
-        if (string.IsNullOrEmpty(physicalPath))
-            return NotFound(new { message = "مسیر فیزیکی نامعتبر", guid, info.Path });
-
-        if (!System.IO.File.Exists(physicalPath))
-            return NotFound(new { message = "فایل در سرور یافت نشد", guid, info.Path, physicalPath });
-
-        var stream = new FileStream(physicalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return File(stream, info.ContentType, info.FileName, enableRangeProcessing: true);
+        var contentType = SafeContentType(info.ContentType, info.FileName);
+        responses.ApplySecurityHeaders(Response, info.FileName, info.FileName, forceDownload: true, contentType);
+        Response.Headers.CacheControl = "private, max-age=3600";
+        var file = new FileInfo(physical);
+        return PhysicalFile(physical, contentType, new DateTimeOffset(file.LastWriteTimeUtc), MediaResponses.ETagFor(file), enableRangeProcessing: true);
     }
 
-    // -----------------------------
-    // Preview
-    // -----------------------------
+    /// <summary>نمایش داخل صفحه؛ برای تصاویر با w نسخه‌ی کوچک‌شده (WebP/JPEG) برگردانده می‌شود</summary>
     [HttpGet("Preview/{guid:guid}")]
-    public async Task<IActionResult> Preview(Guid guid)
+    public async Task<IActionResult> Preview(Guid guid, [FromQuery] int? w)
     {
         var info = await attachmentQueryFacade.Download(guid);
-        if (info == null) return NotFound();
+        var physical = info == null ? null : locations.ResolveStoredFile(info.Path);
+        if (info == null || physical == null)
+            return NotFound(new { message = "فایل یافت نشد", guid });
 
-        var physicalPath = ToPhysicalPath(info.Path);
-        if (string.IsNullOrEmpty(physicalPath) || !System.IO.File.Exists(physicalPath))
-            return NotFound();
+        Response.Headers.CacheControl = "private, max-age=3600";
 
-        Response.Headers["Content-Disposition"] =
-            $"inline; filename*=UTF-8''{Uri.EscapeDataString(info.FileName)}";
+        if (w is > 0 && ImageThumbnailService.IsResizable(physical))
+        {
+            var rendition = await thumbnails.GetAsync(physical, w.Value, 80, ImageThumbnailService.AcceptsWebp(Request), HttpContext.RequestAborted);
+            if (rendition != null)
+            {
+                Response.Headers.Append("Vary", "Accept");
+                responses.ApplySecurityHeaders(Response, rendition.PhysicalPath, info.FileName, false, rendition.ContentType);
+                return PhysicalFile(rendition.PhysicalPath, rendition.ContentType, rendition.LastModified,
+                    new Microsoft.Net.Http.Headers.EntityTagHeaderValue(rendition.ETag));
+            }
+        }
 
-        var stream = new FileStream(physicalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return File(stream, info.ContentType, enableRangeProcessing: true);
+        var contentType = SafeContentType(info.ContentType, info.FileName);
+        responses.ApplySecurityHeaders(Response, info.FileName, info.FileName, forceDownload: false, contentType);
+        var file = new FileInfo(physical);
+        return PhysicalFile(physical, contentType, new DateTimeOffset(file.LastWriteTimeUtc), MediaResponses.ETagFor(file), enableRangeProcessing: true);
     }
 
     // -----------------------------
@@ -143,78 +151,14 @@ public class AttachmentController(
     // =====================================================================
     // Helpers
     // =====================================================================
-    private string? ToPhysicalPath(string? storedPath)
-    {
-        if (string.IsNullOrWhiteSpace(storedPath))
-            return null;
 
-        var basePathFromConfig = configuration["FileSettings:FileBasePath"];
-        var contentRoot = webHostEnvironment.ContentRootPath ?? Directory.GetCurrentDirectory();
+    /// <summary>نوع محتوا از روی پسوند (نه مقدار اعلام‌شده توسط کلاینت هنگام آپلود)</summary>
+    private string SafeContentType(string? stored, string fileName) => responses.ContentTypeFor(fileName);
 
-        var basePath = string.IsNullOrWhiteSpace(basePathFromConfig)
-            ? Path.Combine(contentRoot, "files")
-            : basePathFromConfig;
-
-        if (!Path.IsPathRooted(basePath))
-            basePath = Path.GetFullPath(Path.Combine(contentRoot, basePath));
-
-        basePath = Path.GetFullPath(basePath);
-
-        var basePathWithSep =
-            basePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-
-        string candidateFullPath;
-
-        if (Path.IsPathRooted(storedPath))
-        {
-            candidateFullPath = Path.GetFullPath(storedPath);
-        }
-        else
-        {
-            var normalized = storedPath.Replace('\\', '/').TrimStart('/');
-            var baseFolderName = new DirectoryInfo(basePath).Name; // "files"
-            if (normalized.StartsWith(baseFolderName + "/", StringComparison.OrdinalIgnoreCase))
-                normalized = normalized.Substring(baseFolderName.Length + 1);
-
-            candidateFullPath = Path.GetFullPath(Path.Combine(basePath, normalized));
-        }
-
-        if (!candidateFullPath.StartsWith(basePathWithSep, StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        return candidateFullPath;
-    }
-
+    /// <summary>مسیر ذخیره‌شده → آدرس عمومی امضاشده (/files/…?exp&amp;sig)</summary>
     private string? ToPublicPath(string? storedPath)
     {
-        if (string.IsNullOrWhiteSpace(storedPath))
-            return null;
-
-        var basePathFromConfig = configuration["FileSettings:FileBasePath"];
-        var contentRoot = webHostEnvironment.ContentRootPath ?? Directory.GetCurrentDirectory();
-
-        var basePath = string.IsNullOrWhiteSpace(basePathFromConfig)
-            ? Path.Combine(contentRoot, "files")
-            : basePathFromConfig;
-
-        if (!Path.IsPathRooted(basePath))
-            basePath = Path.GetFullPath(Path.Combine(contentRoot, basePath));
-
-        basePath = Path.GetFullPath(basePath);
-
-        if (Path.IsPathRooted(storedPath))
-        {
-            var full = Path.GetFullPath(storedPath);
-            var rel = Path.GetRelativePath(basePath, full).Replace('\\', '/');
-            rel = rel.TrimStart('.').TrimStart('/');
-            return signedFileUrl.Sign("/files/" + rel);
-        }
-
-        var normalized = storedPath.Replace('\\', '/').TrimStart('/');
-        var baseFolderName = new DirectoryInfo(basePath).Name; // "files"
-        if (normalized.StartsWith(baseFolderName + "/", StringComparison.OrdinalIgnoreCase))
-            normalized = normalized.Substring(baseFolderName.Length + 1);
-
-        return signedFileUrl.Sign("/files/" + normalized);
+        var relative = locations.ToRelativePath(storedPath);
+        return relative == null ? null : signedFileUrl.Sign("/files/" + relative);
     }
 }

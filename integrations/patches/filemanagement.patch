@@ -1,30 +1,2471 @@
+diff --git a/FileManagement.Application/AttachmentCommandHandler.cs b/FileManagement.Application/AttachmentCommandHandler.cs
+index 64d90bb..49911d3 100644
+--- a/FileManagement.Application/AttachmentCommandHandler.cs
++++ b/FileManagement.Application/AttachmentCommandHandler.cs
+@@ -1,157 +1,200 @@
+-﻿using System;
+-using System.Collections.Generic;
+-using System.Linq;
+-using System.Threading.Tasks;
+-using Epc.Application.Command;
+-using Epc.Application.FileValidation;
+-using Epc.Company.Query;
+-using Epc.Identity;
+-using FileManagement.Application.Contract.Attachment;
+-using FileManagement.Application.Contracts.Attachment;
+-using FileManagement.Domain.AttachmentAgg;
+-using FileManagement.Domain.AttachmentAgg.Service;
+-using FileManagement.Domain.ClassificationAgg;
+-using FileManagement.Domain.ClassificationAgg.Service;
+-using FileManagement.Domain.Shared.Acls.UserManagement;
+-using FileSignatures;
+-
+-namespace FileManagement.Application;
+-
+-public class AttachmentCommandHandler(
+-    IAttachmentRepository attachmentRepository,
+-    IClaimHelper claimHelper,
+-    IAttachmentService attachmentService,
+-    IFileService fileService,
+-    IClassificationRepository classificationRepository,
+-    IUserManagementAclService userManagementAclService,
+-    IClassificationService classificationService)
+-    :
+-        ICommandHandlerAsync<CreateAttachment, Guid>,
+-        ICommandHandlerAsync<EditAttachment>,
+-        ICommandHandlerAsync<UploadFileModel, UploadResult>,
+-        ICommandHandlerAsync<UploadFileList, List<UploadResult>>,
+-        ICommandHandlerAsync<DeleteAttachmentGuidDto, Result<bool>>,
+-        ICommandHandlerAsync<DeleteAttachmentGuidsDto, Result<BulkDeleteAttachmentsResult>>
+-{
+-    public Task<Guid> Handle(CreateAttachment command)
+-        => throw new NotImplementedException();
+-
+-    public async Task Handle(EditAttachment command)
+-    {
+-        var attachment = await attachmentRepository.LoadAsync(command.Guid);
+-        attachment.Edit(command.ClassificationId, command.Description, attachmentService);
+-        attachmentRepository.Update(attachment);
+-    }
+-
+-
+-    public Task<UploadResult> Handle(UploadFileModel command)
+-        => throw new NotImplementedException();
+-
+-    public Task<List<UploadResult>> Handle(UploadFileList command)
+-        => throw new NotImplementedException();
+-
+-    // -----------------------------
+-    // حذف تکی (با گزارش درست)
+-    // -----------------------------
+-    public async Task<Result<bool>> Handle(DeleteAttachmentGuidDto command)
+-    {
+-        if (command.Guid == Guid.Empty)
+-            return Result<bool>.Failure(false, "شناسه نامعتبر است");
+-
+-        var entity = await attachmentRepository.LoadAsync(command.Guid);
+-        if (entity == null)
+-            return Result<bool>.Failure(false, "فایل یافت نشد");
+-
+-        var storedPath = entity.StoragePath;
+-
+-        // 1) حذف از DB
+-        attachmentRepository.Delete(entity);
+-
+-        // 2) حذف فیزیکی Best-effort (اگر شکست خورد DB حذف شده می‌ماند)
+-        try
+-        {
+-            if (!string.IsNullOrWhiteSpace(storedPath))
+-                fileService.DeleteDirectory(storedPath);
+-        }
+-        catch
+-        {
+-            // می‌خواهی سخت‌گیر باشی؟ اینجا Failure کن.
+-            // فعلاً Success می‌دیم چون DB حذف شده و فرانت نباید گیر کند.
+-        }
+-
+-        return Result<bool>.Success(true);
+-    }
+-
+-    // -----------------------------
+-    // حذف چندتایی (گزارش کامل)
+-    // -----------------------------
+-    public async Task<Result<BulkDeleteAttachmentsResult>> Handle(DeleteAttachmentGuidsDto command)
+-    {
+-        var input = command.Guids ?? Array.Empty<Guid>();
+-
+-        var normalized = input
+-            .Where(g => g != Guid.Empty)
+-            .Distinct()
+-            .ToList();
+-
+-        if (normalized.Count == 0)
+-        {
+-            var empty = new BulkDeleteAttachmentsResult(
+-                Requested: 0,
+-                Deleted: 0,
+-                DeletedGuids: Array.Empty<Guid>(),
+-                NotFoundGuids: Array.Empty<Guid>(),
+-                PhysicalDeleteFailedGuids: Array.Empty<Guid>()
+-            );
+-
+-            return Result<BulkDeleteAttachmentsResult>.Failure(empty, "لیست شناسه‌ها خالی/نامعتبر است");
+-        }
+-
+-        var deleted = new List<Guid>(capacity: normalized.Count);
+-        var notFound = new List<Guid>();
+-        var physicalFailed = new List<Guid>();
+-
+-        // مسیرهای فیزیکی که باید پاک شوند
+-        var toDeletePhysical = new List<(Guid guid, string? path)>();
+-
+-        // 1) DB delete (همه)
+-        foreach (var guid in normalized)
+-        {
+-            var entity = await attachmentRepository.LoadAsync(guid);
+-            if (entity == null)
+-            {
+-                notFound.Add(guid);
+-                continue;
+-            }
+-
+-            toDeletePhysical.Add((guid, entity.StoragePath));
+-            attachmentRepository.Delete(entity);
+-            deleted.Add(guid);
+-        }
+-
+-        // 2) physical delete best-effort
+-        foreach (var item in toDeletePhysical)
+-        {
+-            try
+-            {
+-                if (!string.IsNullOrWhiteSpace(item.path))
+-                    fileService.DeleteDirectory(item.path);
+-            }
+-            catch
+-            {
+-                physicalFailed.Add(item.guid);
+-            }
+-        }
+-
+-        var result = new BulkDeleteAttachmentsResult(
+-            Requested: normalized.Count,
+-            Deleted: deleted.Count,
+-            DeletedGuids: deleted,
+-            NotFoundGuids: notFound,
+-            PhysicalDeleteFailedGuids: physicalFailed
+-        );
+-
+-        // Success حتی اگر notFound داشتیم (برای UX و Batch deletion درست)
+-        return Result<BulkDeleteAttachmentsResult>.Success(result);
+-    }
+-}
++﻿using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Threading.Tasks;
++using Epc.Application.Command;
++using Epc.Application.FileValidation;
++using Epc.Company.Query;
++using Epc.Identity;
++using FileManagement.Application.Contract.Attachment;
++using FileManagement.Application.Contracts.Attachment;
++using FileManagement.Domain.AttachmentAgg;
++using FileManagement.Domain.AttachmentAgg.Service;
++using FileManagement.Domain.ClassificationAgg;
++using FileManagement.Domain.ClassificationAgg.Service;
++using FileManagement.Domain.Shared.Acls.UserManagement;
++using FileManagement.Common;
++using FileSignatures;
++
++namespace FileManagement.Application;
++
++public class AttachmentCommandHandler(
++    IAttachmentRepository attachmentRepository,
++    IClaimHelper claimHelper,
++    IAttachmentService attachmentService,
++    IFileService fileService,
++    IClassificationRepository classificationRepository,
++    IUserManagementAclService userManagementAclService,
++    IClassificationService classificationService,
++    FileStorageLocations storageLocations,
++    Microsoft.AspNetCore.Http.IHttpContextAccessor httpContextAccessor)
++    :
++        ICommandHandlerAsync<CreateAttachment, Guid>,
++        ICommandHandlerAsync<EditAttachment>,
++        ICommandHandlerAsync<UploadFileModel, UploadResult>,
++        ICommandHandlerAsync<UploadFileList, List<UploadResult>>,
++        ICommandHandlerAsync<DeleteAttachmentGuidDto, Result<bool>>,
++        ICommandHandlerAsync<DeleteAttachmentGuidsDto, Result<BulkDeleteAttachmentsResult>>
++{
++    public Task<Guid> Handle(CreateAttachment command)
++        => throw new NotImplementedException();
++
++    public async Task Handle(EditAttachment command)
++    {
++        var attachment = await attachmentRepository.LoadAsync(command.Guid);
++        attachment.Edit(command.ClassificationId, command.Description, attachmentService);
++        attachmentRepository.Update(attachment);
++    }
++
++
++    public Task<UploadResult> Handle(UploadFileModel command)
++        => throw new NotImplementedException();
++
++    public Task<List<UploadResult>> Handle(UploadFileList command)
++        => throw new NotImplementedException();
++
++    // -----------------------------
++    // حذف تکی
++    // -----------------------------
++    public async Task<Result<bool>> Handle(DeleteAttachmentGuidDto command)
++    {
++        if (command.Guid == Guid.Empty)
++            return Result<bool>.Failure(false, "شناسه نامعتبر است");
++
++        var entity = await attachmentRepository.LoadAsync(command.Guid);
++        if (entity == null)
++            return Result<bool>.Failure(false, "فایل یافت نشد");
++
++        var actor = await GetActorAsync();
++        if (!await CanDeleteAsync(entity, actor))
++            return Result<bool>.Failure(false, "اجازه‌ی حذف این فایل را ندارید");
++
++        var physical = storageLocations.ResolveStoredFile(entity.StoragePath);
++
++        // 1) حذف از DB و ثبت قطعی؛ 2) سپس حذف فیزیکی (اگر ثبت شکست بخورد فایل سالم می‌ماند)
++        attachmentRepository.Delete(entity);
++        await attachmentRepository.SaveChangesAsync();
++        TryDeletePhysical(physical);
++
++        return Result<bool>.Success(true);
++    }
++
++    // -----------------------------
++    // حذف چندتایی (گزارش کامل)
++    // -----------------------------
++    public async Task<Result<BulkDeleteAttachmentsResult>> Handle(DeleteAttachmentGuidsDto command)
++    {
++        var normalized = (command.Guids ?? Array.Empty<Guid>())
++            .Where(g => g != Guid.Empty)
++            .Distinct()
++            .ToList();
++
++        if (normalized.Count == 0)
++        {
++            var empty = new BulkDeleteAttachmentsResult(
++                Requested: 0,
++                Deleted: 0,
++                DeletedGuids: Array.Empty<Guid>(),
++                NotFoundGuids: Array.Empty<Guid>(),
++                PhysicalDeleteFailedGuids: Array.Empty<Guid>()
++            );
++
++            return Result<BulkDeleteAttachmentsResult>.Failure(empty, "لیست شناسه‌ها خالی/نامعتبر است");
++        }
++
++        var actor = await GetActorAsync();
++        var deleted = new List<Guid>(normalized.Count);
++        var notFound = new List<Guid>();
++        var physicalFailed = new List<Guid>();
++        var toDeletePhysical = new List<(Guid Guid, string? Path)>();
++
++        foreach (var guid in normalized)
++        {
++            var entity = await attachmentRepository.LoadAsync(guid);
++            // فایل دیگران (بدون مجوز) مثل «یافت نشد» گزارش می‌شود تا وجودش لو نرود
++            if (entity == null || !await CanDeleteAsync(entity, actor))
++            {
++                notFound.Add(guid);
++                continue;
++            }
++
++            toDeletePhysical.Add((guid, storageLocations.ResolveStoredFile(entity.StoragePath)));
++            attachmentRepository.Delete(entity);
++            deleted.Add(guid);
++        }
++
++        if (deleted.Count > 0)
++            await attachmentRepository.SaveChangesAsync();
++
++        foreach (var item in toDeletePhysical)
++            if (!TryDeletePhysical(item.Path))
++                physicalFailed.Add(item.Guid);
++
++        var result = new BulkDeleteAttachmentsResult(
++            Requested: normalized.Count,
++            Deleted: deleted.Count,
++            DeletedGuids: deleted,
++            NotFoundGuids: notFound,
++            PhysicalDeleteFailedGuids: physicalFailed
++        );
++
++        return Result<BulkDeleteAttachmentsResult>.Success(result);
++    }
++
++    // -----------------------------
++    // مجوز حذف
++    // -----------------------------
++    private sealed record Actor(Guid UserGuid, Guid? SystemGuid, bool IsSuperAdmin);
++
++    /// <summary>
++    /// حذف مجاز است برای: ایجادکننده‌ی فایل، سامانه‌ی صاحب فایل (همان client_id که پوشه‌اش را ساخته؛
++    /// کنترل دسترسی کسب‌وکاری با خود آن سامانه است) و مدیر کل. سامانه‌ها نمی‌توانند فایل یکدیگر را حذف کنند.
++    /// </summary>
++    private async Task<bool> CanDeleteAsync(Domain.AttachmentAgg.Attachment entity, Actor actor)
++    {
++        if (actor.IsSuperAdmin || entity.CreatedBy == actor.UserGuid) return true;
++        if (actor.SystemGuid == null || entity.ClassificationId <= 0) return false;
++
++        var classification = await classificationRepository.LoadAsync(entity.ClassificationId);
++        return classification != null && classification.SystemGuid == actor.SystemGuid;
++    }
++
++    private async Task<Actor> GetActorAsync()
++    {
++        var userGuid = claimHelper.GetCurrentUserGuid();
++        Guid? systemGuid = null;
++        var isSuperAdmin = false;
++
++        try
++        {
++            var clientId = httpContextAccessor.HttpContext?.User.FindFirst("client_id")?.Value;
++            if (!string.IsNullOrWhiteSpace(clientId))
++                systemGuid = (await userManagementAclService.GetSystemByAsync(clientId))?.Guid;
++
++            var users = await userManagementAclService.GetUsersByGuidsAsync([userGuid]);
++            isSuperAdmin = users.Any(u => u.Guid == userGuid && u.IsSuperAdmin);
++        }
++        catch
++        {
++            // در دسترس نبودن UserManagement: فقط ایجادکننده اجازه‌ی حذف دارد
++        }
++
++        return new Actor(userGuid, systemGuid, isSuperAdmin);
++    }
++
++    private static bool TryDeletePhysical(string? physicalPath)
++    {
++        if (string.IsNullOrWhiteSpace(physicalPath)) return true;
++        for (var attempt = 0; attempt < 3; attempt++)
++        {
++            try
++            {
++                if (System.IO.File.Exists(physicalPath)) System.IO.File.Delete(physicalPath);
++                return true;
++            }
++            catch (System.IO.IOException) { Thread.Sleep(150 * (attempt + 1)); }
++            catch (UnauthorizedAccessException) { return false; }
++        }
++        return false;
++    }
++}
+diff --git a/FileManagement.Application/FileManagement.Application.csproj b/FileManagement.Application/FileManagement.Application.csproj
+index b28b96f..e1f0396 100644
+--- a/FileManagement.Application/FileManagement.Application.csproj
++++ b/FileManagement.Application/FileManagement.Application.csproj
+@@ -1,22 +1,26 @@
+-﻿<Project Sdk="Microsoft.NET.Sdk">
+-
+-  <PropertyGroup>
+-    <TargetFramework>net10.0</TargetFramework>
+-    <ImplicitUsings>enable</ImplicitUsings>
+-    <Nullable>enable</Nullable>
+-  </PropertyGroup>
+-
+-  <ItemGroup>
+-    <PackageReference Include="Epc.Application" Version="2.0.3" />
+-    <PackageReference Include="Epc.Company" Version="2.0.3" />
+-    <PackageReference Include="Epc.Identity" Version="2.0.3" />
+-    <PackageReference Include="FileSignatures" Version="7.3.0" />
+-    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.12" />
+-  </ItemGroup>
+-
+-  <ItemGroup>
+-    <ProjectReference Include="..\FileManagement.Application.Contract\FileManagement.Application.Contract.csproj" />
+-    <ProjectReference Include="..\FileManagement.Domain\FileManagement.Domain.csproj" />
+-  </ItemGroup>
+-
+-</Project>
++﻿<Project Sdk="Microsoft.NET.Sdk">
++
++  <PropertyGroup>
++    <TargetFramework>net10.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++  </PropertyGroup>
++
++  <ItemGroup>
++    <PackageReference Include="Epc.Application" Version="2.0.3" />
++    <PackageReference Include="Epc.Company" Version="2.0.3" />
++    <PackageReference Include="Epc.Identity" Version="2.0.3" />
++    <PackageReference Include="FileSignatures" Version="7.3.0" />
++    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.12" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <FrameworkReference Include="Microsoft.AspNetCore.App" />
++  </ItemGroup>
++
++  <ItemGroup>
++    <ProjectReference Include="..\FileManagement.Application.Contract\FileManagement.Application.Contract.csproj" />
++    <ProjectReference Include="..\FileManagement.Domain\FileManagement.Domain.csproj" />
++  </ItemGroup>
++
++</Project>
+diff --git a/FileManagement.Application/UploadCommandHandler.cs b/FileManagement.Application/UploadCommandHandler.cs
+index b9bb61f..04cb18d 100644
+--- a/FileManagement.Application/UploadCommandHandler.cs
++++ b/FileManagement.Application/UploadCommandHandler.cs
+@@ -1,258 +1,304 @@
+-using Epc.Application.Command;
+-using Epc.Identity;
+-using FileManagement.Application.Contract.Upload;
+-using FileManagement.Domain.AttachmentAgg;
+-using FileManagement.Domain.AttachmentAgg.Service;
+-using FileManagement.Domain.ClassificationAgg;
+-using FileManagement.Domain.ClassificationAgg.Service;
+-using FileManagement.Domain.Shared.Acls.UserManagement;
+-using FileManagement.Domain.UploadSessionAgg;
+-using System;
+-using System.IO;
+-using System.Security.Cryptography;
+-using System.Threading.Tasks;
+-
+-namespace FileManagement.Application;
+-
+-public class UploadCommandHandler(
+-    IUploadSessionRepository uploadSessionRepository,
+-    IAttachmentRepository attachmentRepository,
+-    IClassificationRepository classificationRepository,
+-    IUserManagementAclService userManagementAclService,
+-    IClaimHelper claimHelper,
+-    IClassificationService classificationService,
+-    IAttachmentService attachmentService,
+-    ITusFileService tusFileService)
+-    :
+-        ICommandHandlerAsync<InitiateUpload, InitiateUploadResult>,
+-        ICommandHandlerAsync<CompleteUpload, CompleteUploadResult>,
+-        ICommandHandlerAsync<CancelUpload>,
+-        ICommandHandlerAsync<UpdateUploadProgress>
+-{
+-    /// <summary> 
+-    /// شروع جلسه آپلود TUS 
+-    /// </summary> 
+-    public async Task<InitiateUploadResult> Handle(InitiateUpload command)
+-    {
+-        try
+-        {
+-            var creator = claimHelper.GetCurrentUserGuid();
+-            // بررسی سیستم 
+-            var system = await userManagementAclService.GetSystemByAsync(command.ClientId);
+-            if (system == null)
+-                throw new Exception("سیستم مورد نظر یافت نشد.");
+-            // پردازش مسیر پوشه و ایجاد Classification ها 
+-            int? classificationId = command.ClassificationId;
+-            if (!string.IsNullOrEmpty(command.FolderPath))
+-            {
+-                classificationId = await EnsureFolderPathExistsAsync(
+-                    command.FolderPath, system.Guid, system.Id, creator);
+-            }
+-            // ایجاد TusFileId یکتا 
+-            var tusFileId = Guid.NewGuid().ToString("N");
+-            // ایجاد جلسه آپلود 
+-            var session = new UploadSession(
+-                creator: creator,
+-                tusFileId: tusFileId,
+-                fileName: command.FileName,
+-                contentType: command.ContentType,
+-                totalSize: command.FileSize,
+-                systemGuid: system.Guid,
+-                folderPath: command.FolderPath,
+-                classificationId: classificationId
+-            );
+-            await uploadSessionRepository.CreateAsync(session);
+-            await uploadSessionRepository.SaveChangesAsync();
+-            return new InitiateUploadResult(
+-                session.Guid,
+-                tusFileId,
+-                $"/api/Upload/tus/{tusFileId}",
+-                session.ExpiresAt
+-            );
+-        }
+-        catch (Exception ex)
+-        {
+-            Console.WriteLine( ex.ToString() );
+-            throw;
+-        }
+-
+-      
+-    }
+-    /// <summary> 
+-    /// تکمیل آپلود و ثبت فایل 
+-    /// </summary> 
+-    public async Task<CompleteUploadResult> Handle(CompleteUpload command)
+-    {
+-        var creator = claimHelper.GetCurrentUserGuid();
+-
+-        var session = await uploadSessionRepository.LoadAsync(command.SessionGuid);
+-        if (session == null)
+-            throw new Exception("جلسه آپلود یافت نشد.");
+-
+-        var tusFileId = command.TusFileId;
+-
+-        var tusStatus = await tusFileService.GetUploadStatusAsync(tusFileId);
+-        if (tusStatus == null || !tusStatus.IsComplete)
+-            throw new Exception("آپلود فایل هنوز تکمیل نشده است.");
+-
+-        string? fileName = null;
+-        string? fullPath = null;
+-
+-        try
+-        {
+-            var storagePath = GenerateStoragePath(session.SystemGuid, session.ClassificationId);
+-            Directory.CreateDirectory(storagePath);
+-
+-            fileName = $"{Guid.NewGuid():N}{Path.GetExtension(session.FileName)}";
+-            fullPath = Path.Combine(storagePath, fileName);
+-
+-            string checksum;
+-
+-            // ✅ استریم فقط همین‌جا باز است و همین‌جا هم بسته می‌شود
+-            await using (var tusStream = await tusFileService.GetFileStreamAsync(tusFileId))
+-            {
+-                if (tusStream == null)
+-                    throw new Exception("فایل آپلود شده یافت نشد.");
+-
+-                if (tusStream.CanSeek) tusStream.Position = 0;
+-
+-                checksum = await SaveFileWithChecksumAsync(tusStream, fullPath);
+-            } // ✅ اینجا tusStream قطعاً Dispose شده
+-
+-            var attachment = new Attachment(
+-                creator: creator,
+-                classificationId: session.ClassificationId ?? 0,
+-                fileName: fileName,
+-                originalFileName: session.FileName,
+-                storagePath: fullPath.Replace("\\", "/"),
+-                contentType: session.ContentType,
+-                fileSize: session.TotalSize,
+-                tusFileId: tusFileId,
+-                description: command.Description,
+-                checksum: checksum
+-            );
+-
+-            await attachmentRepository.CreateAsync(attachment);
+-
+-            session.Complete(attachment.Guid);
+-            await uploadSessionRepository.SaveChangesAsync();
+-
+-            return new CompleteUploadResult(
+-                attachment.Guid,
+-                session.FileName,
+-                session.TotalSize,
+-                session.ContentType
+-            );
+-        }
+-        catch (Exception ex)
+-        {
+-            session.Fail(ex.Message);
+-            await uploadSessionRepository.SaveChangesAsync();
+-            throw;
+-        }
+-        finally
+-        {
+-            // ✅ حالا فایل دیگر توسط استریم شما باز نیست
+-            _ = await tusFileService.DeleteFileWithRetryAsync(tusFileId);
+-        }
+-    }
+-
+-    /// <summary> 
+-    /// لغو آپلود 
+-    /// </summary> 
+-    public async Task Handle(CancelUpload command)
+-    {
+-        var session = await uploadSessionRepository.LoadAsync(command.SessionGuid);
+-        if (session == null)
+-            throw new Exception("جلسه آپلود یافت نشد.");
+-        // حذف فایل TUS 
+-        await tusFileService.DeleteFileAsync(session.TusFileId);
+-        session.Cancel();
+-        await uploadSessionRepository.SaveChangesAsync();
+-    }
+-    /// <summary> 
+-    /// به‌روزرسانی پیشرفت آپلود 
+-    /// </summary> 
+-    public async Task Handle(UpdateUploadProgress command)
+-    {
+-        var session = await uploadSessionRepository.GetByTusFileIdAsync(command.TusFileId);
+-        if (session == null) return;
+-        session.UpdateProgress(command.UploadedBytes);
+-        await uploadSessionRepository.SaveChangesAsync();
+-    }
+-    #region Private Methods 
+-    private async Task<int> EnsureFolderPathExistsAsync(
+-        string folderPath, Guid systemGuid, int systemId, Guid creator)
+-    {
+-        var folders = folderPath.Split("{{Folder}}", StringSplitOptions.RemoveEmptyEntries);
+-        if (folders.Length == 0)
+-            throw new Exception("مسیر پوشه نامعتبر است.");
+-        int? parentId = null;
+-        Classification? currentFolder = null;
+-        foreach (var folderName in folders)
+-        {
+-            var trimmedName = folderName.Trim();
+-            var existingFolder = classificationRepository.GetByTitle(trimmedName, systemGuid, parentId);
+-            if (existingFolder == null)
+-            {
+-                var newFolder = new Classification(
+-                    creator: creator,
+-                    systemGuid: systemGuid,
+-                    systemId: systemId,
+-                    title: trimmedName,
+-                    parentId: parentId,
+-                    service: classificationService
+-                );
+-                await classificationRepository.CreateAsync(newFolder);
+-                await classificationRepository.SaveChangesAsync();
+-                currentFolder = newFolder;
+-                parentId = newFolder.Id;
+-            }
+-            else
+-            {
+-                currentFolder = existingFolder;
+-                parentId = existingFolder.Id;
+-            }
+-        }
+-        return currentFolder?.Id ?? 0;
+-    }
+-    private string GenerateStoragePath(Guid systemGuid, int? classificationId)
+-    {
+-        var basePath = "files"; // از تنظیمات خوانده شود 
+-        var year = DateTime.UtcNow.Year;
+-        var month = DateTime.UtcNow.Month.ToString("00");
+-        // مسیر کوتاه با hash برای جلوگیری از مشکل path طولانی 
+-        var classHash = classificationId.HasValue
+-            ? Convert.ToBase64String(BitConverter.GetBytes(classificationId.Value))
+-                .Replace("/", "_").Replace("+", "-")[..4]
+-            : "root";
+-        return Path.Combine(basePath, systemGuid.ToString("N")[..8], year.ToString(), month, classHash);
+-    }
+-    private async Task<string> SaveFileWithChecksumAsync(Stream sourceStream, string destinationPath)
+-    {
+-        // اطمینان از وجود دایرکتوری 
+-        var directory = Path.GetDirectoryName(destinationPath);
+-        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+-        {
+-            Directory.CreateDirectory(directory);
+-        }
+-        using var sha256 = SHA256.Create();
+-        await using var destinationStream = new FileStream(
+-            destinationPath,
+-            FileMode.Create,
+-            FileAccess.Write,
+-            FileShare.None,
+-            bufferSize: 81920,
+-            useAsync: true);
+-        var buffer = new byte[81920]; // 80KB buffer 
+-        int bytesRead;
+-        while ((bytesRead = await sourceStream.ReadAsync(buffer)) > 0)
+-        {
+-            await destinationStream.WriteAsync(buffer.AsMemory(0, bytesRead));
+-            sha256.TransformBlock(buffer, 0, bytesRead, null, 0);
+-        }
+-        sha256.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+-        return BitConverter.ToString(sha256.Hash!).Replace("-", "").ToLowerInvariant();
+-    }
+-    #endregion
++using Epc.Application.Command;
++using Epc.Identity;
++using FileManagement.Application.Contract.Upload;
++using FileManagement.Common;
++using Microsoft.AspNetCore.StaticFiles;
++using FileManagement.Domain.AttachmentAgg;
++using FileManagement.Domain.AttachmentAgg.Service;
++using FileManagement.Domain.ClassificationAgg;
++using FileManagement.Domain.ClassificationAgg.Service;
++using FileManagement.Domain.Shared.Acls.UserManagement;
++using FileManagement.Domain.UploadSessionAgg;
++using System;
++using System.IO;
++using System.Security.Cryptography;
++using System.Threading.Tasks;
++
++namespace FileManagement.Application;
++
++public class UploadCommandHandler(
++    IUploadSessionRepository uploadSessionRepository,
++    IAttachmentRepository attachmentRepository,
++    IClassificationRepository classificationRepository,
++    IUserManagementAclService userManagementAclService,
++    IClaimHelper claimHelper,
++    IClassificationService classificationService,
++    IAttachmentService attachmentService,
++    ITusFileService tusFileService,
++    FileStorageLocations storageLocations,
++    FileTypePolicy fileTypePolicy)
++    :
++        ICommandHandlerAsync<InitiateUpload, InitiateUploadResult>,
++        ICommandHandlerAsync<CompleteUpload, CompleteUploadResult>,
++        ICommandHandlerAsync<CancelUpload>,
++        ICommandHandlerAsync<UpdateUploadProgress>
++{
++    /// <summary> 
++    /// شروع جلسه آپلود TUS 
++    /// </summary> 
++    public async Task<InitiateUploadResult> Handle(InitiateUpload command)
++    {
++        try
++        {
++            var creator = claimHelper.GetCurrentUserGuid();
++            var policyError = fileTypePolicy.Validate(command.FileName);
++            if (policyError != null)
++                throw new Exception(policyError);
++            // بررسی سیستم 
++            var system = await userManagementAclService.GetSystemByAsync(command.ClientId);
++            if (system == null)
++                throw new Exception("سیستم مورد نظر یافت نشد.");
++            // پردازش مسیر پوشه و ایجاد Classification ها 
++            int? classificationId = command.ClassificationId;
++            if (!string.IsNullOrEmpty(command.FolderPath))
++            {
++                classificationId = await EnsureFolderPathExistsAsync(
++                    command.FolderPath, system.Guid, system.Id, creator);
++            }
++            // ایجاد TusFileId یکتا 
++            var tusFileId = Guid.NewGuid().ToString("N");
++            // ایجاد جلسه آپلود 
++            var session = new UploadSession(
++                creator: creator,
++                tusFileId: tusFileId,
++                fileName: command.FileName,
++                contentType: ContentTypeFor(command.FileName),
++                totalSize: command.FileSize,
++                systemGuid: system.Guid,
++                folderPath: command.FolderPath,
++                classificationId: classificationId
++            );
++            await uploadSessionRepository.CreateAsync(session);
++            await uploadSessionRepository.SaveChangesAsync();
++            return new InitiateUploadResult(
++                session.Guid,
++                tusFileId,
++                $"/api/Upload/tus/{tusFileId}",
++                session.ExpiresAt
++            );
++        }
++        catch (Exception ex)
++        {
++            Console.WriteLine( ex.ToString() );
++            throw;
++        }
++
++      
++    }
++    /// <summary> 
++    /// تکمیل آپلود و ثبت فایل 
++    /// </summary> 
++    public async Task<CompleteUploadResult> Handle(CompleteUpload command)
++    {
++        var creator = claimHelper.GetCurrentUserGuid();
++
++        var session = await uploadSessionRepository.LoadAsync(command.SessionGuid);
++        if (session == null)
++            throw new Exception("جلسه آپلود یافت نشد.");
++
++        // فقط کاربری که آپلود را شروع کرده می‌تواند آن را تکمیل کند
++        if (session.CreatedBy != creator)
++            throw new UnauthorizedAccessException("این جلسه‌ی آپلود متعلق به شما نیست.");
++
++        // درخواست تکراری (مثلاً تلاش مجدد پس از قطع شبکه) همان نتیجه‌ی قبلی را می‌گیرد
++        if (session.Status == UploadSessionStatus.Completed && session.AttachmentGuid.HasValue)
++            return new CompleteUploadResult(session.AttachmentGuid.Value, session.FileName, session.TotalSize, session.ContentType);
++
++        var tusFileId = command.TusFileId;
++        if (!FileTypePolicy.IsValidTusId(tusFileId))
++            throw new Exception("شناسه‌ی فایل آپلودشده نامعتبر است.");
++
++        var tusStatus = await tusFileService.GetUploadStatusAsync(tusFileId);
++        if (tusStatus == null || !tusStatus.IsComplete)
++            throw new Exception("آپلود فایل هنوز تکمیل نشده است.");
++
++        // فایل tus باید متعلق به همین جلسه باشد (کلاینت sessionId را در metadata می‌فرستد)
++        var metadata = await tusFileService.GetMetadataAsync(tusFileId);
++        if (metadata != null && metadata.TryGetValue("sessionId", out var boundSession)
++            && !string.Equals(boundSession, session.Guid.ToString(), StringComparison.OrdinalIgnoreCase))
++            throw new UnauthorizedAccessException("فایل آپلودشده به این جلسه‌ی آپلود تعلق ندارد.");
++
++        var policyError = fileTypePolicy.Validate(session.FileName);
++        if (policyError != null)
++            throw new Exception(policyError);
++
++        string? tempPath = null;
++
++        try
++        {
++            var fileName = $"{Guid.NewGuid():N}{Path.GetExtension(session.FileName).ToLowerInvariant()}";
++            var (fullPath, storedPath) = storageLocations.NewStoredFile(
++                GenerateStorageDirectory(session.SystemGuid, session.ClassificationId), fileName);
++
++            string checksum;
++            long size;
++            tempPath = fullPath + ".part";
++
++            // ✅ استریم فقط همین‌جا باز است و همین‌جا هم بسته می‌شود
++            await using (var tusStream = await tusFileService.GetFileStreamAsync(tusFileId))
++            {
++                if (tusStream == null)
++                    throw new Exception("فایل آپلود شده یافت نشد.");
++
++                if (tusStream.CanSeek) tusStream.Position = 0;
++
++                (checksum, size) = await SaveFileWithChecksumAsync(tusStream, tempPath);
++            }
++
++            // انتقال اتمی: هیچ‌وقت فایل نیمه‌نوشته‌شده سرو نمی‌شود
++            File.Move(tempPath, fullPath, overwrite: false);
++            tempPath = null;
++
++            var attachment = new Attachment(
++                creator: creator,
++                classificationId: session.ClassificationId ?? 0,
++                fileName: fileName,
++                originalFileName: session.FileName,
++                storagePath: storedPath,
++                contentType: ContentTypeFor(session.FileName),
++                fileSize: size,
++                tusFileId: tusFileId,
++                description: command.Description,
++                checksum: checksum
++            );
++
++            await attachmentRepository.CreateAsync(attachment);
++
++            session.Complete(attachment.Guid);
++            await uploadSessionRepository.SaveChangesAsync();
++
++            return new CompleteUploadResult(
++                attachment.Guid,
++                session.FileName,
++                size,
++                attachment.ContentType
++            );
++        }
++        catch (Exception ex)
++        {
++            session.Fail(ex.Message);
++            await uploadSessionRepository.SaveChangesAsync();
++            throw;
++        }
++        finally
++        {
++            if (tempPath != null)
++                try { File.Delete(tempPath); } catch (IOException) { }
++
++            // ✅ حالا فایل دیگر توسط استریم شما باز نیست
++            _ = await tusFileService.DeleteFileWithRetryAsync(tusFileId);
++        }
++    }
++
++    /// <summary> 
++    /// لغو آپلود 
++    /// </summary> 
++    public async Task Handle(CancelUpload command)
++    {
++        var session = await uploadSessionRepository.LoadAsync(command.SessionGuid);
++        if (session == null)
++            throw new Exception("جلسه آپلود یافت نشد.");
++        if (session.CreatedBy != claimHelper.GetCurrentUserGuid())
++            throw new UnauthorizedAccessException("این جلسه‌ی آپلود متعلق به شما نیست.");
++        // حذف فایل TUS 
++        await tusFileService.DeleteFileAsync(session.TusFileId);
++        session.Cancel();
++        await uploadSessionRepository.SaveChangesAsync();
++    }
++    /// <summary> 
++    /// به‌روزرسانی پیشرفت آپلود 
++    /// </summary> 
++    public async Task Handle(UpdateUploadProgress command)
++    {
++        var session = await uploadSessionRepository.GetByTusFileIdAsync(command.TusFileId);
++        if (session == null) return;
++        session.UpdateProgress(command.UploadedBytes);
++        await uploadSessionRepository.SaveChangesAsync();
++    }
++    #region Private Methods 
++    private async Task<int> EnsureFolderPathExistsAsync(
++        string folderPath, Guid systemGuid, int systemId, Guid creator)
++    {
++        var folders = folderPath.Split("{{Folder}}", StringSplitOptions.RemoveEmptyEntries);
++        if (folders.Length == 0)
++            throw new Exception("مسیر پوشه نامعتبر است.");
++        int? parentId = null;
++        Classification? currentFolder = null;
++        foreach (var folderName in folders)
++        {
++            var trimmedName = folderName.Trim();
++            var existingFolder = classificationRepository.GetByTitle(trimmedName, systemGuid, parentId);
++            if (existingFolder == null)
++            {
++                var newFolder = new Classification(
++                    creator: creator,
++                    systemGuid: systemGuid,
++                    systemId: systemId,
++                    title: trimmedName,
++                    parentId: parentId,
++                    service: classificationService
++                );
++                await classificationRepository.CreateAsync(newFolder);
++                await classificationRepository.SaveChangesAsync();
++                currentFolder = newFolder;
++                parentId = newFolder.Id;
++            }
++            else
++            {
++                currentFolder = existingFolder;
++                parentId = existingFolder.Id;
++            }
++        }
++        return currentFolder?.Id ?? 0;
++    }
++    private static readonly FileExtensionContentTypeProvider ContentTypes = CreateContentTypes();
++
++    private static FileExtensionContentTypeProvider CreateContentTypes()
++    {
++        var provider = new FileExtensionContentTypeProvider();
++        provider.Mappings[".webp"] = "image/webp";
++        provider.Mappings[".rar"] = "application/vnd.rar";
++        provider.Mappings[".7z"] = "application/x-7z-compressed";
++        return provider;
++    }
++
++    /// <summary>نوع محتوا از روی پسوند؛ مقدار اعلام‌شده توسط کلاینت قابل اعتماد نیست</summary>
++    private static string ContentTypeFor(string? fileName)
++        => !string.IsNullOrEmpty(fileName) && ContentTypes.TryGetContentType(fileName, out var type) ? type : "application/octet-stream";
++
++    /// <summary>مسیر نسبی داخل ریشه‌ی فایل‌ها: {system8}/{yyyy}/{MM}/{classHash}</summary>
++    private static string GenerateStorageDirectory(Guid systemGuid, int? classificationId)
++    {
++        var now = DateTime.UtcNow;
++        // مسیر کوتاه با hash برای جلوگیری از مشکل path طولانی 
++        var classHash = classificationId.HasValue
++            ? Convert.ToBase64String(BitConverter.GetBytes(classificationId.Value))
++                .Replace("/", "_").Replace("+", "-")[..4]
++            : "root";
++        return string.Join('/', systemGuid.ToString("N")[..8], now.Year.ToString(), now.Month.ToString("00"), classHash);
++    }
++
++    private static async Task<(string Checksum, long Size)> SaveFileWithChecksumAsync(Stream sourceStream, string destinationPath)
++    {
++        using var sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
++        await using var destinationStream = new FileStream(
++            destinationPath,
++            FileMode.Create,
++            FileAccess.Write,
++            FileShare.None,
++            bufferSize: 1024 * 1024,
++            useAsync: true);
++        var buffer = new byte[1024 * 1024]; // 1MB buffer (فایل‌های چندگیگابایتی)
++        long total = 0;
++        int bytesRead;
++        while ((bytesRead = await sourceStream.ReadAsync(buffer)) > 0)
++        {
++            await destinationStream.WriteAsync(buffer.AsMemory(0, bytesRead));
++            sha256.AppendData(buffer, 0, bytesRead);
++            total += bytesRead;
++        }
++        await destinationStream.FlushAsync();
++        return (Convert.ToHexStringLower(sha256.GetHashAndReset()), total);
++    }
++    #endregion
+ }
+\ No newline at end of file
+diff --git a/FileManagement.Common/FilePathResolver.cs b/FileManagement.Common/FilePathResolver.cs
+index 25c72ab..d832c1f 100644
+--- a/FileManagement.Common/FilePathResolver.cs
++++ b/FileManagement.Common/FilePathResolver.cs
+@@ -1,39 +1,19 @@
+-﻿using Microsoft.Extensions.Configuration;
+-using System;
+-using System.IO;
+-
+-namespace FileManagement.Common
+-{
+-    public interface IFilePathResolver
+-    {
+-        string ToPhysicalPath(string relativePath);
+-    }
+-    public class FilePathResolver(IConfiguration configuration) : IFilePathResolver
+-    {
+-        public string ToPhysicalPath(string relativePath)
+-        {
+-            var basePathFromConfig = configuration["FileSettings:FileBasePath"];
+-            var contentRoot = Directory.GetCurrentDirectory();
+-
+-            var basePath = string.IsNullOrWhiteSpace(basePathFromConfig)
+-                ? Path.Combine(contentRoot, "files")
+-                : basePathFromConfig;
+-
+-            if (!Path.IsPathRooted(basePath))
+-                basePath = Path.GetFullPath(Path.Combine(contentRoot, basePath));
+-
+-            basePath = Path.GetFullPath(basePath);
+-            Directory.CreateDirectory(basePath);
+-
+-            var normalized = (relativePath ?? string.Empty).Replace('\\', '/').TrimStart('/');
+-            var physical = Path.GetFullPath(Path.Combine(basePath, normalized.Replace('/', Path.DirectorySeparatorChar)));
+-
+-            // traversal defense
+-            var baseWithSep = basePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+-            if (!physical.StartsWith(baseWithSep, StringComparison.OrdinalIgnoreCase))
+-                throw new InvalidOperationException("Invalid path traversal.");
+-
+-            return physical;
+-        }
+-    }
+-}
+\ No newline at end of file
++using System;
++
++namespace FileManagement.Common
++{
++    public interface IFilePathResolver
++    {
++        /// <summary>مسیر ذخیره‌شده‌ی پیوست (files/…) → مسیر فیزیکی؛ مسیر خارج از ریشه‌های مجاز خطا می‌دهد.</summary>
++        string ToPhysicalPath(string relativePath);
++    }
++
++    /// <summary>سازگاری با کدهای قدیمی؛ منطق اصلی در <see cref="FileStorageLocations"/> است.</summary>
++    public class FilePathResolver(FileStorageLocations locations) : IFilePathResolver
++    {
++        public string ToPhysicalPath(string relativePath)
++            => locations.ResolveStoredFile(relativePath)
++               ?? locations.ExpectedPhysicalPath(relativePath)
++               ?? throw new InvalidOperationException("Invalid path traversal.");
++    }
++}
+diff --git a/FileManagement.Common/FileStorageLocations.cs b/FileManagement.Common/FileStorageLocations.cs
+new file mode 100644
+index 0000000..66b8707
+--- /dev/null
++++ b/FileManagement.Common/FileStorageLocations.cs
+@@ -0,0 +1,210 @@
++using Microsoft.Extensions.Configuration;
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Linq;
++using System.Text.RegularExpressions;
++
++namespace FileManagement.Common;
++
++/// <summary>
++/// مسیرهای فیزیکی ذخیره‌سازی سامانه‌ی مدیریت فایل (یک مرجع واحد برای آپلود، دانلود، حذف، تصاویر و کش).
++/// ─────────────────────────────────────────────────────────────────────────────────────────────
++///  • Files       ← FileSettings:FileBasePath       (پیش‌فرض: files)               پیوست‌ها
++///  • Photos      ← FileSettings:PhotoBasePath      (پیش‌فرض: App_Data/photos)     تصاویر پرسنلی
++///  • Signatures  ← FileSettings:SignatureBasePath  (پیش‌فرض: App_Data/signatures) تصاویر امضا
++///  • Cache       ← FileSettings:CachePath          (پیش‌فرض: App_Data/cache)      بندانگشتی‌ها
++/// همه‌ی این پوشه‌ها خارج از wwwroot هستند و هیچ‌کدام مستقیم (Static) سرو نمی‌شوند.
++/// برای سازگاری با استقرارهای قبلی، پوشه‌های قدیمی (wwwroot/photo و wwwroot/EpcSignature و files کنار برنامه)
++/// به‌عنوان مسیر دوم (فقط خواندنی) جستجو می‌شوند تا جابه‌جایی فایل‌ها بدون قطعی انجام شود.
++/// </summary>
++public sealed class FileStorageLocations
++{
++    /// <summary>پیشوند ثابتی که در StoragePath پیوست‌ها ذخیره می‌شود (files/...)</summary>
++    public const string StoredPrefix = "files";
++
++    private static readonly Regex SafeName = new(@"^[A-Za-z0-9][A-Za-z0-9._\-]{0,127}$", RegexOptions.Compiled);
++    private static readonly string[] ImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
++
++    public string ContentRoot { get; }
++    public string FilesRoot { get; }
++    public string PhotosRoot { get; }
++    public string SignaturesRoot { get; }
++    public string CacheRoot { get; }
++
++    /// <summary>مسیرهای جستجو (اول مسیر تنظیم‌شده، سپس مسیر قدیمی)</summary>
++    public IReadOnlyList<string> FileRoots { get; }
++    public IReadOnlyList<string> PhotoRoots { get; }
++    public IReadOnlyList<string> SignatureRoots { get; }
++
++    public FileStorageLocations(IConfiguration configuration)
++    {
++        ContentRoot = Path.GetFullPath(configuration["FileSettings:ContentRoot"] is { Length: > 0 } root
++            ? root
++            : Directory.GetCurrentDirectory());
++
++        var webRoot = Path.Combine(ContentRoot, "wwwroot");
++
++        FilesRoot = Resolve(configuration["FileSettings:FileBasePath"], StoredPrefix);
++        PhotosRoot = Resolve(configuration["FileSettings:PhotoBasePath"], Path.Combine("App_Data", "photos"));
++        SignaturesRoot = Resolve(configuration["FileSettings:SignatureBasePath"], Path.Combine("App_Data", "signatures"));
++        CacheRoot = Resolve(configuration["FileSettings:CachePath"], Path.Combine("App_Data", "cache"));
++
++        FileRoots = Distinct(FilesRoot, Path.Combine(ContentRoot, StoredPrefix));
++        PhotoRoots = Distinct(PhotosRoot, Path.Combine(webRoot, "photo"));
++        SignatureRoots = Distinct(SignaturesRoot, Path.Combine(webRoot, "EpcSignature"));
++
++        Directory.CreateDirectory(FilesRoot);
++        Directory.CreateDirectory(CacheRoot);
++    }
++
++    // ───────────────────────────── پیوست‌ها ─────────────────────────────
++
++    /// <summary>
++    /// مسیر ذخیره‌شده در پایگاه داده (files/… یا مسیر مطلق قدیمی) → مسیر فیزیکی موجود.
++    /// فقط مسیرهای داخل پوشه‌های مجاز پذیرفته می‌شوند (جلوگیری از Path Traversal).
++    /// </summary>
++    public string? ResolveStoredFile(string? storedPath)
++    {
++        foreach (var candidate in CandidatesFor(storedPath))
++            if (File.Exists(candidate)) return candidate;
++        return null;
++    }
++
++    /// <summary>مسیر فیزیکی مورد انتظار (حتی اگر فایل وجود نداشته باشد)؛ برای سازگاری با IFilePathResolver</summary>
++    public string? ExpectedPhysicalPath(string? storedPath) => CandidatesFor(storedPath).FirstOrDefault();
++
++    /// <summary>مسیر نسبی داخل پوشه‌ی فایل‌ها (برای ساخت آدرس /files/…)</summary>
++    public string? ToRelativePath(string? storedPath)
++    {
++        var physical = ResolveStoredFile(storedPath) ?? ExpectedPhysicalPath(storedPath);
++        if (physical == null) return null;
++
++        foreach (var root in FileRoots)
++            if (IsUnder(physical, root))
++                return Path.GetRelativePath(root, physical).Replace('\\', '/');
++        return null;
++    }
++
++    /// <summary>مسیر فیزیکی آدرس عمومی /files/{relative} (هر دو ریشه جستجو می‌شود)</summary>
++    public string? ResolvePublicRelative(string relative)
++    {
++        var normalized = Normalize(relative);
++        if (normalized == null) return null;
++
++        foreach (var root in FileRoots)
++        {
++            var full = Path.GetFullPath(Path.Combine(root, normalized));
++            if (IsUnder(full, root) && File.Exists(full)) return full;
++        }
++        return null;
++    }
++
++    /// <summary>مسیر فیزیکی جدید برای ذخیره‌ی فایل + مقداری که در StoragePath ثبت می‌شود</summary>
++    public (string PhysicalPath, string StoredPath) NewStoredFile(string relativeDirectory, string fileName)
++    {
++        var dir = Normalize(relativeDirectory) ?? throw new InvalidOperationException("Invalid storage directory.");
++        var safeFile = Path.GetFileName(fileName);
++        var physical = Path.GetFullPath(Path.Combine(FilesRoot, dir, safeFile));
++        if (!IsUnder(physical, FilesRoot)) throw new InvalidOperationException("Invalid storage path.");
++
++        Directory.CreateDirectory(Path.GetDirectoryName(physical)!);
++        var stored = $"{StoredPrefix}/{Path.GetRelativePath(FilesRoot, physical).Replace('\\', '/')}";
++        return (physical, stored);
++    }
++
++    // ───────────────────────────── تصاویر پرسنلی و امضا ─────────────────────────────
++
++    public static bool IsSafeName(string? name) => !string.IsNullOrWhiteSpace(name) && SafeName.IsMatch(name);
++
++    /// <summary>تصویر پرسنلی با نام کاربری/شماره پرسنلی (با یا بدون پسوند)</summary>
++    public string? FindPhoto(string? name) => FindImage(PhotoRoots, name);
++
++    /// <summary>تصویر امضای کاربر با نام کاربری</summary>
++    public string? FindSignature(string? userName) => FindImage(SignatureRoots, userName);
++
++    private static string? FindImage(IEnumerable<string> roots, string? name)
++    {
++        if (!IsSafeName(name)) return null;
++
++        var ext = Path.GetExtension(name!).ToLowerInvariant();
++        var hasImageExt = ImageExtensions.Contains(ext);
++        var baseName = hasImageExt ? Path.GetFileNameWithoutExtension(name!) : name!;
++        if (!IsSafeName(baseName)) return null;
++
++        foreach (var root in roots)
++        {
++            if (!Directory.Exists(root)) continue;
++            if (hasImageExt)
++            {
++                var exact = Path.Combine(root, baseName + ext);
++                if (File.Exists(exact)) return exact;
++            }
++            foreach (var e in ImageExtensions)
++            {
++                var path = Path.Combine(root, baseName + e);
++                if (File.Exists(path)) return path;
++            }
++        }
++        return null;
++    }
++
++    // ───────────────────────────── Helpers ─────────────────────────────
++
++    private IEnumerable<string> CandidatesFor(string? storedPath)
++    {
++        if (string.IsNullOrWhiteSpace(storedPath)) yield break;
++
++        var raw = storedPath.Trim();
++        if (Path.IsPathRooted(raw) && !raw.StartsWith('/') && !raw.StartsWith('\\'))
++        {
++            // مسیر مطلق (رکوردهای قدیمی): فقط اگر داخل یکی از ریشه‌های مجاز باشد
++            var full = Path.GetFullPath(raw);
++            if (FileRoots.Any(r => IsUnder(full, r))) yield return full;
++            yield break;
++        }
++
++        var normalized = Normalize(raw);
++        if (normalized == null) yield break;
++
++        // «files/…» پیشوند ثابت است و به ریشه‌ی فایل‌ها نگاشت می‌شود
++        var withoutPrefix = normalized.StartsWith(StoredPrefix + "/", StringComparison.OrdinalIgnoreCase)
++            ? normalized[(StoredPrefix.Length + 1)..]
++            : normalized;
++
++        foreach (var root in FileRoots)
++        {
++            var full = Path.GetFullPath(Path.Combine(root, withoutPrefix));
++            if (IsUnder(full, root)) yield return full;
++        }
++    }
++
++    /// <summary>مسیر نسبی امن: بدون «..»، بدون درایو و بدون کاراکترهای کنترلی</summary>
++    private static string? Normalize(string? path)
++    {
++        if (string.IsNullOrWhiteSpace(path)) return null;
++        var p = path.Replace('\\', '/').Trim().TrimStart('/');
++        if (p.Length == 0 || p.Contains(':') || p.Any(char.IsControl)) return null;
++        var segments = p.Split('/', StringSplitOptions.RemoveEmptyEntries);
++        if (segments.Any(s => s is "." or "..")) return null;
++        return string.Join(Path.DirectorySeparatorChar, segments);
++    }
++
++    private static bool IsUnder(string fullPath, string root)
++    {
++        var rootWithSep = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
++                          + Path.DirectorySeparatorChar;
++        return fullPath.StartsWith(rootWithSep, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
++    }
++
++    private string Resolve(string? configured, string fallback)
++    {
++        var path = string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
++        return Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(ContentRoot, path));
++    }
++
++    private static IReadOnlyList<string> Distinct(params string[] roots)
++        => roots.Select(Path.GetFullPath)
++            .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
++            .ToList();
++}
+diff --git a/FileManagement.Common/FileTypePolicy.cs b/FileManagement.Common/FileTypePolicy.cs
+new file mode 100644
+index 0000000..8d82dfe
+--- /dev/null
++++ b/FileManagement.Common/FileTypePolicy.cs
+@@ -0,0 +1,64 @@
++using Microsoft.Extensions.Configuration;
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Linq;
++using System.Text.RegularExpressions;
++
++namespace FileManagement.Common;
++
++/// <summary>
++/// سیاست نوع فایل‌های قابل آپلود (یک مرجع برای tus و تکمیل آپلود).
++///  • پسوندهای اجرایی/اسکریپتی همیشه ممنوع‌اند.
++///  • اگر FileSettings:FileExtensions تنظیم شده باشد، فقط همان پسوندها مجازند.
++/// </summary>
++public sealed class FileTypePolicy
++{
++    private static readonly Regex TusId = new(@"^[A-Za-z0-9_\-]{8,64}$", RegexOptions.Compiled);
++
++    private static readonly string[] AlwaysBlocked =
++    [
++        ".exe", ".dll", ".bat", ".cmd", ".ps1", ".psm1", ".sh", ".msi", ".msp", ".scr", ".com", ".cpl", ".msc",
++        ".vbs", ".vbe", ".jse", ".wsf", ".wsh", ".hta", ".lnk", ".reg", ".jar", ".appx", ".application",
++        ".php", ".phtml", ".asp", ".aspx", ".ashx", ".asmx", ".cshtml", ".jsp", ".cgi", ".pl", ".config"
++    ];
++
++    private readonly HashSet<string> _blocked;
++    private readonly HashSet<string>? _allowed;
++
++    public FileTypePolicy(IConfiguration configuration)
++    {
++        _blocked = new HashSet<string>(AlwaysBlocked, StringComparer.OrdinalIgnoreCase);
++        foreach (var ext in configuration.GetSection("TusSettings:BlockedExtensions").GetChildren().Select(c => c.Value ?? string.Empty).Where(v => v.Length > 0))
++            _blocked.Add(NormalizeExt(ext));
++
++        var allowed = configuration["FileSettings:FileExtensions"];
++        if (!string.IsNullOrWhiteSpace(allowed))
++            _allowed = new HashSet<string>(
++                allowed.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries).Select(NormalizeExt),
++                StringComparer.OrdinalIgnoreCase);
++    }
++
++    /// <summary>null یعنی مجاز؛ در غیر این صورت پیام خطا</summary>
++    public string? Validate(string? fileName)
++    {
++        if (string.IsNullOrWhiteSpace(fileName) || fileName.Length > 255 || fileName.Any(char.IsControl))
++            return "نام فایل نامعتبر است.";
++
++        var ext = Path.GetExtension(fileName).ToLowerInvariant();
++        if (_blocked.Contains(ext))
++            return $"بارگذاری فایل با پسوند «{ext}» مجاز نیست.";
++        if (_allowed != null && !_allowed.Contains(ext))
++            return string.IsNullOrEmpty(ext) ? "فایل بدون پسوند قابل بارگذاری نیست." : $"پسوند «{ext}» در فهرست پسوندهای مجاز نیست.";
++        return null;
++    }
++
++    /// <summary>شناسه‌ی tus فقط حروف/عدد است؛ جلوگیری از خواندن فایل دلخواه سرور با «../»</summary>
++    public static bool IsValidTusId(string? id) => !string.IsNullOrEmpty(id) && TusId.IsMatch(id);
++
++    private static string NormalizeExt(string ext)
++    {
++        var e = ext.Trim().ToLowerInvariant();
++        return e.StartsWith('.') ? e : "." + e;
++    }
++}
+diff --git a/FileManagement.Infrastructure.Configuration/FileManagementModule.cs b/FileManagement.Infrastructure.Configuration/FileManagementModule.cs
+index 96c1ad7..49a5b9d 100644
+--- a/FileManagement.Infrastructure.Configuration/FileManagementModule.cs
++++ b/FileManagement.Infrastructure.Configuration/FileManagementModule.cs
+@@ -1,152 +1,160 @@
+-﻿using Autofac;
+-using Autofac.Extras.DynamicProxy;
+-using Epc.Application.Command;
+-using Epc.Application.Query;
+-using Epc.Autofac;
+-using Epc.Domain;
+-using FileManagement.Application;
+-using FileManagement.Common;
+-using FileManagement.Domain.AttachmentAgg.Service;
+-using FileManagement.Domain.UploadSessionAgg;
+-using FileManagement.Infrastructure.Acl;
+-using FileManagement.Infrastructure.Persistence;
+-using FileManagement.Infrastructure.Persistence.Repositories;
+-using FileManagement.Infrastructure.Query;
+-using FileManagement.Infrastructure.Tus;
+-using FileManagement.Presentation.Facade.Command;
+-using FileManagement.Presentation.Facade.Query;
+-using Microsoft.EntityFrameworkCore;
+-using System.Text;
+-
+-namespace FileManagement.Infrastructure.Configuration;
+-
+-public class FileManagementModule(string connectionString) : Module
+-{
+-    private string ConnectionString { get; set; } = connectionString;
+-
+-    protected override void Load(ContainerBuilder builder)
+-    {
+-        // ============================================
+-        // Repositories
+-        // ============================================
+-        var repositoryAssembly = typeof(AttachmentRepository).Assembly;
+-        builder.RegisterAssemblyTypes(repositoryAssembly)
+-            .AsClosedTypesOf(typeof(IRepository<,>))
+-            .InstancePerLifetimeScope();
+-
+-        // UploadSession Repository
+-        builder.RegisterType<UploadSessionRepository>()
+-            .As<IUploadSessionRepository>()
+-            .InstancePerLifetimeScope();
+-
+-        // ============================================
+-        // Domain Services
+-        // ============================================
+-        var domainServiceAssembly = typeof(AttachmentService).Assembly;
+-        builder.RegisterAssemblyTypes(domainServiceAssembly)
+-            .Where(t => t.Name.EndsWith("Service"))
+-            .AsImplementedInterfaces();
+-
+-        // ============================================
+-        // Command Handlers
+-        // ============================================
+-        var commandHandlersAssembly = typeof(AttachmentCommandHandler).Assembly;
+-
+-        builder.RegisterAssemblyTypes(commandHandlersAssembly)
+-            .AsClosedTypesOf(typeof(ICommandHandler<>))
+-            .InstancePerLifetimeScope();
+-
+-        builder.RegisterAssemblyTypes(commandHandlersAssembly)
+-            .AsClosedTypesOf(typeof(ICommandHandler<,>))
+-            .InstancePerLifetimeScope();
+-
+-        builder.RegisterAssemblyTypes(commandHandlersAssembly)
+-            .AsClosedTypesOf(typeof(ICommandHandlerAsync<>))
+-            .InstancePerLifetimeScope();
+-
+-        builder.RegisterAssemblyTypes(commandHandlersAssembly)
+-            .AsClosedTypesOf(typeof(ICommandHandlerAsync<,>))
+-            .InstancePerLifetimeScope();
+-
+-        // ============================================
+-        // Query Handlers
+-        // ============================================
+-        var queryHandlerAssembly = typeof(AttachmentQueryHandler).Assembly;
+-
+-        builder.RegisterAssemblyTypes(queryHandlerAssembly)
+-            .AsClosedTypesOf(typeof(IQueryHandler<>))
+-            .InstancePerDependency();
+-
+-        builder.RegisterAssemblyTypes(queryHandlerAssembly)
+-            .AsClosedTypesOf(typeof(IQueryHandler<,>))
+-            .InstancePerDependency();
+-
+-        builder.RegisterAssemblyTypes(queryHandlerAssembly)
+-            .AsClosedTypesOf(typeof(IQueryHandlerAsync<>))
+-            .InstancePerDependency();
+-
+-        builder.RegisterAssemblyTypes(queryHandlerAssembly)
+-            .AsClosedTypesOf(typeof(IQueryHandlerAsync<,>))
+-            .InstancePerDependency();
+-
+-        // ============================================
+-        // DbContexts
+-        // ============================================
+-        if (!ConnectionString.Contains("Server"))
+-            ConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(ConnectionString));
+-
+-        builder.Register(_ =>
+-        {
+-            var optionsBuilder = new DbContextOptionsBuilder<FileManagementCommandContext>();
+-            optionsBuilder.UseSqlServer(ConnectionString);
+-            return new FileManagementCommandContext(optionsBuilder.Options);
+-        })
+-            .As<DbContext>()
+-            .As<FileManagementCommandContext>()
+-            .InstancePerLifetimeScope();
+-
+-        builder.Register(_ =>
+-        {
+-            var optionsBuilder = new DbContextOptionsBuilder<FileManagementQueryContext>();
+-            optionsBuilder.UseSqlServer(ConnectionString);
+-            return new FileManagementQueryContext(optionsBuilder.Options);
+-        })
+-            .As<FileManagementQueryContext>()
+-            .InstancePerDependency();
+-
+-        // ============================================
+-        // Facades
+-        // ============================================
+-        var facadeAssembly = typeof(AttachmentCommandFacade).Assembly;
+-        builder.RegisterAssemblyTypes(facadeAssembly)
+-            .Where(t => t.Name.EndsWith("CommandFacade"))
+-            .InstancePerLifetimeScope()
+-            .EnableInterfaceInterceptors()
+-            .InterceptedBy(typeof(SecurityInterceptor))
+-            .AsImplementedInterfaces();
+-
+-        var facadeQueryAssembly = typeof(AttachmentQueryFacade).Assembly;
+-        builder.RegisterAssemblyTypes(facadeQueryAssembly)
+-            .Where(t => t.Name.EndsWith("QueryFacade"))
+-            .InstancePerLifetimeScope()
+-            .EnableInterfaceInterceptors()
+-            .InterceptedBy(typeof(SecurityInterceptor))
+-            .AsImplementedInterfaces();
+-
+-        // ============================================
+-        // ACL Services
+-        // ============================================
+-        var aclServiceAssembly = typeof(UserManagementAclService).Assembly;
+-        builder.RegisterAssemblyTypes(aclServiceAssembly)
+-            .Where(t => t.Name.EndsWith("AclService"))
+-            .AsImplementedInterfaces()
+-            .InstancePerLifetimeScope();
+-
+-
+-        builder.RegisterType<FilePathResolver>()
+-           .As<IFilePathResolver>()
+-           .InstancePerLifetimeScope();
+-
+-        base.Load(builder);
+-    }
+-}
++﻿using Autofac;
++using Autofac.Extras.DynamicProxy;
++using Epc.Application.Command;
++using Epc.Application.Query;
++using Epc.Autofac;
++using Epc.Domain;
++using FileManagement.Application;
++using FileManagement.Common;
++using FileManagement.Domain.AttachmentAgg.Service;
++using FileManagement.Domain.UploadSessionAgg;
++using FileManagement.Infrastructure.Acl;
++using FileManagement.Infrastructure.Persistence;
++using FileManagement.Infrastructure.Persistence.Repositories;
++using FileManagement.Infrastructure.Query;
++using FileManagement.Infrastructure.Tus;
++using FileManagement.Presentation.Facade.Command;
++using FileManagement.Presentation.Facade.Query;
++using Microsoft.EntityFrameworkCore;
++using System.Text;
++
++namespace FileManagement.Infrastructure.Configuration;
++
++public class FileManagementModule(string connectionString) : Module
++{
++    private string ConnectionString { get; set; } = connectionString;
++
++    protected override void Load(ContainerBuilder builder)
++    {
++        // ============================================
++        // Repositories
++        // ============================================
++        var repositoryAssembly = typeof(AttachmentRepository).Assembly;
++        builder.RegisterAssemblyTypes(repositoryAssembly)
++            .AsClosedTypesOf(typeof(IRepository<,>))
++            .InstancePerLifetimeScope();
++
++        // UploadSession Repository
++        builder.RegisterType<UploadSessionRepository>()
++            .As<IUploadSessionRepository>()
++            .InstancePerLifetimeScope();
++
++        // ============================================
++        // Domain Services
++        // ============================================
++        var domainServiceAssembly = typeof(AttachmentService).Assembly;
++        builder.RegisterAssemblyTypes(domainServiceAssembly)
++            .Where(t => t.Name.EndsWith("Service"))
++            .AsImplementedInterfaces();
++
++        // ============================================
++        // Command Handlers
++        // ============================================
++        var commandHandlersAssembly = typeof(AttachmentCommandHandler).Assembly;
++
++        builder.RegisterAssemblyTypes(commandHandlersAssembly)
++            .AsClosedTypesOf(typeof(ICommandHandler<>))
++            .InstancePerLifetimeScope();
++
++        builder.RegisterAssemblyTypes(commandHandlersAssembly)
++            .AsClosedTypesOf(typeof(ICommandHandler<,>))
++            .InstancePerLifetimeScope();
++
++        builder.RegisterAssemblyTypes(commandHandlersAssembly)
++            .AsClosedTypesOf(typeof(ICommandHandlerAsync<>))
++            .InstancePerLifetimeScope();
++
++        builder.RegisterAssemblyTypes(commandHandlersAssembly)
++            .AsClosedTypesOf(typeof(ICommandHandlerAsync<,>))
++            .InstancePerLifetimeScope();
++
++        // ============================================
++        // Query Handlers
++        // ============================================
++        var queryHandlerAssembly = typeof(AttachmentQueryHandler).Assembly;
++
++        builder.RegisterAssemblyTypes(queryHandlerAssembly)
++            .AsClosedTypesOf(typeof(IQueryHandler<>))
++            .InstancePerDependency();
++
++        builder.RegisterAssemblyTypes(queryHandlerAssembly)
++            .AsClosedTypesOf(typeof(IQueryHandler<,>))
++            .InstancePerDependency();
++
++        builder.RegisterAssemblyTypes(queryHandlerAssembly)
++            .AsClosedTypesOf(typeof(IQueryHandlerAsync<>))
++            .InstancePerDependency();
++
++        builder.RegisterAssemblyTypes(queryHandlerAssembly)
++            .AsClosedTypesOf(typeof(IQueryHandlerAsync<,>))
++            .InstancePerDependency();
++
++        // ============================================
++        // DbContexts
++        // ============================================
++        if (!ConnectionString.Contains("Server"))
++            ConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(ConnectionString));
++
++        builder.Register(_ =>
++        {
++            var optionsBuilder = new DbContextOptionsBuilder<FileManagementCommandContext>();
++            optionsBuilder.UseSqlServer(ConnectionString);
++            return new FileManagementCommandContext(optionsBuilder.Options);
++        })
++            .As<DbContext>()
++            .As<FileManagementCommandContext>()
++            .InstancePerLifetimeScope();
++
++        builder.Register(_ =>
++        {
++            var optionsBuilder = new DbContextOptionsBuilder<FileManagementQueryContext>();
++            optionsBuilder.UseSqlServer(ConnectionString);
++            return new FileManagementQueryContext(optionsBuilder.Options);
++        })
++            .As<FileManagementQueryContext>()
++            .InstancePerDependency();
++
++        // ============================================
++        // Facades
++        // ============================================
++        var facadeAssembly = typeof(AttachmentCommandFacade).Assembly;
++        builder.RegisterAssemblyTypes(facadeAssembly)
++            .Where(t => t.Name.EndsWith("CommandFacade"))
++            .InstancePerLifetimeScope()
++            .EnableInterfaceInterceptors()
++            .InterceptedBy(typeof(SecurityInterceptor))
++            .AsImplementedInterfaces();
++
++        var facadeQueryAssembly = typeof(AttachmentQueryFacade).Assembly;
++        builder.RegisterAssemblyTypes(facadeQueryAssembly)
++            .Where(t => t.Name.EndsWith("QueryFacade"))
++            .InstancePerLifetimeScope()
++            .EnableInterfaceInterceptors()
++            .InterceptedBy(typeof(SecurityInterceptor))
++            .AsImplementedInterfaces();
++
++        // ============================================
++        // ACL Services
++        // ============================================
++        var aclServiceAssembly = typeof(UserManagementAclService).Assembly;
++        builder.RegisterAssemblyTypes(aclServiceAssembly)
++            .Where(t => t.Name.EndsWith("AclService"))
++            .AsImplementedInterfaces()
++            .InstancePerLifetimeScope();
++
++
++        builder.RegisterType<FileStorageLocations>()
++           .AsSelf()
++           .SingleInstance();
++
++        builder.RegisterType<FileTypePolicy>()
++           .AsSelf()
++           .SingleInstance();
++
++        builder.RegisterType<FilePathResolver>()
++           .As<IFilePathResolver>()
++           .InstancePerLifetimeScope();
++
++        base.Load(builder);
++    }
++}
 diff --git a/FileManagement.Infrastructure.Tus/TusConfiguration.cs b/FileManagement.Infrastructure.Tus/TusConfiguration.cs
-index f7814ec..dcfee75 100644
+index f7814ec..ab10eec 100644
 --- a/FileManagement.Infrastructure.Tus/TusConfiguration.cs
 +++ b/FileManagement.Infrastructure.Tus/TusConfiguration.cs
-@@ -49,7 +49,8 @@ public static class TusConfiguration
-             // ❌ UrlPath را ست نکنید وقتی از MapTus استفاده می‌کنید! 
-             // UrlPath = settings.UrlPath, // این خط باعث خطا می‌شود 
-             Store = new TusDiskStore(storagePath, deletePartialFilesOnConcat: true),
+@@ -1,109 +1,111 @@
+-﻿using FileManagement.Application;
+-using Microsoft.AspNetCore.Http;
+-using Microsoft.Extensions.Configuration;
+-using Microsoft.Extensions.DependencyInjection;
+-using Microsoft.Extensions.Logging;
+-using System;
+-using System.IO;
+-using System.Linq;
+-using System.Threading.Tasks;
+-using tusdotnet.Models;
+-using tusdotnet.Models.Configuration;
+-using tusdotnet.Models.Expiration;
+-using tusdotnet.Stores;
+-
+-namespace FileManagement.Infrastructure.Tus;
+-
+-/// <summary> 
+-/// پیکربندی TUS 
+-/// </summary> 
+-public static class TusConfiguration
+-{
+-    public static IServiceCollection AddTusServices(this IServiceCollection services, IConfiguration configuration)
+-    {
+-        var settings = configuration.GetSection("TusSettings").Get<TusSettings>() ?? new TusSettings();
+-        services.AddSingleton(settings);
+-        services.AddScoped<ITusFileService, TusFileService>();
+-        return services;
+-    }
+-    /// <summary> 
+-    /// دریافت تنظیمات TUS برای استفاده با MapTus (Endpoint Routing) 
+-    /// </summary> 
+-    public static DefaultTusConfiguration GetTusConfiguration(
+-        IServiceProvider serviceProvider,
+-        HttpContext httpContext)
+-    {
+-        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+-        var settings = configuration.GetSection("TusSettings").Get<TusSettings>() ?? new TusSettings();
+-        var logger = serviceProvider.GetService<ILogger<DefaultTusConfiguration>>();
+-        // ✅ اطمینان از وجود پوشه ذخیره‌سازی 
+-        var storagePath = Path.Combine(Directory.GetCurrentDirectory(), settings.StoragePath);
+-        logger?.LogInformation("TUS Configuration using storage path: {Path}", storagePath);
+-        if (!Directory.Exists(storagePath))
+-        {
+-            Directory.CreateDirectory(storagePath);
+-            logger?.LogInformation("Created TUS storage directory: {Path}", storagePath);
+-        }
+-        return new DefaultTusConfiguration
+-        {
+-            // ❌ UrlPath را ست نکنید وقتی از MapTus استفاده می‌کنید! 
+-            // UrlPath = settings.UrlPath, // این خط باعث خطا می‌شود 
+-            Store = new TusDiskStore(storagePath, deletePartialFilesOnConcat: true),
 -            MaxAllowedUploadSizeInBytes = (int?)settings.MaxFileSizeBytes,
+-            Expiration = new AbsoluteExpiration(TimeSpan.FromHours(settings.ExpirationHours)),
+-            Events = new Events
+-            {
+-                // بررسی احراز هویت 
+-                OnAuthorizeAsync = async eventContext =>
+-                {
+-                    if (!eventContext.HttpContext.User.Identity?.IsAuthenticated ?? true)
+-                    {
+-                        eventContext.FailRequest(System.Net.HttpStatusCode.Unauthorized, "Unauthorized");
+-                        return;
+-                    }
+-                    await Task.CompletedTask;
+-                },
+-                // اعتبارسنجی قبل از ایجاد فایل 
+-                OnBeforeCreateAsync = async eventContext =>
+-                {
+-                    // بررسی metadata 
+-                    var metadata = eventContext.Metadata;
+-                    if (!metadata.ContainsKey("filename"))
+-                    {
+-                        eventContext.FailRequest("filename metadata is required");
+-                        return;
+-                    }
+-                    var filename = metadata["filename"].GetString(System.Text.Encoding.UTF8);
+-                    var extension = Path.GetExtension(filename)?.ToLowerInvariant();
+-                    // بررسی پسوندهای ممنوع 
+-                    if (!string.IsNullOrEmpty(extension) && settings.BlockedExtensions.Contains(extension))
+-                    {
+-                        eventContext.FailRequest($"File extension '{extension}' is not allowed");
+-                        return;
+-                    }
+-                    // بررسی حجم 
+-                    if (eventContext.UploadLength > settings.MaxFileSizeBytes)
+-                    {
+-                        eventContext.FailRequest($"File size exceeds maximum allowed size of {settings.MaxFileSizeBytes / (1024 * 1024)} MB");
+-                        return;
+-                    }
+-                    logger?.LogInformation("TUS: Creating upload for file '{FileName}', Size: {Size} bytes",
+-                        filename, eventContext.UploadLength);
+-                    await Task.CompletedTask;
+-                },
+-                // لاگ بعد از ایجاد 
+-                OnCreateCompleteAsync = async eventContext =>
+-                {
+-                    logger?.LogInformation("TUS: Upload created with ID: {FileId}", eventContext.FileId);
+-                    await Task.CompletedTask;
+-                },
+-                // اطلاع‌رسانی تکمیل آپلود 
+-                OnFileCompleteAsync = async eventContext =>
+-                {
+-                    logger?.LogInformation("TUS: Upload completed for file ID: {FileId}", eventContext.FileId);
+-                    await Task.CompletedTask;
+-                }
+-            }
+-        };
+-    }
++﻿using FileManagement.Application;
++using FileManagement.Common;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Logging;
++using System;
++using System.IO;
++using System.Linq;
++using System.Threading.Tasks;
++using tusdotnet.Models;
++using tusdotnet.Models.Configuration;
++using tusdotnet.Models.Expiration;
++using tusdotnet.Stores;
++
++namespace FileManagement.Infrastructure.Tus;
++
++/// <summary> 
++/// پیکربندی TUS 
++/// </summary> 
++public static class TusConfiguration
++{
++    public static IServiceCollection AddTusServices(this IServiceCollection services, IConfiguration configuration)
++    {
++        var settings = configuration.GetSection("TusSettings").Get<TusSettings>() ?? new TusSettings();
++        services.AddSingleton(settings);
++        services.AddScoped<ITusFileService, TusFileService>();
++        return services;
++    }
++    /// <summary> 
++    /// دریافت تنظیمات TUS برای استفاده با MapTus (Endpoint Routing) 
++    /// </summary> 
++    public static DefaultTusConfiguration GetTusConfiguration(
++        IServiceProvider serviceProvider,
++        HttpContext httpContext)
++    {
++        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
++        var settings = configuration.GetSection("TusSettings").Get<TusSettings>() ?? new TusSettings();
++        var logger = serviceProvider.GetService<ILogger<DefaultTusConfiguration>>();
++        // ✅ اطمینان از وجود پوشه ذخیره‌سازی 
++        var storagePath = Path.Combine(Directory.GetCurrentDirectory(), settings.StoragePath);
++        logger?.LogInformation("TUS Configuration using storage path: {Path}", storagePath);
++        if (!Directory.Exists(storagePath))
++        {
++            Directory.CreateDirectory(storagePath);
++            logger?.LogInformation("Created TUS storage directory: {Path}", storagePath);
++        }
++        return new DefaultTusConfiguration
++        {
++            // ❌ UrlPath را ست نکنید وقتی از MapTus استفاده می‌کنید! 
++            // UrlPath = settings.UrlPath, // این خط باعث خطا می‌شود 
++            Store = new TusDiskStore(storagePath, deletePartialFilesOnConcat: true),
 +            // ✅ قبلاً (int?) بود و 5GB به 1GB سرریز می‌شد (و مقادیر 2 تا 4 گیگ همه‌ی آپلودها را رد می‌کرد)
 +            MaxAllowedUploadSizeInBytesLong = settings.MaxFileSizeBytes,
-             Expiration = new AbsoluteExpiration(TimeSpan.FromHours(settings.ExpirationHours)),
-             Events = new Events
-             {
++            Expiration = new AbsoluteExpiration(TimeSpan.FromHours(settings.ExpirationHours)),
++            Events = new Events
++            {
++                // بررسی احراز هویت 
++                OnAuthorizeAsync = async eventContext =>
++                {
++                    if (!eventContext.HttpContext.User.Identity?.IsAuthenticated ?? true)
++                    {
++                        eventContext.FailRequest(System.Net.HttpStatusCode.Unauthorized, "Unauthorized");
++                        return;
++                    }
++                    await Task.CompletedTask;
++                },
++                // اعتبارسنجی قبل از ایجاد فایل 
++                OnBeforeCreateAsync = async eventContext =>
++                {
++                    // بررسی metadata 
++                    var metadata = eventContext.Metadata;
++                    if (!metadata.ContainsKey("filename"))
++                    {
++                        eventContext.FailRequest("filename metadata is required");
++                        return;
++                    }
++                    var filename = metadata["filename"].GetString(System.Text.Encoding.UTF8);
++                    // پسوندهای اجرایی ممنوع + فهرست مجاز FileSettings:FileExtensions (همان سیاست تکمیل آپلود)
++                    var policyError = new FileTypePolicy(configuration).Validate(filename);
++                    if (policyError != null)
++                    {
++                        eventContext.FailRequest(System.Net.HttpStatusCode.UnsupportedMediaType, policyError);
++                        return;
++                    }
++                    // بررسی حجم 
++                    if (eventContext.UploadLength > settings.MaxFileSizeBytes)
++                    {
++                        eventContext.FailRequest($"File size exceeds maximum allowed size of {settings.MaxFileSizeBytes / (1024 * 1024)} MB");
++                        return;
++                    }
++                    logger?.LogInformation("TUS: Creating upload for file '{FileName}', Size: {Size} bytes",
++                        filename, eventContext.UploadLength);
++                    await Task.CompletedTask;
++                },
++                // لاگ بعد از ایجاد 
++                OnCreateCompleteAsync = async eventContext =>
++                {
++                    logger?.LogInformation("TUS: Upload created with ID: {FileId}", eventContext.FileId);
++                    await Task.CompletedTask;
++                },
++                // اطلاع‌رسانی تکمیل آپلود 
++                OnFileCompleteAsync = async eventContext =>
++                {
++                    logger?.LogInformation("TUS: Upload completed for file ID: {FileId}", eventContext.FileId);
++                    await Task.CompletedTask;
++                }
++            }
++        };
++    }
+ }
+\ No newline at end of file
 diff --git a/FileManagement.Infrastructure.Tus/TusFileService.cs b/FileManagement.Infrastructure.Tus/TusFileService.cs
-index 89fdeab..4e612b9 100644
+index 89fdeab..34886bf 100644
 --- a/FileManagement.Infrastructure.Tus/TusFileService.cs
 +++ b/FileManagement.Infrastructure.Tus/TusFileService.cs
-@@ -27,7 +27,7 @@ public class TusFileService : ITusFileService
-     {
-         _logger = logger;
-         // ✅ مسیر را دقیقاً مثل TusConfiguration بساز! 
+@@ -1,291 +1,298 @@
+-using Epc.Core;
+-using FileManagement.Application;
+-using FileManagement.Application.Contract.Upload;
+-using Microsoft.AspNetCore.Builder;
+-using Microsoft.AspNetCore.Http.Features;
+-using Microsoft.Extensions.Configuration;
+-using Microsoft.Extensions.Logging;
+-using System;
+-using System.Collections.Generic;
+-using System.IO;
+-using System.Linq;
+-using System.Threading;
+-using System.Threading.Tasks;
+-using tusdotnet.Interfaces;
+-using tusdotnet.Stores;
+-
+-namespace FileManagement.Infrastructure.Tus;
+-/// <summary> 
+-/// پیاده‌سازی سرویس TUS 
+-/// </summary> 
+-public class TusFileService : ITusFileService
+-{
+-    private readonly string _storagePath;
+-    private readonly ILogger<TusFileService> _logger;
+-    private readonly TusDiskStore _store;
+-    public TusFileService(IConfiguration configuration, ILogger<TusFileService> logger)
+-    {
+-        _logger = logger;
+-        // ✅ مسیر را دقیقاً مثل TusConfiguration بساز! 
 -        var relativePath = configuration["TusSettings:StoragePath"] ?? "wwwroot/tus-uploads";
+-        _storagePath = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
+-        _logger.LogInformation("TusFileService initialized with storage path: {Path}", _storagePath);
+-        if (!Directory.Exists(_storagePath))
+-        {
+-            Directory.CreateDirectory(_storagePath);
+-            _logger.LogInformation("Created TUS storage directory: {Path}", _storagePath);
+-        }
+-        _store = new TusDiskStore(_storagePath);
+-    }
+-    public async Task<Stream?> GetFileStreamAsync(string tusFileId)
+-    {
+-        try
+-        {
+-            _logger.LogDebug("Getting file stream for TUS file: {FileId}", tusFileId);
+-            // ✅ اول چک کن فایل فیزیکی وجود دارد 
+-            var filePath = Path.Combine(_storagePath, tusFileId);
+-            if (!File.Exists(filePath))
+-            {
+-                _logger.LogWarning("TUS file does not exist on disk: {Path}", filePath);
+-                // لیست فایل‌های موجود برای debug 
+-                var existingFiles = Directory.GetFiles(_storagePath).Select(Path.GetFileName);
+-                _logger.LogDebug("Existing files in storage: {Files}", string.Join(", ", existingFiles));
+-                return null;
+-            }
+-            var file = await _store.GetFileAsync(tusFileId, CancellationToken.None);
+-            if (file == null)
+-            {
+-                _logger.LogWarning("TUS store returned null for file: {FileId}", tusFileId);
+-                // ✅ Fallback: مستقیم فایل را بخوان 
+-                _logger.LogInformation("Using direct file read fallback for: {FileId}", tusFileId);
+-                return new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+-            }
+-            return await file.GetContentAsync(CancellationToken.None);
+-        }
+-        catch (Exception ex)
+-        {
+-            _logger.LogError(ex, "Error getting TUS file stream: {FileId}", tusFileId);
+-            return null;
+-        }
+-    }
+-    public async Task<TusUploadStatus?> GetUploadStatusAsync(string tusFileId)
+-    {
+-        try
+-        {
+-            _logger.LogDebug("Getting upload status for TUS file: {FileId}", tusFileId);
+-            // ✅ اول چک کن فایل فیزیکی وجود دارد 
+-            var filePath = Path.Combine(_storagePath, tusFileId);
+-            var directory = Path.GetDirectoryName(filePath);
+-            // اگر پوشه وجود ندارد → ایجاد کن 
+-            if (!Directory.Exists(directory))
+-            {
+-                Directory.CreateDirectory(directory);
+-                _logger.LogInformation("Directory created: {Directory}", directory);
+-            }
+-            var uploadLengthPath = filePath + ".uploadlength";
+-            // ✅ روش اول: از Store استفاده کن 
+-            var file = await _store.GetFileAsync(tusFileId, CancellationToken.None);
+-            if (file != null)
+-            {
+-                var uploadLength = await _store.GetUploadLengthAsync(tusFileId, CancellationToken.None) ?? 0;
+-                var uploadOffset = await _store.GetUploadOffsetAsync(tusFileId, CancellationToken.None);
+-                return new TusUploadStatus
+-                {
+-                    FileId = tusFileId,
+-                    TotalSize = uploadLength,
+-                    UploadedSize = uploadOffset,
+-                    IsComplete = uploadLength > 0 && uploadOffset >= uploadLength
+-                };
+-            }
+-            // ✅ روش دوم (Fallback): مستقیم از فایل‌ها بخوان 
+-            _logger.LogInformation("Using fallback method to get upload status for: {FileId}", tusFileId);
+-            long totalSize = 0;
+-            long uploadedSize = new FileInfo(filePath).Length;
+-            // خواندن uploadlength از فایل متادیتا 
+-            if (File.Exists(uploadLengthPath))
+-            {
+-                var lengthStr = await File.ReadAllTextAsync(uploadLengthPath);
+-                if (long.TryParse(lengthStr, out var length))
+-                {
+-                    totalSize = length;
+-                }
+-            }
+-            else
+-            {
+-                // اگر فایل uploadlength نبود، یعنی آپلود کامل شده 
+-                totalSize = uploadedSize;
+-            }
+-            return new TusUploadStatus
+-            {
+-                FileId = tusFileId,
+-                TotalSize = totalSize,
+-                UploadedSize = uploadedSize,
+-                IsComplete = totalSize > 0 && uploadedSize >= totalSize
+-            };
+-        }
+-        catch (Exception ex)
+-        {
+-            _logger.LogError(ex, "Error getting TUS upload status: {FileId}", tusFileId);
+-            return null;
+-        }
+-    }
+-    public async Task<bool> DeleteFileAsync(string tusFileId)
+-    {
+-        try
+-        {
+-            _logger.LogInformation("Deleting TUS file: {FileId}", tusFileId);
+-            if (_store is ITusTerminationStore terminationStore)
+-            {
+-                await terminationStore.DeleteFileAsync(tusFileId, CancellationToken.None);
+-                _logger.LogInformation("TUS file deleted via store: {FileId}", tusFileId);
+-                return true;
+-            }
+-            // ✅ حذف دستی همه فایل‌های مرتبط 
+-            var filePath = Path.Combine(_storagePath, tusFileId);
+-            var relatedFiles = new[]
+-            {
+-                filePath,
+-                filePath + ".metadata",
+-                filePath + ".chunkcomplete",
+-                filePath + ".uploadlength",
+-                filePath + ".chunkstart",
+-                filePath + ".expiration"
+-            };
+-            foreach (var path in relatedFiles)
+-            {
+-                if (File.Exists(path))
+-                {
+-                    File.Delete(path);
+-                    _logger.LogDebug("Deleted file: {Path}", path);
+-                }
+-            }
+-            _logger.LogInformation("TUS file manually deleted: {FileId}", tusFileId);
+-            return true;
+-        }
+-        catch (Exception ex)
+-        {
+-            _logger.LogError(ex, "Error deleting TUS file: {FileId}", tusFileId);
+-            return false;
+-        }
+-    }
+-    /// <summary> 
+-    /// دریافت متادیتای فایل TUS 
+-    /// </summary> 
+-    public async Task<Dictionary<string, string>?> GetMetadataAsync(string tusFileId)
+-    {
+-        try
+-        {
+-            var file = await _store.GetFileAsync(tusFileId, CancellationToken.None);
+-            if (file != null)
+-            {
+-                var metadata = await file.GetMetadataAsync(CancellationToken.None);
+-                return metadata.ToDictionary(
+-                    kvp => kvp.Key,
+-                    kvp => kvp.Value.GetString(System.Text.Encoding.UTF8));
+-            }
+-            // ✅ Fallback: خواندن مستقیم از فایل metadata 
+-            var metadataPath = Path.Combine(_storagePath, tusFileId + ".metadata");
+-            if (File.Exists(metadataPath))
+-            {
+-                var result = new Dictionary<string, string>();
+-                var lines = await File.ReadAllLinesAsync(metadataPath);
+-                foreach (var line in lines)
+-                {
+-                    var parts = line.Split(' ', 2);
+-                    if (parts.Length == 2)
+-                    {
+-                        var key = parts[0];
+-                        var value = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(parts[1]));
+-                        result[key] = value;
+-                    }
+-                }
+-                return result;
+-            }
+-            return null;
+-        }
+-        catch (Exception ex)
+-        {
+-            _logger.LogError(ex, "Error getting TUS metadata: {FileId}", tusFileId);
+-            return null;
+-        }
+-    }
+-    /// <summary> 
+-    /// بررسی وجود فایل 
+-    /// </summary> 
+-    public bool FileExists(string tusFileId)
+-    {
+-        var filePath = Path.Combine(_storagePath, tusFileId);
+-        return File.Exists(filePath);
+-    }
+-    /// <summary> 
+-    /// لیست فایل‌های موجود در storage (برای debug) 
+-    /// </summary> 
+-    public IEnumerable<string> GetAllFiles()
+-    {
+-        if (!Directory.Exists(_storagePath))
+-            return Enumerable.Empty<string>();
+-        return Directory.GetFiles(_storagePath)
+-            .Where(f => !f.EndsWith(".metadata") &&
+-                        !f.EndsWith(".uploadlength") &&
+-                        !f.EndsWith(".chunkcomplete"))
+-            .Select(Path.GetFileName)!;
+-    }
+-    public async Task<bool> DeleteFileWithRetryAsync(string tusFileId, CancellationToken ct = default)
+-    {
+-        var delaysMs = new[] { 0, 100, 250, 500, 1000, 2000 };
+-
+-        for (int attempt = 0; attempt < delaysMs.Length; attempt++)
+-        {
+-            if (delaysMs[attempt] > 0)
+-                await Task.Delay(delaysMs[attempt], ct);
+-
+-            try
+-            {
+-                _logger.LogInformation("Deleting TUS file: {FileId} (attempt {Attempt})", tusFileId, attempt + 1);
+-
+-                if (_store is ITusTerminationStore terminationStore)
+-                {
+-                    await terminationStore.DeleteFileAsync(tusFileId, ct);
+-                    _logger.LogInformation("TUS file deleted via store: {FileId}", tusFileId);
+-                    return true;
+-                }
+-
+-                // fallback manual delete
+-                var filePath = Path.Combine(_storagePath, tusFileId);
+-                var relatedFiles = new[]
+-                {
+-                filePath,
+-                filePath + ".metadata",
+-                filePath + ".chunkcomplete",
+-                filePath + ".uploadlength",
+-                filePath + ".chunkstart",
+-                filePath + ".expiration"
+-            };
+-
+-                foreach (var path in relatedFiles)
+-                {
+-                    if (!File.Exists(path)) continue;
+-                    File.Delete(path);
+-                    _logger.LogDebug("Deleted file: {Path}", path);
+-                }
+-
+-                _logger.LogInformation("TUS file manually deleted: {FileId}", tusFileId);
+-                return true;
+-            }
+-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+-            {
+-                _logger.LogWarning(ex, "Could not delete TUS file (attempt {Attempt}): {FileId}", attempt + 1, tusFileId);
+-                // ادامه می‌دهیم تا retry بعدی
+-            }
+-            catch (Exception ex)
+-            {
+-                _logger.LogError(ex, "Unexpected error deleting TUS file: {FileId}", tusFileId);
+-                return false;
+-            }
+-        }
+-
+-        _logger.LogError("Failed to delete TUS file after retries: {FileId}", tusFileId);
+-        return false;
+-    }
+-
++﻿using Epc.Core;
++using FileManagement.Common;
++using FileManagement.Application;
++using FileManagement.Application.Contract.Upload;
++using Microsoft.AspNetCore.Builder;
++using Microsoft.AspNetCore.Http.Features;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.Logging;
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Linq;
++using System.Threading;
++using System.Threading.Tasks;
++using tusdotnet.Interfaces;
++using tusdotnet.Stores;
++
++namespace FileManagement.Infrastructure.Tus;
++/// <summary> 
++/// پیاده‌سازی سرویس TUS 
++/// </summary> 
++public class TusFileService : ITusFileService
++{
++    private readonly string _storagePath;
++    private readonly ILogger<TusFileService> _logger;
++    private readonly TusDiskStore _store;
++    public TusFileService(IConfiguration configuration, ILogger<TusFileService> logger)
++    {
++        _logger = logger;
++        // ✅ مسیر را دقیقاً مثل TusConfiguration بساز! 
 +        var relativePath = configuration["TusSettings:StoragePath"] ?? "App_Data/tus-uploads";
-         _storagePath = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
-         _logger.LogInformation("TusFileService initialized with storage path: {Path}", _storagePath);
-         if (!Directory.Exists(_storagePath))
++        _storagePath = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
++        _logger.LogInformation("TusFileService initialized with storage path: {Path}", _storagePath);
++        if (!Directory.Exists(_storagePath))
++        {
++            Directory.CreateDirectory(_storagePath);
++            _logger.LogInformation("Created TUS storage directory: {Path}", _storagePath);
++        }
++        _store = new TusDiskStore(_storagePath);
++    }
++    public async Task<Stream?> GetFileStreamAsync(string tusFileId)
++    {
++        if (!FileTypePolicy.IsValidTusId(tusFileId)) return null;
++        try
++        {
++            _logger.LogDebug("Getting file stream for TUS file: {FileId}", tusFileId);
++            // ✅ اول چک کن فایل فیزیکی وجود دارد 
++            var filePath = Path.Combine(_storagePath, tusFileId);
++            if (!File.Exists(filePath))
++            {
++                _logger.LogWarning("TUS file does not exist on disk: {Path}", filePath);
++                // لیست فایل‌های موجود برای debug 
++                var existingFiles = Directory.GetFiles(_storagePath).Select(Path.GetFileName);
++                _logger.LogDebug("Existing files in storage: {Files}", string.Join(", ", existingFiles));
++                return null;
++            }
++            var file = await _store.GetFileAsync(tusFileId, CancellationToken.None);
++            if (file == null)
++            {
++                _logger.LogWarning("TUS store returned null for file: {FileId}", tusFileId);
++                // ✅ Fallback: مستقیم فایل را بخوان 
++                _logger.LogInformation("Using direct file read fallback for: {FileId}", tusFileId);
++                return new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
++            }
++            return await file.GetContentAsync(CancellationToken.None);
++        }
++        catch (Exception ex)
++        {
++            _logger.LogError(ex, "Error getting TUS file stream: {FileId}", tusFileId);
++            return null;
++        }
++    }
++    public async Task<TusUploadStatus?> GetUploadStatusAsync(string tusFileId)
++    {
++        if (!FileTypePolicy.IsValidTusId(tusFileId)) return null;
++        try
++        {
++            _logger.LogDebug("Getting upload status for TUS file: {FileId}", tusFileId);
++            // ✅ اول چک کن فایل فیزیکی وجود دارد 
++            var filePath = Path.Combine(_storagePath, tusFileId);
++            var directory = Path.GetDirectoryName(filePath);
++            // اگر پوشه وجود ندارد → ایجاد کن 
++            if (!Directory.Exists(directory))
++            {
++                Directory.CreateDirectory(directory);
++                _logger.LogInformation("Directory created: {Directory}", directory);
++            }
++            var uploadLengthPath = filePath + ".uploadlength";
++            // ✅ روش اول: از Store استفاده کن 
++            var file = await _store.GetFileAsync(tusFileId, CancellationToken.None);
++            if (file != null)
++            {
++                var uploadLength = await _store.GetUploadLengthAsync(tusFileId, CancellationToken.None) ?? 0;
++                var uploadOffset = await _store.GetUploadOffsetAsync(tusFileId, CancellationToken.None);
++                return new TusUploadStatus
++                {
++                    FileId = tusFileId,
++                    TotalSize = uploadLength,
++                    UploadedSize = uploadOffset,
++                    IsComplete = uploadLength > 0 && uploadOffset >= uploadLength
++                };
++            }
++            // ✅ روش دوم (Fallback): مستقیم از فایل‌ها بخوان 
++            _logger.LogInformation("Using fallback method to get upload status for: {FileId}", tusFileId);
++            long totalSize = 0;
++            long uploadedSize = new FileInfo(filePath).Length;
++            // خواندن uploadlength از فایل متادیتا 
++            if (File.Exists(uploadLengthPath))
++            {
++                var lengthStr = await File.ReadAllTextAsync(uploadLengthPath);
++                if (long.TryParse(lengthStr, out var length))
++                {
++                    totalSize = length;
++                }
++            }
++            else
++            {
++                // اگر فایل uploadlength نبود، یعنی آپلود کامل شده 
++                totalSize = uploadedSize;
++            }
++            return new TusUploadStatus
++            {
++                FileId = tusFileId,
++                TotalSize = totalSize,
++                UploadedSize = uploadedSize,
++                IsComplete = totalSize > 0 && uploadedSize >= totalSize
++            };
++        }
++        catch (Exception ex)
++        {
++            _logger.LogError(ex, "Error getting TUS upload status: {FileId}", tusFileId);
++            return null;
++        }
++    }
++    public async Task<bool> DeleteFileAsync(string tusFileId)
++    {
++        if (!FileTypePolicy.IsValidTusId(tusFileId)) return false;
++        try
++        {
++            _logger.LogInformation("Deleting TUS file: {FileId}", tusFileId);
++            if (_store is ITusTerminationStore terminationStore)
++            {
++                await terminationStore.DeleteFileAsync(tusFileId, CancellationToken.None);
++                _logger.LogInformation("TUS file deleted via store: {FileId}", tusFileId);
++                return true;
++            }
++            // ✅ حذف دستی همه فایل‌های مرتبط 
++            var filePath = Path.Combine(_storagePath, tusFileId);
++            var relatedFiles = new[]
++            {
++                filePath,
++                filePath + ".metadata",
++                filePath + ".chunkcomplete",
++                filePath + ".uploadlength",
++                filePath + ".chunkstart",
++                filePath + ".expiration"
++            };
++            foreach (var path in relatedFiles)
++            {
++                if (File.Exists(path))
++                {
++                    File.Delete(path);
++                    _logger.LogDebug("Deleted file: {Path}", path);
++                }
++            }
++            _logger.LogInformation("TUS file manually deleted: {FileId}", tusFileId);
++            return true;
++        }
++        catch (Exception ex)
++        {
++            _logger.LogError(ex, "Error deleting TUS file: {FileId}", tusFileId);
++            return false;
++        }
++    }
++    /// <summary> 
++    /// دریافت متادیتای فایل TUS 
++    /// </summary> 
++    public async Task<Dictionary<string, string>?> GetMetadataAsync(string tusFileId)
++    {
++        if (!FileTypePolicy.IsValidTusId(tusFileId)) return null;
++        try
++        {
++            var file = await _store.GetFileAsync(tusFileId, CancellationToken.None);
++            if (file != null)
++            {
++                var metadata = await file.GetMetadataAsync(CancellationToken.None);
++                return metadata.ToDictionary(
++                    kvp => kvp.Key,
++                    kvp => kvp.Value.GetString(System.Text.Encoding.UTF8));
++            }
++            // ✅ Fallback: خواندن مستقیم از فایل metadata 
++            var metadataPath = Path.Combine(_storagePath, tusFileId + ".metadata");
++            if (File.Exists(metadataPath))
++            {
++                var result = new Dictionary<string, string>();
++                var lines = await File.ReadAllLinesAsync(metadataPath);
++                foreach (var line in lines)
++                {
++                    var parts = line.Split(' ', 2);
++                    if (parts.Length == 2)
++                    {
++                        var key = parts[0];
++                        var value = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(parts[1]));
++                        result[key] = value;
++                    }
++                }
++                return result;
++            }
++            return null;
++        }
++        catch (Exception ex)
++        {
++            _logger.LogError(ex, "Error getting TUS metadata: {FileId}", tusFileId);
++            return null;
++        }
++    }
++    /// <summary> 
++    /// بررسی وجود فایل 
++    /// </summary> 
++    public bool FileExists(string tusFileId)
++    {
++        if (!FileTypePolicy.IsValidTusId(tusFileId)) return false;
++        var filePath = Path.Combine(_storagePath, tusFileId);
++        return File.Exists(filePath);
++    }
++    /// <summary> 
++    /// لیست فایل‌های موجود در storage (برای debug) 
++    /// </summary> 
++    public IEnumerable<string> GetAllFiles()
++    {
++        if (!Directory.Exists(_storagePath))
++            return Enumerable.Empty<string>();
++        return Directory.GetFiles(_storagePath)
++            .Where(f => !f.EndsWith(".metadata") &&
++                        !f.EndsWith(".uploadlength") &&
++                        !f.EndsWith(".chunkcomplete"))
++            .Select(Path.GetFileName)!;
++    }
++    public async Task<bool> DeleteFileWithRetryAsync(string tusFileId, CancellationToken ct = default)
++    {
++        if (!FileTypePolicy.IsValidTusId(tusFileId)) return false;
++        var delaysMs = new[] { 0, 100, 250, 500, 1000, 2000 };
++
++        for (int attempt = 0; attempt < delaysMs.Length; attempt++)
++        {
++            if (delaysMs[attempt] > 0)
++                await Task.Delay(delaysMs[attempt], ct);
++
++            try
++            {
++                _logger.LogInformation("Deleting TUS file: {FileId} (attempt {Attempt})", tusFileId, attempt + 1);
++
++                if (_store is ITusTerminationStore terminationStore)
++                {
++                    await terminationStore.DeleteFileAsync(tusFileId, ct);
++                    _logger.LogInformation("TUS file deleted via store: {FileId}", tusFileId);
++                    return true;
++                }
++
++                // fallback manual delete
++                var filePath = Path.Combine(_storagePath, tusFileId);
++                var relatedFiles = new[]
++                {
++                filePath,
++                filePath + ".metadata",
++                filePath + ".chunkcomplete",
++                filePath + ".uploadlength",
++                filePath + ".chunkstart",
++                filePath + ".expiration"
++            };
++
++                foreach (var path in relatedFiles)
++                {
++                    if (!File.Exists(path)) continue;
++                    File.Delete(path);
++                    _logger.LogDebug("Deleted file: {Path}", path);
++                }
++
++                _logger.LogInformation("TUS file manually deleted: {FileId}", tusFileId);
++                return true;
++            }
++            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
++            {
++                _logger.LogWarning(ex, "Could not delete TUS file (attempt {Attempt}): {FileId}", attempt + 1, tusFileId);
++                // ادامه می‌دهیم تا retry بعدی
++            }
++            catch (Exception ex)
++            {
++                _logger.LogError(ex, "Unexpected error deleting TUS file: {FileId}", tusFileId);
++                return false;
++            }
++        }
++
++        _logger.LogError("Failed to delete TUS file after retries: {FileId}", tusFileId);
++        return false;
++    }
++
+ }
+\ No newline at end of file
 diff --git a/FileManagement.Infrastructure.Tus/TusSettings.cs b/FileManagement.Infrastructure.Tus/TusSettings.cs
 index ba3fe2b..7dadeb5 100644
 --- a/FileManagement.Infrastructure.Tus/TusSettings.cs
@@ -42,63 +2483,734 @@ index ba3fe2b..7dadeb5 100644
      // public string UrlPath { get; set; } = "/api/Upload/tus"; 
      public long MaxFileSizeBytes { get; set; } = 5L * 1024 * 1024 * 1024; // 5GB 
 diff --git a/FileManagement.Presentation.Api/Controllers/AttachmentController.cs b/FileManagement.Presentation.Api/Controllers/AttachmentController.cs
-index f2960a2..e71adfa 100644
+index f2960a2..bac8860 100644
 --- a/FileManagement.Presentation.Api/Controllers/AttachmentController.cs
 +++ b/FileManagement.Presentation.Api/Controllers/AttachmentController.cs
-@@ -19,7 +19,8 @@ public class AttachmentController(
-     IAttachmentCommandFacade attachmentCommandFacade,
-     IAttachmentQueryFacade attachmentQueryFacade,
-     IWebHostEnvironment webHostEnvironment,
+@@ -1,214 +1,164 @@
+-﻿using System;
+-using System.Collections.Generic;
+-using System.IO;
+-using System.Linq;
+-using System.Threading.Tasks;
+-using FileManagement.Infrastructure.Query.Contracts.Attachment;
+-using FileManagement.Presentation.Facade.Contracts.Attachment;
+-using Microsoft.AspNetCore.Authorization;
+-using Microsoft.AspNetCore.Hosting;
+-using Microsoft.AspNetCore.Mvc;
+-using Microsoft.Extensions.Configuration;
+-
+-namespace FileManagement.Presentation.Api.Controllers;
+-
+-[ApiController]
+-[Route("api/[controller]")]
+-[Authorize(Policy = "FileManagementApi")]
+-public class AttachmentController(
+-    IAttachmentCommandFacade attachmentCommandFacade,
+-    IAttachmentQueryFacade attachmentQueryFacade,
+-    IWebHostEnvironment webHostEnvironment,
 -    IConfiguration configuration)
-+    IConfiguration configuration,
-+    FileManagement.Presentation.Api.Security.SignedFileUrl signedFileUrl)
-     : ControllerBase
- {
-     [HttpGet("GetList")]
-@@ -28,7 +29,12 @@ public class AttachmentController(
- 
-     [HttpGet("GetForOtherSystems")]
-     public async Task<IActionResult> GetForOtherSystems([FromQuery] OtherSystemAttachmentSearchModel searchModel)
+-    : ControllerBase
+-{
+-    [HttpGet("GetList")]
+-    public async Task<IActionResult> GetAll([FromQuery] AttachmentSearchModel searchModel)
+-        => new JsonResult(await attachmentQueryFacade.GetList(searchModel));
+-
+-    [HttpGet("GetForOtherSystems")]
+-    public async Task<IActionResult> GetForOtherSystems([FromQuery] OtherSystemAttachmentSearchModel searchModel)
 -        => new JsonResult(await attachmentQueryFacade.GetForOtherSystems(searchModel));
+-
+-    [HttpGet("GetFileName/{guid:guid}")]
+-    public async Task<IActionResult> GetFileName(Guid guid)
+-        => new JsonResult(await attachmentQueryFacade.GetFileNameBy(guid));
+-
+-    // -----------------------------
+-    // Download
+-    // -----------------------------
+-    [HttpGet("Download/{guid:guid}")]
+-    public async Task<IActionResult> Download(Guid guid)
+-    {
+-        var info = await attachmentQueryFacade.Download(guid);
+-        if (info == null)
+-            return NotFound(new { message = "فایل یافت نشد", guid });
+-
+-        var physicalPath = ToPhysicalPath(info.Path);
+-        if (string.IsNullOrEmpty(physicalPath))
+-            return NotFound(new { message = "مسیر فیزیکی نامعتبر", guid, info.Path });
+-
+-        if (!System.IO.File.Exists(physicalPath))
+-            return NotFound(new { message = "فایل در سرور یافت نشد", guid, info.Path, physicalPath });
+-
+-        var stream = new FileStream(physicalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+-        return File(stream, info.ContentType, info.FileName, enableRangeProcessing: true);
+-    }
+-
+-    // -----------------------------
+-    // Preview
+-    // -----------------------------
+-    [HttpGet("Preview/{guid:guid}")]
+-    public async Task<IActionResult> Preview(Guid guid)
+-    {
+-        var info = await attachmentQueryFacade.Download(guid);
+-        if (info == null) return NotFound();
+-
+-        var physicalPath = ToPhysicalPath(info.Path);
+-        if (string.IsNullOrEmpty(physicalPath) || !System.IO.File.Exists(physicalPath))
+-            return NotFound();
+-
+-        Response.Headers["Content-Disposition"] =
+-            $"inline; filename*=UTF-8''{Uri.EscapeDataString(info.FileName)}";
+-
+-        var stream = new FileStream(physicalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+-        return File(stream, info.ContentType, enableRangeProcessing: true);
+-    }
+-
+-    // -----------------------------
+-    // Meta
+-    // -----------------------------
+-    [HttpGet("GetMeta/{guid:guid}")]
+-    public async Task<IActionResult> GetMeta(Guid guid)
+-    {
+-        var result = await attachmentQueryFacade.GetMeta(guid);
+-        if (result == null) return NotFound();
+-
+-        var publicPath = ToPublicPath(result.Path);
+-        var dto = result with { Path = publicPath ?? string.Empty };
+-        return new JsonResult(dto);
+-    }
+-
+-    [HttpPost("GetMetas")]
+-    public async Task<IActionResult> GetMetas([FromBody] List<Guid> guids)
+-    {
+-        if (guids == null || guids.Count == 0)
+-            return BadRequest(new { message = "لیست شناسه‌ها خالی است" });
+-
+-        var result = await attachmentQueryFacade.GetMetas(guids);
+-        var mapped = result.Select(x => x with { Path = ToPublicPath(x.Path) ?? string.Empty }).ToList();
+-        return new JsonResult(mapped);
+-    }
+-
+-    // =====================================================================
+-    // ✅ DELETE ENDPOINTS (Single + Bulk) - fully compatible with your frontend
+-    // =====================================================================
+-
+-    // 1) POST /api/Attachment/Delete/{guid}
+-    [HttpPost("Delete/{guid:guid}")]
+-    public async Task<IActionResult> Delete_Post(Guid guid)
+-        => new JsonResult(await attachmentCommandFacade.Delete(guid));
+-
+-    // 2) DELETE /api/Attachment/Delete/{guid}
+-    [HttpDelete("Delete/{guid:guid}")]
+-    public async Task<IActionResult> Delete_Delete(Guid guid)
+-        => new JsonResult(await attachmentCommandFacade.Delete(guid));
+-
+-    // 3) POST /api/Attachment/Remove/{guid}
+-    [HttpPost("Remove/{guid:guid}")]
+-    public async Task<IActionResult> Remove_Post(Guid guid)
+-        => new JsonResult(await attachmentCommandFacade.Delete(guid));
+-
+-    // 4) DELETE /api/Attachment/{guid}
+-    [HttpDelete("{guid:guid}")]
+-    public async Task<IActionResult> Delete_Root(Guid guid)
+-        => new JsonResult(await attachmentCommandFacade.Delete(guid));
+-
+-    // 5) ✅ POST /api/Attachment/Delete  Body: [guid1,guid2,...]
+-    [HttpPost("Delete")]
+-    public async Task<IActionResult> DeleteMany([FromBody] List<Guid> guids)
+-    {
+-        if (guids == null || guids.Count == 0)
+-            return BadRequest(new { message = "لیست شناسه‌ها خالی است" });
+-
+-        return new JsonResult(await attachmentCommandFacade.DeleteMany(guids));
+-    }
+-
+-    // =====================================================================
+-    // Helpers
+-    // =====================================================================
+-    private string? ToPhysicalPath(string? storedPath)
+-    {
+-        if (string.IsNullOrWhiteSpace(storedPath))
+-            return null;
+-
+-        var basePathFromConfig = configuration["FileSettings:FileBasePath"];
+-        var contentRoot = webHostEnvironment.ContentRootPath ?? Directory.GetCurrentDirectory();
+-
+-        var basePath = string.IsNullOrWhiteSpace(basePathFromConfig)
+-            ? Path.Combine(contentRoot, "files")
+-            : basePathFromConfig;
+-
+-        if (!Path.IsPathRooted(basePath))
+-            basePath = Path.GetFullPath(Path.Combine(contentRoot, basePath));
+-
+-        basePath = Path.GetFullPath(basePath);
+-
+-        var basePathWithSep =
+-            basePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+-
+-        string candidateFullPath;
+-
+-        if (Path.IsPathRooted(storedPath))
+-        {
+-            candidateFullPath = Path.GetFullPath(storedPath);
+-        }
+-        else
+-        {
+-            var normalized = storedPath.Replace('\\', '/').TrimStart('/');
+-            var baseFolderName = new DirectoryInfo(basePath).Name; // "files"
+-            if (normalized.StartsWith(baseFolderName + "/", StringComparison.OrdinalIgnoreCase))
+-                normalized = normalized.Substring(baseFolderName.Length + 1);
+-
+-            candidateFullPath = Path.GetFullPath(Path.Combine(basePath, normalized));
+-        }
+-
+-        if (!candidateFullPath.StartsWith(basePathWithSep, StringComparison.OrdinalIgnoreCase))
+-            return null;
+-
+-        return candidateFullPath;
+-    }
+-
+-    private string? ToPublicPath(string? storedPath)
+-    {
+-        if (string.IsNullOrWhiteSpace(storedPath))
+-            return null;
+-
+-        var basePathFromConfig = configuration["FileSettings:FileBasePath"];
+-        var contentRoot = webHostEnvironment.ContentRootPath ?? Directory.GetCurrentDirectory();
+-
+-        var basePath = string.IsNullOrWhiteSpace(basePathFromConfig)
+-            ? Path.Combine(contentRoot, "files")
+-            : basePathFromConfig;
+-
+-        if (!Path.IsPathRooted(basePath))
+-            basePath = Path.GetFullPath(Path.Combine(contentRoot, basePath));
+-
+-        basePath = Path.GetFullPath(basePath);
+-
+-        if (Path.IsPathRooted(storedPath))
+-        {
+-            var full = Path.GetFullPath(storedPath);
+-            var rel = Path.GetRelativePath(basePath, full).Replace('\\', '/');
+-            rel = rel.TrimStart('.').TrimStart('/');
+-            return "/files/" + rel;
+-        }
+-
+-        var normalized = storedPath.Replace('\\', '/').TrimStart('/');
+-        var baseFolderName = new DirectoryInfo(basePath).Name; // "files"
+-        if (normalized.StartsWith(baseFolderName + "/", StringComparison.OrdinalIgnoreCase))
+-            normalized = normalized.Substring(baseFolderName.Length + 1);
+-
+-        return "/files/" + normalized;
+-    }
+-}
++﻿using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Linq;
++using System.Threading.Tasks;
++using FileManagement.Infrastructure.Query.Contracts.Attachment;
++using FileManagement.Presentation.Facade.Contracts.Attachment;
++using Microsoft.AspNetCore.Authorization;
++using FileManagement.Common;
++using FileManagement.Presentation.Api.Media;
++using FileManagement.Presentation.Api.Security;
++using Microsoft.AspNetCore.Mvc;
++
++namespace FileManagement.Presentation.Api.Controllers;
++
++[ApiController]
++[Route("api/[controller]")]
++[Authorize(Policy = "FileManagementApi")]
++public class AttachmentController(
++    IAttachmentCommandFacade attachmentCommandFacade,
++    IAttachmentQueryFacade attachmentQueryFacade,
++    FileStorageLocations locations,
++    SignedFileUrl signedFileUrl,
++    ImageThumbnailService thumbnails,
++    MediaResponses responses)
++    : ControllerBase
++{
++    [HttpGet("GetList")]
++    public async Task<IActionResult> GetAll([FromQuery] AttachmentSearchModel searchModel)
++        => new JsonResult(await attachmentQueryFacade.GetList(searchModel));
++
++    [HttpGet("GetForOtherSystems")]
++    public async Task<IActionResult> GetForOtherSystems([FromQuery] OtherSystemAttachmentSearchModel searchModel)
 +    {
 +        var items = await attachmentQueryFacade.GetForOtherSystems(searchModel);
 +        foreach (var item in items)
 +            item.Path = ToPublicPath(item.Path);
 +        return new JsonResult(items);
 +    }
- 
-     [HttpGet("GetFileName/{guid:guid}")]
-     public async Task<IActionResult> GetFileName(Guid guid)
-@@ -201,7 +207,7 @@ public class AttachmentController(
-             var full = Path.GetFullPath(storedPath);
-             var rel = Path.GetRelativePath(basePath, full).Replace('\\', '/');
-             rel = rel.TrimStart('.').TrimStart('/');
--            return "/files/" + rel;
-+            return signedFileUrl.Sign("/files/" + rel);
-         }
- 
-         var normalized = storedPath.Replace('\\', '/').TrimStart('/');
-@@ -209,6 +215,6 @@ public class AttachmentController(
-         if (normalized.StartsWith(baseFolderName + "/", StringComparison.OrdinalIgnoreCase))
-             normalized = normalized.Substring(baseFolderName.Length + 1);
- 
--        return "/files/" + normalized;
-+        return signedFileUrl.Sign("/files/" + normalized);
-     }
- }
++
++    [HttpGet("GetFileName/{guid:guid}")]
++    public async Task<IActionResult> GetFileName(Guid guid)
++        => new JsonResult(await attachmentQueryFacade.GetFileNameBy(guid));
++
++    // -----------------------------
++    // Download / Preview (Bearer) — با Range، ETag و 304
++    // -----------------------------
++    [HttpGet("Download/{guid:guid}")]
++    public async Task<IActionResult> Download(Guid guid)
++    {
++        var info = await attachmentQueryFacade.Download(guid);
++        var physical = info == null ? null : locations.ResolveStoredFile(info.Path);
++        if (info == null || physical == null)
++            return NotFound(new { message = "فایل یافت نشد", guid });
++
++        var contentType = SafeContentType(info.ContentType, info.FileName);
++        responses.ApplySecurityHeaders(Response, info.FileName, info.FileName, forceDownload: true, contentType);
++        Response.Headers.CacheControl = "private, max-age=3600";
++        var file = new FileInfo(physical);
++        return PhysicalFile(physical, contentType, new DateTimeOffset(file.LastWriteTimeUtc), MediaResponses.ETagFor(file), enableRangeProcessing: true);
++    }
++
++    /// <summary>نمایش داخل صفحه؛ برای تصاویر با w نسخه‌ی کوچک‌شده (WebP/JPEG) برگردانده می‌شود</summary>
++    [HttpGet("Preview/{guid:guid}")]
++    public async Task<IActionResult> Preview(Guid guid, [FromQuery] int? w)
++    {
++        var info = await attachmentQueryFacade.Download(guid);
++        var physical = info == null ? null : locations.ResolveStoredFile(info.Path);
++        if (info == null || physical == null)
++            return NotFound(new { message = "فایل یافت نشد", guid });
++
++        Response.Headers.CacheControl = "private, max-age=3600";
++
++        if (w is > 0 && ImageThumbnailService.IsResizable(physical))
++        {
++            var rendition = await thumbnails.GetAsync(physical, w.Value, 80, ImageThumbnailService.AcceptsWebp(Request), HttpContext.RequestAborted);
++            if (rendition != null)
++            {
++                Response.Headers.Append("Vary", "Accept");
++                responses.ApplySecurityHeaders(Response, rendition.PhysicalPath, info.FileName, false, rendition.ContentType);
++                return PhysicalFile(rendition.PhysicalPath, rendition.ContentType, rendition.LastModified,
++                    new Microsoft.Net.Http.Headers.EntityTagHeaderValue(rendition.ETag));
++            }
++        }
++
++        var contentType = SafeContentType(info.ContentType, info.FileName);
++        responses.ApplySecurityHeaders(Response, info.FileName, info.FileName, forceDownload: false, contentType);
++        var file = new FileInfo(physical);
++        return PhysicalFile(physical, contentType, new DateTimeOffset(file.LastWriteTimeUtc), MediaResponses.ETagFor(file), enableRangeProcessing: true);
++    }
++
++    // -----------------------------
++    // Meta
++    // -----------------------------
++    [HttpGet("GetMeta/{guid:guid}")]
++    public async Task<IActionResult> GetMeta(Guid guid)
++    {
++        var result = await attachmentQueryFacade.GetMeta(guid);
++        if (result == null) return NotFound();
++
++        var publicPath = ToPublicPath(result.Path);
++        var dto = result with { Path = publicPath ?? string.Empty };
++        return new JsonResult(dto);
++    }
++
++    [HttpPost("GetMetas")]
++    public async Task<IActionResult> GetMetas([FromBody] List<Guid> guids)
++    {
++        if (guids == null || guids.Count == 0)
++            return BadRequest(new { message = "لیست شناسه‌ها خالی است" });
++
++        var result = await attachmentQueryFacade.GetMetas(guids);
++        var mapped = result.Select(x => x with { Path = ToPublicPath(x.Path) ?? string.Empty }).ToList();
++        return new JsonResult(mapped);
++    }
++
++    // =====================================================================
++    // ✅ DELETE ENDPOINTS (Single + Bulk) - fully compatible with your frontend
++    // =====================================================================
++
++    // 1) POST /api/Attachment/Delete/{guid}
++    [HttpPost("Delete/{guid:guid}")]
++    public async Task<IActionResult> Delete_Post(Guid guid)
++        => new JsonResult(await attachmentCommandFacade.Delete(guid));
++
++    // 2) DELETE /api/Attachment/Delete/{guid}
++    [HttpDelete("Delete/{guid:guid}")]
++    public async Task<IActionResult> Delete_Delete(Guid guid)
++        => new JsonResult(await attachmentCommandFacade.Delete(guid));
++
++    // 3) POST /api/Attachment/Remove/{guid}
++    [HttpPost("Remove/{guid:guid}")]
++    public async Task<IActionResult> Remove_Post(Guid guid)
++        => new JsonResult(await attachmentCommandFacade.Delete(guid));
++
++    // 4) DELETE /api/Attachment/{guid}
++    [HttpDelete("{guid:guid}")]
++    public async Task<IActionResult> Delete_Root(Guid guid)
++        => new JsonResult(await attachmentCommandFacade.Delete(guid));
++
++    // 5) ✅ POST /api/Attachment/Delete  Body: [guid1,guid2,...]
++    [HttpPost("Delete")]
++    public async Task<IActionResult> DeleteMany([FromBody] List<Guid> guids)
++    {
++        if (guids == null || guids.Count == 0)
++            return BadRequest(new { message = "لیست شناسه‌ها خالی است" });
++
++        return new JsonResult(await attachmentCommandFacade.DeleteMany(guids));
++    }
++
++    // =====================================================================
++    // Helpers
++    // =====================================================================
++
++    /// <summary>نوع محتوا از روی پسوند (نه مقدار اعلام‌شده توسط کلاینت هنگام آپلود)</summary>
++    private string SafeContentType(string? stored, string fileName) => responses.ContentTypeFor(fileName);
++
++    /// <summary>مسیر ذخیره‌شده → آدرس عمومی امضاشده (/files/…?exp&amp;sig)</summary>
++    private string? ToPublicPath(string? storedPath)
++    {
++        var relative = locations.ToRelativePath(storedPath);
++        return relative == null ? null : signedFileUrl.Sign("/files/" + relative);
++    }
++}
 diff --git a/FileManagement.Presentation.Api/Controllers/ImageController.cs b/FileManagement.Presentation.Api/Controllers/ImageController.cs
-index 39681be..2ef40f6 100644
+index 39681be..42fc7ea 100644
 --- a/FileManagement.Presentation.Api/Controllers/ImageController.cs
 +++ b/FileManagement.Presentation.Api/Controllers/ImageController.cs
-@@ -54,7 +54,7 @@ public class ImageController(
-             // محاسبه ارتفاع متناسب
-             var height = (int)Math.Round((double)original.Height / original.Width * width);
- 
+@@ -1,155 +1,53 @@
+-﻿using Microsoft.AspNetCore.Authorization;
+-using Microsoft.AspNetCore.Mvc;
+-using Microsoft.Extensions.Configuration;
+-using SkiaSharp;
+-
+-namespace FileManagement.Presentation.Api.Controllers;
+-
+-[ApiController]
+-[Route("api/[controller]")]
+-[Authorize(Policy = "FileManagementApi")]
+-public class ImageController(
+-    IConfiguration configuration,
+-    IWebHostEnvironment webHostEnvironment) : ControllerBase
+-{
+-    // مقادیر مجاز برای جلوگیری از سوءاستفاده
+-    private static readonly int[] AllowedWidths = [32, 48, 64, 96, 128, 256, 512];
+-    private static readonly int MinQuality = 30;
+-    private static readonly int MaxQuality = 100;
+-    private static readonly int DefaultQuality = 75;
+-    private static readonly int DefaultWidth = 48;
+-
+-    /// <summary>
+-    /// GET /api/Image?url=photo/username.jpg&w=48&q=75
+-    /// </summary>
+-    [HttpGet]
+-    [AllowAnonymous] // یا Authorize بسته به نیاز
+-    [ResponseCache(Duration = 86400, Location = ResponseCacheLocation.Any)] // کش ۲۴ ساعته
+-    public IActionResult GetOptimized(
+-        [FromQuery] string url,
+-        [FromQuery] int? w,
+-        [FromQuery] int? q)
+-    {
+-        if (string.IsNullOrWhiteSpace(url))
+-            return BadRequest(new { message = "پارامتر url الزامی است" });
+-
+-        // ---- تعیین پارامترها ----
+-        var width = GetClosestAllowedWidth(w ?? DefaultWidth);
+-        var quality = Math.Clamp(q ?? DefaultQuality, MinQuality, MaxQuality);
+-
+-        // ---- پیدا کردن فایل فیزیکی ----
+-        var physicalPath = ResolvePhysicalPath(url);
+-        if (physicalPath == null || !System.IO.File.Exists(physicalPath))
+-            return NotFound(new { message = "تصویر یافت نشد" });
+-
+-        // ---- خواندن و تغییر اندازه ----
+-        try
+-        {
+-            using var inputStream = System.IO.File.OpenRead(physicalPath);
+-            using var original = SKBitmap.Decode(inputStream);
+-
+-            if (original == null)
+-                return BadRequest(new { message = "فایل تصویری معتبر نیست" });
+-
+-            // محاسبه ارتفاع متناسب
+-            var height = (int)Math.Round((double)original.Height / original.Width * width);
+-
 -            using var resized = original.Resize(new SKImageInfo(width, height), SKFilterQuality.Medium);
-+            using var resized = original.Resize(new SKImageInfo(width, height), new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
-             if (resized == null)
-                 return StatusCode(500, new { message = "خطا در تغییر اندازه" });
- 
+-            if (resized == null)
+-                return StatusCode(500, new { message = "خطا در تغییر اندازه" });
+-
+-            using var image = SKImage.FromBitmap(resized);
+-            using var data = image.Encode(SKEncodedImageFormat.Jpeg, quality);
+-
+-            // ---- هدرهای محافظتی ----
+-            Response.Headers["Cache-Control"] = "public, max-age=86400, immutable";
+-            Response.Headers["Content-Disposition"] = "inline";
+-            Response.Headers["X-Content-Type-Options"] = "nosniff";
+-
+-            return File(data.ToArray(), "image/jpeg");
+-        }
+-        catch (Exception ex)
+-        {
+-            return StatusCode(500, new { message = "خطا در پردازش تصویر", detail = ex.Message });
+-        }
+-    }
+-
+-    /// <summary>
+-    /// اندپوینت اختصاصی پروفایل - بدون نیاز به URL کامل
+-    /// GET /api/Image/profile/username.jpg?w=48&q=75
+-    /// </summary>
+-    [HttpGet("profile/{fileName}")]
+-    [AllowAnonymous]
+-    [ResponseCache(Duration = 86400, Location = ResponseCacheLocation.Any)]
+-    public IActionResult GetProfileImage(
+-        string fileName,
+-        [FromQuery] int? w,
+-        [FromQuery] int? q)
+-    {
+-        // فقط فایل‌های jpg/png مجاز
+-        var ext = Path.GetExtension(fileName)?.ToLowerInvariant();
+-        if (ext is not (".jpg" or ".jpeg" or ".png"))
+-            return BadRequest(new { message = "فرمت فایل مجاز نیست" });
+-
+-        // ساخت مسیر امن
+-        var safeName = Path.GetFileName(fileName); // جلوگیری از path traversal
+-        var url = $"photo/{safeName}";
+-
+-        return GetOptimized(url, w, q);
+-    }
+-
+-    // ========== Helpers ==========
+-
+-    private static int GetClosestAllowedWidth(int requested)
+-    {
+-        // نزدیک‌ترین سایز مجاز (بالاتر)
+-        foreach (var allowed in AllowedWidths)
+-        {
+-            if (allowed >= requested)
+-                return allowed;
+-        }
+-        return AllowedWidths[^1]; // بزرگ‌ترین
+-    }
+-
+-    private string? ResolvePhysicalPath(string url)
+-    {
+-        if (string.IsNullOrWhiteSpace(url))
+-            return null;
+-
+-        // پاکسازی URL
+-        var normalized = Uri.UnescapeDataString(url)
+-            .Replace('\\', '/')
+-            .TrimStart('/');
+-
+-        // جلوگیری از path traversal
+-        if (normalized.Contains("..") || normalized.Contains(':'))
+-            return null;
+-
+-        // بررسی مسیرهای مختلف
+-        // 1. wwwroot
+-        var wwwrootPath = Path.Combine(
+-            webHostEnvironment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"),
+-            normalized.Replace('/', Path.DirectorySeparatorChar));
+-
+-        if (System.IO.File.Exists(wwwrootPath))
+-            return Path.GetFullPath(wwwrootPath);
+-
+-        // 2. FileBasePath
+-        var basePathFromConfig = configuration["FileSettings:FileBasePath"];
+-        var contentRoot = webHostEnvironment.ContentRootPath ?? Directory.GetCurrentDirectory();
+-        var basePath = string.IsNullOrWhiteSpace(basePathFromConfig)
+-            ? Path.Combine(contentRoot, "files")
+-            : basePathFromConfig;
+-
+-        if (!Path.IsPathRooted(basePath))
+-            basePath = Path.GetFullPath(Path.Combine(contentRoot, basePath));
+-
+-        var filePath = Path.GetFullPath(Path.Combine(basePath, normalized.Replace('/', Path.DirectorySeparatorChar)));
+-
+-        // اطمینان از اینکه خارج از basePath نرفته
+-        if (!filePath.StartsWith(Path.GetFullPath(basePath), StringComparison.OrdinalIgnoreCase))
+-            return null;
+-
+-        return System.IO.File.Exists(filePath) ? filePath : null;
+-    }
+-}
+\ No newline at end of file
++﻿using FileManagement.Common;
++using FileManagement.Presentation.Api.Media;
++using FileManagement.Presentation.Api.Security;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Mvc;
++
++namespace FileManagement.Presentation.Api.Controllers;
++
++/// <summary>
++/// عکس پرسنلی بهینه‌شده (بندانگشتی کش‌شده روی دیسک، WebP/JPEG).
++/// ─────────────────────────────────────────────────────────────────────────
++/// قبلاً این اندپوینت بدون ورود هر تصویری را از wwwroot و حتی پوشه‌ی پیوست‌ها برمی‌گرداند
++/// (یعنی دور زدن آدرس امضاشده‌ی فایل‌ها). حالا فقط از پوشه‌ی عکس‌های پرسنلی می‌خواند و
++/// نیاز به ورود (Bearer) یا توکن کوتاه‌مدت mt دارد (api/Media/Token).
++/// </summary>
++[ApiController]
++[Route("api/[controller]")]
++[AllowAnonymous] // احراز دسترسی در MediaAccess (Bearer یا mt)؛ تگ img هدر Authorization نمی‌فرستد
++public class ImageController(
++    MediaAccess access,
++    FileStorageLocations locations,
++    ImageThumbnailService thumbnails,
++    MediaResponses responses) : ControllerBase
++{
++    /// <summary>GET /api/Image?url=photo/username.jpg&amp;w=48&amp;q=75&amp;mt=…</summary>
++    [HttpGet]
++    public async Task GetOptimized([FromQuery] string? url, [FromQuery] int? w)
++    {
++        var fileName = PhotoFileName(url);
++        if (fileName == null)
++        {
++            Response.StatusCode = StatusCodes.Status404NotFound;
++            return;
++        }
++
++        await MediaEndpoints.ServePhotoCoreAsync(HttpContext, fileName, w ?? 48, access, locations, thumbnails, responses);
++    }
++
++    /// <summary>GET /api/Image/profile/username.jpg?w=48&amp;q=75&amp;mt=…</summary>
++    [HttpGet("profile/{fileName}")]
++    public Task GetProfileImage(string fileName, [FromQuery] int? w)
++        => MediaEndpoints.ServePhotoCoreAsync(HttpContext, Path.GetFileName(fileName), w ?? 96, access, locations, thumbnails, responses);
++
++    /// <summary>فقط «photo/{name}» پذیرفته می‌شود؛ هر مسیر دیگری (پیوست، امضا، …) در دسترس نیست</summary>
++    private static string? PhotoFileName(string? url)
++    {
++        if (string.IsNullOrWhiteSpace(url)) return null;
++        var normalized = Uri.UnescapeDataString(url).Replace('\\', '/').TrimStart('/');
++        if (!normalized.StartsWith("photo/", StringComparison.OrdinalIgnoreCase)) return null;
++        var name = normalized["photo/".Length..];
++        return FileStorageLocations.IsSafeName(name) ? name : null;
++    }
++}
+diff --git a/FileManagement.Presentation.Api/Controllers/ImageControllerHelpers.cs b/FileManagement.Presentation.Api/Controllers/ImageControllerHelpers.cs
+deleted file mode 100644
+index 2b65087..0000000
+--- a/FileManagement.Presentation.Api/Controllers/ImageControllerHelpers.cs
++++ /dev/null
+@@ -1,25 +0,0 @@
+-﻿namespace FileManagement.Presentation.Api.Controllers
+-{
+-    internal static class ImageControllerHelpers
+-    {
+-        // مقادیر مجاز برای جلوگیری از سوءاستفاده
+-        private static readonly int[] AllowedWidths = [32, 48, 64, 96, 128, 256, 512];
+-        private static readonly int MinQuality = 30;
+-        private static readonly int MaxQuality = 100;
+-        private static readonly int DefaultQuality = 75;
+-        private static readonly int DefaultWidth = 48;
+-
+-        // ========== Helpers ==========
+-
+-        private static int GetClosestAllowedWidth(int requested)
+-        {
+-            // نزدیک‌ترین سایز مجاز (بالاتر)
+-            foreach (var allowed in AllowedWidths)
+-            {
+-                if (allowed >= requested)
+-                    return allowed;
+-            }
+-            return AllowedWidths[^1]; // بزرگ‌ترین
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/FileManagement.Presentation.Api/Controllers/PhotoController.cs b/FileManagement.Presentation.Api/Controllers/PhotoController.cs
+index 41bae42..9817074 100644
+--- a/FileManagement.Presentation.Api/Controllers/PhotoController.cs
++++ b/FileManagement.Presentation.Api/Controllers/PhotoController.cs
+@@ -1,57 +1,38 @@
+-﻿using Microsoft.AspNetCore.Authorization;
+-using Microsoft.AspNetCore.Mvc;
+-using Microsoft.Extensions.Configuration;
+-using System;
+-
+-namespace FileManagement.Presentation.Api.Controllers;
+-
+-[ApiController]
+-[Route("api/[controller]")]
+-[Authorize(Policy = "FileManagementApi")]
+-public class PhotoController(IConfiguration configuration) : ControllerBase
+-{
+-    // مسیر عکس‌ها (خارج از wwwroot / static)
+-    private string PhotoRoot => configuration["FileSettings:PhotoBasePath"]!;
+-    // مثال: D:\FileManagement\Photos
+-
+-    // ✅ بهترین حالت: فقط عکس خود کاربر
+-    [HttpGet("Me")]
+-    public IActionResult Me()
+-    {
+-        var personalNo = User.FindFirst("personal_no")?.Value; // یا claim خودتان
+-        if (string.IsNullOrWhiteSpace(personalNo)) return Forbid();
+-
+-        return ServePhotoByPersonalNo(personalNo);
+-    }
+-
+-    // ✅ اگر لازم دارید با personalNo بگیرید (حتماً permission بگذارید)
+-    [HttpGet("{personalNo}")]
+-    public IActionResult ByPersonalNo(string personalNo)
+-    {
+-        //var myPersonalNo = User.FindFirst("personal_no")?.Value;
+-        //var isAdmin = User.IsInRole("Admin"); // یا Policy جدا
+-
+-        //if (!isAdmin && !string.Equals(myPersonalNo, personalNo, StringComparison.Ordinal))
+-        //    return Forbid();
+-
+-        return ServePhotoByPersonalNo(personalNo);
+-    }
+-
+-    private IActionResult ServePhotoByPersonalNo(string personalNo)
+-    {
+-        var path = Path.Combine(PhotoRoot, $"{personalNo}.jpg");
+-        if (!System.IO.File.Exists(path)) return NotFound();
+-
+-        Response.Headers.CacheControl = "no-store";
+-        Response.Headers["Content-Disposition"] = "inline; filename=\"photo.jpg\"";
+-        return PhysicalFile(path, "image/jpeg");
+-    }
+-    //loadMyPhoto()
+-    //{
+-    //    const url = `${ environment.fileManagementEndpoint}/ api / photo / me`;
+-    //    return this.http.get(url, { responseType: 'blob' }).pipe(
+-    //      map(blob => URL.createObjectURL(blob))
+-    //    );
+-    //}
+-
+-}
++﻿using FileManagement.Common;
++using FileManagement.Presentation.Api.Media;
++using FileManagement.Presentation.Api.Security;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Mvc;
++
++namespace FileManagement.Presentation.Api.Controllers;
++
++/// <summary>عکس پرسنلی با Bearer (برای فراخوانی‌های HttpClient)؛ برای تگ img از /photo/… با توکن mt استفاده کنید.</summary>
++[ApiController]
++[Route("api/[controller]")]
++[Authorize(Policy = "FileManagementApi")]
++public class PhotoController(
++    MediaAccess access,
++    FileStorageLocations locations,
++    ImageThumbnailService thumbnails,
++    MediaResponses responses) : ControllerBase
++{
++    /// <summary>عکس خود کاربر (claim نام کاربری/شماره پرسنلی)</summary>
++    [HttpGet("Me")]
++    public async Task Me([FromQuery] int? w)
++    {
++        var name = User.FindFirst("personal_no")?.Value
++                   ?? User.FindFirst("preferred_username")?.Value
++                   ?? User.FindFirst("name")?.Value;
++        if (!FileStorageLocations.IsSafeName(name))
++        {
++            Response.StatusCode = StatusCodes.Status404NotFound;
++            return;
++        }
++
++        await MediaEndpoints.ServePhotoCoreAsync(HttpContext, name!, w, access, locations, thumbnails, responses);
++    }
++
++    [HttpGet("{personalNo}")]
++    public Task ByPersonalNo(string personalNo, [FromQuery] int? w)
++        => MediaEndpoints.ServePhotoCoreAsync(HttpContext, personalNo, w, access, locations, thumbnails, responses);
++}
 diff --git a/FileManagement.Presentation.Api/Controllers/UploadController.cs b/FileManagement.Presentation.Api/Controllers/UploadController.cs
 index b9de506..b87b89d 100644
 --- a/FileManagement.Presentation.Api/Controllers/UploadController.cs
@@ -132,81 +3244,1117 @@ index b9de506..b87b89d 100644
          var exists = _tusFileService.FileExists(tusFileId);
          var status = await _tusFileService.GetUploadStatusAsync(tusFileId);
          var metadata = await _tusFileService.GetMetadataAsync(tusFileId);
+diff --git a/FileManagement.Presentation.Api/Media/ImageThumbnailService.cs b/FileManagement.Presentation.Api/Media/ImageThumbnailService.cs
+new file mode 100644
+index 0000000..6dcf950
+--- /dev/null
++++ b/FileManagement.Presentation.Api/Media/ImageThumbnailService.cs
+@@ -0,0 +1,180 @@
++using System.Collections.Concurrent;
++using System.Security.Cryptography;
++using System.Text;
++using FileManagement.Common;
++using SkiaSharp;
++
++namespace FileManagement.Presentation.Api.Media;
++
++/// <summary>نتیجه‌ی آماده برای ارسال: فایل کش‌شده روی دیسک</summary>
++public sealed record ImageRendition(string PhysicalPath, string ContentType, string ETag, DateTimeOffset LastModified);
++
++/// <summary>
++/// ساخت و کش بندانگشتی تصاویر (عکس پرسنلی، امضا، پیوست‌های تصویری).
++/// ─────────────────────────────────────────────────────────────────────────
++///  • هر اندازه فقط یک بار ساخته و روی دیسک (FileSettings:CachePath) نگه داشته می‌شود؛ درخواست‌های بعدی
++///    مستقیم از فایل کش (با ETag و 304) پاسخ می‌گیرند.
++///  • خروجی WebP برای مرورگرهای پشتیبان (حدود ۳۰٪ کوچک‌تر از JPEG) و JPEG برای بقیه.
++///  • JPEGهای بزرگ با کاهش مقیاس در زمان Decode (۱/۲، ۱/۴، ۱/۸) خوانده می‌شوند: سریع و کم‌حافظه.
++///  • جهت عکس طبق EXIF اصلاح می‌شود (عکس‌های موبایل کج نمایش داده نمی‌شوند).
++///  • برای یک کلید همزمان فقط یک بار پردازش انجام می‌شود (single-flight) و تعداد پردازش موازی محدود است.
++///  • تصاویر بسیار بزرگ (بمب فشرده‌سازی) پردازش نمی‌شوند.
++/// </summary>
++public sealed class ImageThumbnailService(FileStorageLocations locations, ILogger<ImageThumbnailService> logger)
++{
++    private static readonly int[] Widths = [32, 48, 64, 96, 128, 160, 256, 320, 480, 640, 960, 1280, 1920];
++    private static readonly HashSet<string> Resizable = new(StringComparer.OrdinalIgnoreCase)
++        { ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp" };
++
++    private const long MaxSourceBytes = 150L * 1024 * 1024;
++    private const long MaxSourcePixels = 120_000_000;
++
++    private static readonly SemaphoreSlim Gate = new(Math.Max(2, Environment.ProcessorCount));
++    private readonly ConcurrentDictionary<string, Lazy<Task<bool>>> _inflight = new();
++
++    public static bool IsResizable(string? fileNameOrExt)
++        => !string.IsNullOrEmpty(fileNameOrExt) && Resizable.Contains(Path.GetExtension(fileNameOrExt) is { Length: > 0 } e ? e : fileNameOrExt);
++
++    /// <summary>نزدیک‌ترین عرض مجاز (بزرگ‌تر یا مساوی)؛ تعداد اندازه‌های قابل ساخت محدود می‌ماند</summary>
++    public static int SnapWidth(int requested)
++    {
++        foreach (var w in Widths)
++            if (w >= requested) return w;
++        return Widths[^1];
++    }
++
++    public static bool AcceptsWebp(HttpRequest request)
++        => request.Headers.Accept.ToString().Contains("image/webp", StringComparison.OrdinalIgnoreCase);
++
++    public async Task<ImageRendition?> GetAsync(string sourcePath, int width, int quality, bool webp, CancellationToken ct)
++    {
++        var source = new FileInfo(sourcePath);
++        if (!source.Exists || source.Length > MaxSourceBytes) return null;
++
++        width = SnapWidth(width);
++        quality = Math.Clamp(quality, 40, 95);
++        var format = webp ? "webp" : "jpg";
++
++        var key = Hash($"{source.FullName}|{source.LastWriteTimeUtc.Ticks}|{source.Length}|{width}|{quality}|{format}");
++        var cachePath = Path.Combine(locations.CacheRoot, "img", key[..2], $"{key}.{format}");
++        var contentType = webp ? "image/webp" : "image/jpeg";
++
++        if (!File.Exists(cachePath))
++        {
++            var job = _inflight.GetOrAdd(cachePath, p => new Lazy<Task<bool>>(() => RenderAsync(source.FullName, p, width, quality, webp)));
++            bool ok;
++            try { ok = await job.Value.WaitAsync(ct); }
++            finally { _inflight.TryRemove(new KeyValuePair<string, Lazy<Task<bool>>>(cachePath, job)); }
++            if (!ok) return null;
++        }
++        else
++        {
++            Touch(cachePath);
++        }
++
++        return new ImageRendition(cachePath, contentType, $"\"{key[..20]}\"", new DateTimeOffset(source.LastWriteTimeUtc));
++    }
++
++    private async Task<bool> RenderAsync(string sourcePath, string cachePath, int width, int quality, bool webp)
++    {
++        await Gate.WaitAsync();
++        try
++        {
++            return await Task.Run(() => Render(sourcePath, cachePath, width, quality, webp));
++        }
++        catch (Exception ex)
++        {
++            logger.LogWarning(ex, "Thumbnail generation failed for {File}", Path.GetFileName(sourcePath));
++            return false;
++        }
++        finally
++        {
++            Gate.Release();
++        }
++    }
++
++    private static bool Render(string sourcePath, string cachePath, int width, int quality, bool webp)
++    {
++        using var stream = File.OpenRead(sourcePath);
++        using var codec = SKCodec.Create(stream);
++        if (codec == null) return false;
++
++        var info = codec.Info;
++        if (info.Width <= 0 || info.Height <= 0 || (long)info.Width * info.Height > MaxSourcePixels) return false;
++
++        var origin = codec.EncodedOrigin;
++        var swap = origin is SKEncodedOrigin.LeftTop or SKEncodedOrigin.RightTop or SKEncodedOrigin.RightBottom or SKEncodedOrigin.LeftBottom;
++        var displayWidth = swap ? info.Height : info.Width;
++        var displayHeight = swap ? info.Width : info.Height;
++
++        var targetWidth = Math.Min(width, displayWidth);
++        var targetHeight = Math.Max(1, (int)Math.Round((double)displayHeight * targetWidth / displayWidth));
++
++        // Decode با کاهش مقیاس (برای JPEG بسیار سریع‌تر از Decode کامل + Resize)
++        var desiredScale = (float)targetWidth / displayWidth;
++        var scaled = codec.GetScaledDimensions(Math.Max(desiredScale, 1f / 8));
++        if (scaled.Width < (swap ? targetHeight : targetWidth)) scaled = info.Size;
++
++        var decodeInfo = new SKImageInfo(scaled.Width, scaled.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
++        using var decoded = new SKBitmap(decodeInfo);
++        var result = codec.GetPixels(decodeInfo, decoded.GetPixels());
++        if (result is not (SKCodecResult.Success or SKCodecResult.IncompleteInput)) return false;
++
++        using var surface = SKSurface.Create(new SKImageInfo(targetWidth, targetHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
++        var canvas = surface.Canvas;
++        if (!webp) canvas.Clear(SKColors.White); // JPEG شفافیت ندارد
++        else canvas.Clear(SKColors.Transparent);
++
++        ApplyOrientation(canvas, origin, targetWidth, targetHeight);
++        var drawWidth = swap ? targetHeight : targetWidth;
++        var drawHeight = swap ? targetWidth : targetHeight;
++
++        using var image = SKImage.FromBitmap(decoded);
++        canvas.DrawImage(image, new SKRect(0, 0, drawWidth, drawHeight), new SKSamplingOptions(SKCubicResampler.Mitchell));
++        canvas.Flush();
++
++        using var snapshot = surface.Snapshot();
++        using var data = snapshot.Encode(webp ? SKEncodedImageFormat.Webp : SKEncodedImageFormat.Jpeg, quality);
++        if (data == null) return false;
++
++        Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
++        var temp = cachePath + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
++        using (var output = File.Create(temp))
++            data.SaveTo(output);
++        File.Move(temp, cachePath, overwrite: true);
++        return true;
++    }
++
++    /// <summary>
++    /// نگاشت مختصات تصویر خام به جهت نمایشی EXIF (w و h ابعاد خروجی نمایشی هستند).
++    /// عملیات Canvas به ترتیب معکوس روی نقاط اعمال می‌شوند.
++    /// </summary>
++    private static void ApplyOrientation(SKCanvas canvas, SKEncodedOrigin origin, int w, int h)
++    {
++        switch (origin)
++        {
++            case SKEncodedOrigin.TopRight:    canvas.Translate(w, 0); canvas.Scale(-1, 1); break;            // (w-x, y)
++            case SKEncodedOrigin.BottomRight: canvas.Translate(w, h); canvas.RotateDegrees(180); break;      // (w-x, h-y)
++            case SKEncodedOrigin.BottomLeft:  canvas.Translate(0, h); canvas.Scale(1, -1); break;            // (x, h-y)
++            case SKEncodedOrigin.LeftTop:     canvas.RotateDegrees(90); canvas.Scale(1, -1); break;          // (y, x)
++            case SKEncodedOrigin.RightTop:    canvas.Translate(w, 0); canvas.RotateDegrees(90); break;       // (w-y, x)
++            case SKEncodedOrigin.RightBottom: canvas.Translate(w, h); canvas.RotateDegrees(270); canvas.Scale(1, -1); break; // (w-y, h-x)
++            case SKEncodedOrigin.LeftBottom:  canvas.Translate(0, h); canvas.RotateDegrees(270); break;      // (y, h-x)
++        }
++    }
++
++    /// <summary>برای پاک‌سازی LRU؛ حداکثر روزی یک بار زمان فایل به‌روز می‌شود</summary>
++    private static void Touch(string path)
++    {
++        try
++        {
++            var info = new FileInfo(path);
++            if (info.LastWriteTimeUtc < DateTime.UtcNow.AddDays(-1)) info.LastWriteTimeUtc = DateTime.UtcNow;
++        }
++        catch (IOException) { }
++        catch (UnauthorizedAccessException) { }
++    }
++
++    private static string Hash(string value)
++        => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
++}
+diff --git a/FileManagement.Presentation.Api/Media/MediaCacheSweeper.cs b/FileManagement.Presentation.Api/Media/MediaCacheSweeper.cs
+new file mode 100644
+index 0000000..aedaa12
+--- /dev/null
++++ b/FileManagement.Presentation.Api/Media/MediaCacheSweeper.cs
+@@ -0,0 +1,57 @@
++using FileManagement.Common;
++
++namespace FileManagement.Presentation.Api.Media;
++
++/// <summary>
++/// پاک‌سازی دوره‌ای کش بندانگشتی‌ها: حذف فایل‌های استفاده‌نشده (پیش‌فرض ۳۰ روز) و نگه داشتن حجم کل
++/// زیر سقف FileSettings:CacheMaxMegabytes (قدیمی‌ترین‌ها اول حذف می‌شوند). فایل‌های موقت نیمه‌کاره هم پاک می‌شوند.
++/// </summary>
++public sealed class MediaCacheSweeper(FileStorageLocations locations, IConfiguration configuration, ILogger<MediaCacheSweeper> logger)
++    : BackgroundService
++{
++    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
++    {
++        var maxAge = TimeSpan.FromDays(Math.Clamp(configuration.GetValue("FileSettings:CacheMaxAgeDays", 30), 1, 365));
++        var maxBytes = Math.Max(64, configuration.GetValue("FileSettings:CacheMaxMegabytes", 2048)) * 1024L * 1024;
++
++        try { await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken); }
++        catch (OperationCanceledException) { return; }
++
++        using var timer = new PeriodicTimer(TimeSpan.FromHours(6));
++        do
++        {
++            try { Sweep(maxAge, maxBytes); }
++            catch (Exception ex) { logger.LogWarning(ex, "Media cache sweep failed"); }
++        }
++        while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
++    }
++
++    private void Sweep(TimeSpan maxAge, long maxBytes)
++    {
++        var root = Path.Combine(locations.CacheRoot, "img");
++        if (!Directory.Exists(root)) return;
++
++        var now = DateTime.UtcNow;
++        var files = new DirectoryInfo(root).EnumerateFiles("*", SearchOption.AllDirectories)
++            .OrderBy(f => f.LastWriteTimeUtc)
++            .ToList();
++
++        long total = files.Sum(f => f.Length);
++        var removed = 0;
++        foreach (var file in files)
++        {
++            var stale = file.Extension == ".tmp" ? now - file.LastWriteTimeUtc > TimeSpan.FromHours(1) : now - file.LastWriteTimeUtc > maxAge;
++            if (!stale && total <= maxBytes) continue;
++            try
++            {
++                total -= file.Length;
++                file.Delete();
++                removed++;
++            }
++            catch (IOException) { }
++            catch (UnauthorizedAccessException) { }
++        }
++
++        if (removed > 0) logger.LogInformation("Media cache sweep removed {Count} files", removed);
++    }
++}
+diff --git a/FileManagement.Presentation.Api/Media/MediaEndpoints.cs b/FileManagement.Presentation.Api/Media/MediaEndpoints.cs
+new file mode 100644
+index 0000000..5569952
+--- /dev/null
++++ b/FileManagement.Presentation.Api/Media/MediaEndpoints.cs
+@@ -0,0 +1,151 @@
++using FileManagement.Common;
++using FileManagement.Presentation.Api.Security;
++
++namespace FileManagement.Presentation.Api.Media;
++
++/// <summary>
++/// سرو فایل‌ها بدون Static Files عمومی:
++///   GET /files/{**path}?exp&amp;sig[&amp;w]        پیوست‌ها با آدرس امضاشده (+ بندانگشتی تصاویر با w)
++///   GET /media/signature/{userName}?exp&amp;sig    تصویر امضا (آدرس صادرشده توسط سامانه‌ی صاحب فرایند)
++///   GET /photo/{fileName}?mt[&amp;w]               عکس پرسنلی (سازگار با آدرس قدیمی، با توکن)
++///   GET /api/Media/Token                         توکن عکس برای کاربر واردشده
++/// </summary>
++public static class MediaEndpoints
++{
++    public static IEndpointRouteBuilder MapMediaEndpoints(this IEndpointRouteBuilder app)
++    {
++        app.MapMethods("/files/{**path}", [HttpMethods.Get, HttpMethods.Head], ServeAttachmentAsync).AllowAnonymous();
++        app.MapMethods("/media/signature/{userName}", [HttpMethods.Get, HttpMethods.Head], ServeSignatureAsync).AllowAnonymous();
++        app.MapMethods("/photo/{fileName}", [HttpMethods.Get, HttpMethods.Head], ServePhotoAsync).AllowAnonymous();
++
++        app.MapGet("/api/Media/Token", (MediaAccess access, HttpContext context) =>
++        {
++            var (token, expiresAt) = access.IssuePhotoToken();
++            context.Response.Headers.CacheControl = "no-store";
++            return Results.Json(new { token, expiresAt, param = MediaAccess.PhotoTokenParam });
++        }).RequireAuthorization("FileManagementApi");
++
++        return app;
++    }
++
++    // ───────────────────────────── پیوست‌ها ─────────────────────────────
++
++    private static async Task ServeAttachmentAsync(HttpContext context, string path,
++        SignedFileUrl signer, FileStorageLocations locations, ImageThumbnailService thumbnails, MediaResponses responses)
++    {
++        long expiresAt = DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds();
++        if (signer.Enforced && !signer.IsValid(context.Request.Path,
++                context.Request.Query[SignedFileUrl.ExpiresParam], context.Request.Query[SignedFileUrl.SignatureParam], out expiresAt))
++        {
++            context.Response.StatusCode = StatusCodes.Status403Forbidden;
++            return;
++        }
++
++        var physical = locations.ResolvePublicRelative(path);
++        if (physical == null)
++        {
++            context.Response.StatusCode = StatusCodes.Status404NotFound;
++            return;
++        }
++
++        // محتوای هر مسیر هرگز عوض نمی‌شود (نام فایل GUID است) → کش تا پایان اعتبار آدرس
++        var maxAge = Math.Clamp(HmacSigner.Remaining(expiresAt), 0, 24 * 3600);
++        var cache = $"private, max-age={maxAge}, immutable";
++        var fileName = Path.GetFileName(physical);
++
++        if (MediaResponses.TryReadWidth(context.Request, out var width) && ImageThumbnailService.IsResizable(fileName))
++        {
++            var rendition = await thumbnails.GetAsync(physical, width, MediaResponses.ReadQuality(context.Request, 80),
++                ImageThumbnailService.AcceptsWebp(context.Request), context.RequestAborted);
++            if (rendition != null)
++            {
++                responses.ApplySecurityHeaders(context.Response, rendition.PhysicalPath, fileName, false, rendition.ContentType);
++                await MediaResponses.SendRenditionAsync(context, rendition, cache);
++                return;
++            }
++        }
++
++        var contentType = responses.ContentTypeFor(fileName);
++        var download = context.Request.Query.ContainsKey("download");
++        responses.ApplySecurityHeaders(context.Response, fileName, null, download, contentType);
++        await MediaResponses.SendFileAsync(context, physical, contentType, cache);
++    }
++
++    // ───────────────────────────── امضا ─────────────────────────────
++
++    private static async Task ServeSignatureAsync(HttpContext context, string userName,
++        MediaAccess access, FileStorageLocations locations, ImageThumbnailService thumbnails, MediaResponses responses)
++    {
++        if (!FileStorageLocations.IsSafeName(userName)
++            || !access.IsValidSignatureUrl(userName, context.Request.Query["exp"], context.Request.Query["sig"], out var expiresAt))
++        {
++            context.Response.StatusCode = StatusCodes.Status403Forbidden;
++            return;
++        }
++
++        var physical = locations.FindSignature(userName);
++        if (physical == null)
++        {
++            context.Response.StatusCode = StatusCodes.Status404NotFound;
++            return;
++        }
++
++        // فقط در حافظه‌ی همین مرورگر و تا پایان اعتبار آدرس؛ هیچ پراکسی/CDN نگه نمی‌دارد
++        var cache = $"private, max-age={Math.Clamp(HmacSigner.Remaining(expiresAt), 0, 3600)}";
++        var width = MediaResponses.TryReadWidth(context.Request, out var w) ? w : 640;
++        var rendition = await thumbnails.GetAsync(physical, width, MediaResponses.ReadQuality(context.Request, 90),
++            ImageThumbnailService.AcceptsWebp(context.Request), context.RequestAborted);
++
++        if (rendition != null)
++        {
++            responses.ApplySecurityHeaders(context.Response, rendition.PhysicalPath, "signature", false, rendition.ContentType);
++            await MediaResponses.SendRenditionAsync(context, rendition, cache);
++            return;
++        }
++
++        var contentType = responses.ContentTypeFor(physical);
++        responses.ApplySecurityHeaders(context.Response, physical, "signature", false, contentType);
++        await MediaResponses.SendFileAsync(context, physical, contentType, cache);
++    }
++
++    // ───────────────────────────── عکس پرسنلی ─────────────────────────────
++
++    private static Task ServePhotoAsync(HttpContext context, string fileName,
++        MediaAccess access, FileStorageLocations locations, ImageThumbnailService thumbnails, MediaResponses responses)
++        => ServePhotoCoreAsync(context, fileName, null, access, locations, thumbnails, responses);
++
++    /// <summary>منطق مشترک /photo/… و api/Image (کنترلر)</summary>
++    public static async Task ServePhotoCoreAsync(HttpContext context, string fileName, int? requestedWidth,
++        MediaAccess access, FileStorageLocations locations, ImageThumbnailService thumbnails, MediaResponses responses)
++    {
++        if (!access.CanViewPhoto(context, out var maxAge))
++        {
++            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
++            return;
++        }
++
++        var physical = locations.FindPhoto(fileName);
++        if (physical == null)
++        {
++            context.Response.StatusCode = StatusCodes.Status404NotFound;
++            context.Response.Headers.CacheControl = "private, max-age=600"; // آواتار پیش‌فرض فرانت؛ درخواست تکراری نفرستد
++            return;
++        }
++
++        var cache = $"private, max-age={maxAge}";
++        var width = requestedWidth ?? (MediaResponses.TryReadWidth(context.Request, out var w) ? w : 256);
++        var rendition = await thumbnails.GetAsync(physical, width, MediaResponses.ReadQuality(context.Request, 80),
++            ImageThumbnailService.AcceptsWebp(context.Request), context.RequestAborted);
++
++        if (rendition != null)
++        {
++            responses.ApplySecurityHeaders(context.Response, rendition.PhysicalPath, "photo", false, rendition.ContentType);
++            await MediaResponses.SendRenditionAsync(context, rendition, cache);
++            return;
++        }
++
++        var contentType = responses.ContentTypeFor(physical);
++        responses.ApplySecurityHeaders(context.Response, physical, "photo", false, contentType);
++        await MediaResponses.SendFileAsync(context, physical, contentType, cache);
++    }
++}
+diff --git a/FileManagement.Presentation.Api/Media/MediaResponses.cs b/FileManagement.Presentation.Api/Media/MediaResponses.cs
+new file mode 100644
+index 0000000..f0e6125
+--- /dev/null
++++ b/FileManagement.Presentation.Api/Media/MediaResponses.cs
+@@ -0,0 +1,94 @@
++using Microsoft.AspNetCore.StaticFiles;
++using Microsoft.Net.Http.Headers;
++
++namespace FileManagement.Presentation.Api.Media;
++
++/// <summary>تنظیمات مشترک پاسخ فایل‌ها (نوع محتوا، هدرهای امنیتی، کش و درخواست شرطی)</summary>
++public sealed class MediaResponses
++{
++    /// <summary>انواعی که مرورگر می‌تواند به‌عنوان صفحه/اسکریپت اجرا کند؛ هرگز inline روی دامنه‌ی فایل اجرا نشوند</summary>
++    private static readonly HashSet<string> ActiveExtensions = new(StringComparer.OrdinalIgnoreCase)
++    {
++        ".html", ".htm", ".xhtml", ".shtml", ".svg", ".svgz", ".xml", ".xsl", ".xslt", ".js", ".mjs", ".swf", ".hta", ".mht", ".mhtml"
++    };
++
++    private readonly FileExtensionContentTypeProvider _types = new();
++
++    public MediaResponses(string frameAncestors)
++    {
++        FrameAncestors = frameAncestors;
++        _types.Mappings[".webp"] = "image/webp";
++        _types.Mappings[".csv"] = "text/csv";
++        _types.Mappings[".json"] = "application/json";
++        _types.Mappings[".rar"] = "application/vnd.rar";
++        _types.Mappings[".7z"] = "application/x-7z-compressed";
++        _types.Mappings[".dwg"] = "application/acad";
++        _types.Mappings[".msg"] = "application/vnd.ms-outlook";
++    }
++
++    /// <summary>مبداهایی که اجازه دارند فایل را در iframe نمایش دهند (CSP frame-ancestors)</summary>
++    public string FrameAncestors { get; }
++
++    public string ContentTypeFor(string fileName)
++        => _types.TryGetContentType(fileName, out var type) ? type : "application/octet-stream";
++
++    public static bool IsActiveContent(string fileName) => ActiveExtensions.Contains(Path.GetExtension(fileName));
++
++    /// <summary>
++    /// هدرهای امنیتی پاسخ فایل.
++    /// محتوای فعال (HTML/SVG/XML/JS) همیشه دانلودی و داخل sandbox است تا XSS ذخیره‌شده ممکن نباشد.
++    /// </summary>
++    public void ApplySecurityHeaders(HttpResponse response, string fileName, string? downloadName, bool forceDownload, string contentType)
++    {
++        var headers = response.Headers;
++        headers.XContentTypeOptions = "nosniff";
++        headers["Referrer-Policy"] = "no-referrer";
++        headers["Cross-Origin-Resource-Policy"] = "cross-origin";
++        headers.Remove(HeaderNames.XFrameOptions);
++
++        var active = IsActiveContent(fileName);
++        headers.ContentSecurityPolicy = active
++            ? "sandbox; default-src 'none'; frame-ancestors 'none'"
++            : $"frame-ancestors {FrameAncestors}"; // نمایشگر PDF مرورگر با CSP سخت‌گیرانه‌تر از کار می‌افتد؛ nosniff کافی است
++
++        var download = forceDownload || active || contentType == "application/octet-stream";
++        var name = downloadName ?? Path.GetFileName(fileName);
++        headers.ContentDisposition = $"{(download ? "attachment" : "inline")}; filename*=UTF-8''{Uri.EscapeDataString(name)}";
++    }
++
++    public static EntityTagHeaderValue ETagFor(FileInfo file)
++        => new($"\"{file.LastWriteTimeUtc.Ticks:x}-{file.Length:x}\"");
++
++    /// <summary>ارسال فایل با پشتیبانی Range (پخش ویدئو/PDF بزرگ)، ETag و If-None-Match/If-Modified-Since</summary>
++    public static Task SendFileAsync(HttpContext context, string physicalPath, string contentType, string cacheControl,
++        EntityTagHeaderValue? etag = null, DateTimeOffset? lastModified = null)
++    {
++        var info = new FileInfo(physicalPath);
++        context.Response.Headers.CacheControl = cacheControl;
++        return Results.File(
++                physicalPath,
++                contentType,
++                fileDownloadName: null,
++                lastModified: lastModified ?? new DateTimeOffset(info.LastWriteTimeUtc),
++                entityTag: etag ?? ETagFor(info),
++                enableRangeProcessing: true)
++            .ExecuteAsync(context);
++    }
++
++    public static Task SendRenditionAsync(HttpContext context, ImageRendition rendition, string cacheControl)
++    {
++        context.Response.Headers.Append(HeaderNames.Vary, "Accept");
++        return SendFileAsync(context, rendition.PhysicalPath, rendition.ContentType, cacheControl,
++            new EntityTagHeaderValue(rendition.ETag), rendition.LastModified);
++    }
++
++    public static bool TryReadWidth(HttpRequest request, out int width)
++    {
++        width = 0;
++        var raw = request.Query["w"].ToString();
++        return raw.Length is > 0 and < 6 && int.TryParse(raw, out width) && width > 0;
++    }
++
++    public static int ReadQuality(HttpRequest request, int fallback)
++        => int.TryParse(request.Query["q"], out var q) ? Math.Clamp(q, 40, 95) : fallback;
++}
 diff --git a/FileManagement.Presentation.Api/Program.cs b/FileManagement.Presentation.Api/Program.cs
-index d69959a..c082c50 100644
+index d69959a..7284a90 100644
 --- a/FileManagement.Presentation.Api/Program.cs
 +++ b/FileManagement.Presentation.Api/Program.cs
-@@ -14,6 +14,7 @@ using Microsoft.IdentityModel.Logging;
- using Microsoft.IdentityModel.Tokens;
- using System.IO.Compression;
- using tusdotnet;
+@@ -1,228 +1,186 @@
+-﻿using Autofac;
+-using Autofac.Extensions.DependencyInjection;
+-using Epc.Autofac;
+-using Epc.Core;
+-using FileManagement.Common;
+-using FileManagement.Infrastructure.Configuration;
+-using FileManagement.Infrastructure.Tus;
+-using FileManagement.Presentation.Api;
+-using Microsoft.AspNetCore.Http.Features;
+-using Microsoft.AspNetCore.ResponseCompression;
+-using Microsoft.AspNetCore.StaticFiles;
+-using Microsoft.Extensions.FileProviders;
+-using Microsoft.IdentityModel.Logging;
+-using Microsoft.IdentityModel.Tokens;
+-using System.IO.Compression;
+-using tusdotnet;
+-
+-var builder = WebApplication.CreateBuilder(args);
+-
+-builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
+-
+-builder.Services.AddRazorPages();
+-builder.Services.AddControllers().AddNewtonsoftJson();
+-builder.Services.AddSignalR();
+-builder.Services.AddHttpContextAccessor();
+-builder.Services.AddLogging();
+-
+-// Compression
+-builder.Services.Configure<GzipCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
+-builder.Services.AddResponseCompression(o =>
+-{
+-    o.EnableForHttps = true;
+-    o.Providers.Add<GzipCompressionProvider>();
+-});
+-
+-// Auth
+-var authorities = builder.Configuration.GetSection("IdentityAuthorities");
+-builder.Services.AddAuthentication("Bearer")
+-    .AddJwtBearer("Bearer", options =>
+-    {
+-        options.RequireHttpsMetadata = false;
+-        options.Authority = authorities["0"];
+-        options.TokenValidationParameters = new TokenValidationParameters { ValidateAudience = false };
+-    });
+-
+-builder.Services.AddAuthorization(options =>
+-{
+-    options.AddPolicy("FileManagementApi", policy =>
+-    {
+-        policy.RequireAuthenticatedUser();
+-        policy.RequireClaim("scope", "FileManagementApi");
+-    });
+-});
+-
+-// CORS (حتماً Policy را همیشه بسازید تا UseCors خطا ندهد)
+-var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+-
+-builder.Services.AddCors(options =>
+-{
+-    options.AddPolicy("FileManagement", p =>
+-    {
+-        p.AllowAnyHeader()
+-         .AllowAnyMethod()
+-         .WithExposedHeaders(
+-            "Upload-Offset",
+-            "Upload-Length",
+-            "Location",
+-            "Tus-Resumable",
+-            "Tus-Version",
+-            "Tus-Extension",
+-            "Tus-Max-Size",
+-            "Upload-Metadata");
+-
+-        // اگر Origins دارید
+-        if (allowedOrigins.Length > 0)
+-        {
+-            p.WithOrigins(allowedOrigins).AllowCredentials();
+-        }
+-        else
+-        {
+-            // اگر تنظیم نکردید، برای اینکه محیط Dev از کار نیفتد (ریسک امنیتی)
+-            p.SetIsOriginAllowed(_ => true).AllowCredentials();
+-        }
+-    });
+-});
+-
+-// Large uploads
+-builder.WebHost.ConfigureKestrel(options =>
+-{
+-    options.Limits.MaxRequestBodySize = 5L * 1024 * 1024 * 1024; // 5GB
+-    options.Limits.MinRequestBodyDataRate = new Microsoft.AspNetCore.Server.Kestrel.Core.MinDataRate(100, TimeSpan.FromSeconds(10));
+-    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(30);
+-    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(5);
+-});
+-
+-builder.Services.Configure<FormOptions>(options =>
+-{
+-    options.MultipartBodyLengthLimit = 5L * 1024 * 1024 * 1024; // 5GB
+-    options.ValueLengthLimit = int.MaxValue;
+-    options.MultipartHeadersLengthLimit = int.MaxValue;
+-});
+-
+-// Autofac modules
+-var connectionString = builder.Configuration.GetConnectionString("Application");
+-if (string.IsNullOrWhiteSpace(connectionString))
+-    throw new Exception("Please Set Connection String");
+-
+-builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
+-{
+-    containerBuilder.RegisterModule<EpcModule>();
+-    containerBuilder.RegisterModule(new FileManagementModule(connectionString));
+-});
+-builder.Services.AddTusServices(builder.Configuration);
+-
+-var app = builder.Build();
+-
+-// ServiceLocator
+-var autofacContainer = app.Services.GetAutofacRoot();
+-ServiceLocator.SetCurrent(new AutofacServiceLocator(autofacContainer));
+-
+-// ======== Exception pages ========
+-if (app.Environment.IsDevelopment())
+-{
+-    app.UseDeveloperExceptionPage();
+-    IdentityModelEventSource.ShowPII = true;
+-}
+-else
+-{
+-    app.UseHsts();
+-}
+-
+-// Compression
+-app.UseResponseCompression();
+-
+-// HTTPS + Routing
+-app.UseHttpsRedirection();
+-app.UseRouting();
+-
+-// CORS (برای API + Static files هم اعمال شود)
+-app.UseCors("FileManagement");
+-
+-// ======== Static files: /files از FileBasePath ========
+-// این دقیقاً همان چیزی است که لازم دارید تا Path مثل "/files/...." مستقیم لود شود
+-var basePathFromConfig = builder.Configuration["FileSettings:FileBasePath"];
+-var contentRoot = app.Environment.ContentRootPath ?? Directory.GetCurrentDirectory();
+-
+-var fileBasePath = string.IsNullOrWhiteSpace(basePathFromConfig)
+-    ? Path.Combine(contentRoot, "files")
+-    : basePathFromConfig;
+-
+-if (!Path.IsPathRooted(fileBasePath))
+-    fileBasePath = Path.GetFullPath(Path.Combine(contentRoot, fileBasePath));
+-
+-fileBasePath = Path.GetFullPath(fileBasePath);
+-Directory.CreateDirectory(fileBasePath);
+-
+-var contentTypeProvider = new FileExtensionContentTypeProvider();
+-contentTypeProvider.Mappings[".pdf"] = "application/pdf";
+-contentTypeProvider.Mappings[".txt"] = "text/plain";
+-contentTypeProvider.Mappings[".csv"] = "text/csv";
+-contentTypeProvider.Mappings[".json"] = "application/json";
+-contentTypeProvider.Mappings[".xml"] = "application/xml";
+-
+-// برای اینکه PDF داخل iframe بلاک نشود، CSP frame-ancestors تنظیم می‌کنیم
+-// اگر Angular روی Origin دیگری است، باید توی AllowedOrigins باشد
+-string frameAncestors = "'self'";
+-if (allowedOrigins.Length > 0)
+-    frameAncestors += " " + string.Join(" ", allowedOrigins);
+-
+-app.UseStaticFiles(new StaticFileOptions
+-{
+-    FileProvider = new PhysicalFileProvider(fileBasePath),
+-    RequestPath = "/files",
+-    ContentTypeProvider = contentTypeProvider,
+-    ServeUnknownFileTypes = false,
+-    OnPrepareResponse = ctx =>
+-    {
+-        // اجازه‌ی نمایش داخل iframe
+-        ctx.Context.Response.Headers.Remove("X-Frame-Options");
+-        ctx.Context.Response.Headers["Content-Security-Policy"] = $"frame-ancestors {frameAncestors};";
+-
+-        // اگر فایل‌ها حساس هستند، کش را کم کنید
+-        ctx.Context.Response.Headers["Cache-Control"] = "private, max-age=300";
+-    }
+-});
+-// Static files for profile photos with protection headers
+-var photoPath = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(contentRoot, "wwwroot"), "photo");
+-Directory.CreateDirectory(photoPath);
+-
+-app.UseStaticFiles(new StaticFileOptions
+-{
+-    FileProvider = new PhysicalFileProvider(photoPath),
+-    RequestPath = "/photo",
+-    OnPrepareResponse = ctx =>
+-    {
+-        ctx.Context.Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
+-        ctx.Context.Response.Headers["Pragma"] = "no-cache";
+-        ctx.Context.Response.Headers["Content-Disposition"] = "inline";
+-        // جلوگیری از embedding در سایت‌های دیگر
+-        ctx.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+-        ctx.Context.Response.Headers["Content-Security-Policy"] = $"frame-ancestors {frameAncestors};";
+-    }
+-});
+-// wwwroot (اگر دارید)
+-app.UseStaticFiles();
+-
+-// Custom middlewares
+-app.ConfigureExceptionHandler();
+-app.UseAntiXssMiddleware();
+-
+-// Auth
+-app.UseAuthentication();
+-app.UseAuthorization();
+-
+-// Controllers (secured)
+-app.MapControllers().RequireAuthorization("FileManagementApi");
+-
+-// TUS endpoint (secured)
+-app.MapTus("/api/Upload/tus", async httpContext =>
+-{
+-    var sp = httpContext.RequestServices;
+-    return TusConfiguration.GetTusConfiguration(sp, httpContext);
+-}).RequireAuthorization("FileManagementApi");
+-
+-app.MapRazorPages();
+-app.MapDefaultControllerRoute();
+-
+-app.Run();
++﻿using Autofac;
++using Autofac.Extensions.DependencyInjection;
++using Epc.Autofac;
++using Epc.Core;
++using FileManagement.Common;
++using FileManagement.Infrastructure.Configuration;
++using FileManagement.Infrastructure.Tus;
++using FileManagement.Presentation.Api;
++using Microsoft.AspNetCore.Http.Features;
++using Microsoft.AspNetCore.ResponseCompression;
++using Microsoft.IdentityModel.Logging;
++using Microsoft.IdentityModel.Tokens;
++using System.IO.Compression;
++using tusdotnet;
++using FileManagement.Presentation.Api.Media;
 +using FileManagement.Presentation.Api.Security;
- 
- var builder = WebApplication.CreateBuilder(args);
- 
-@@ -111,6 +112,7 @@ builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
-     containerBuilder.RegisterModule(new FileManagementModule(connectionString));
- });
- builder.Services.AddTusServices(builder.Configuration);
-+builder.Services.AddSingleton<FileManagement.Presentation.Api.Security.SignedFileUrl>();
- 
- var app = builder.Build();
- 
-@@ -167,6 +169,9 @@ string frameAncestors = "'self'";
- if (allowedOrigins.Length > 0)
-     frameAncestors += " " + string.Join(" ", allowedOrigins);
- 
-+// ✅ فایل‌های جلسات/مصوبات فقط با آدرس امضاشده‌ی موقت (صادرشده توسط API احرازهویت‌شده) قابل دریافت‌اند
-+app.UseSignedFileUrls("/files");
 +
- app.UseStaticFiles(new StaticFileOptions
- {
-     FileProvider = new PhysicalFileProvider(fileBasePath),
++var builder = WebApplication.CreateBuilder(args);
++
++builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
++
++builder.Services.AddRazorPages();
++builder.Services.AddControllers().AddNewtonsoftJson();
++builder.Services.AddSignalR();
++builder.Services.AddHttpContextAccessor();
++builder.Services.AddLogging();
++
++// Compression
++builder.Services.Configure<GzipCompressionProviderOptions>(o => o.Level = CompressionLevel.Fastest);
++builder.Services.AddResponseCompression(o =>
++{
++    o.EnableForHttps = true;
++    o.Providers.Add<GzipCompressionProvider>();
++});
++
++// Auth
++var authorities = builder.Configuration.GetSection("IdentityAuthorities");
++builder.Services.AddAuthentication("Bearer")
++    .AddJwtBearer("Bearer", options =>
++    {
++        options.RequireHttpsMetadata = false;
++        options.Authority = authorities["0"];
++        options.TokenValidationParameters = new TokenValidationParameters { ValidateAudience = false };
++    });
++
++builder.Services.AddAuthorization(options =>
++{
++    options.AddPolicy("FileManagementApi", policy =>
++    {
++        policy.RequireAuthenticatedUser();
++        policy.RequireClaim("scope", "FileManagementApi");
++    });
++});
++
++// CORS (حتماً Policy را همیشه بسازید تا UseCors خطا ندهد)
++var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
++
++builder.Services.AddCors(options =>
++{
++    options.AddPolicy("FileManagement", p =>
++    {
++        p.AllowAnyHeader()
++         .AllowAnyMethod()
++         .WithExposedHeaders(
++            "Upload-Offset",
++            "Upload-Length",
++            "Location",
++            "Tus-Resumable",
++            "Tus-Version",
++            "Tus-Extension",
++            "Tus-Max-Size",
++            "Upload-Metadata");
++
++        if (allowedOrigins.Length > 0)
++        {
++            p.WithOrigins(allowedOrigins).AllowCredentials();
++        }
++        else if (builder.Environment.IsDevelopment())
++        {
++            // فقط در محیط توسعه: هر مبدأ مجاز (در Production بدون AllowedOrigins هیچ مبدأیی مجاز نیست)
++            p.SetIsOriginAllowed(_ => true).AllowCredentials();
++        }
++        else
++        {
++            p.SetIsOriginAllowed(_ => false);
++        }
++    });
++});
++
++// Large uploads
++builder.WebHost.ConfigureKestrel(options =>
++{
++    options.Limits.MaxRequestBodySize = 5L * 1024 * 1024 * 1024; // 5GB
++    options.Limits.MinRequestBodyDataRate = new Microsoft.AspNetCore.Server.Kestrel.Core.MinDataRate(100, TimeSpan.FromSeconds(10));
++    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(30);
++    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(5);
++});
++
++builder.Services.Configure<FormOptions>(options =>
++{
++    options.MultipartBodyLengthLimit = 5L * 1024 * 1024 * 1024; // 5GB
++    options.ValueLengthLimit = int.MaxValue;
++    options.MultipartHeadersLengthLimit = int.MaxValue;
++});
++
++// Autofac modules
++var connectionString = builder.Configuration.GetConnectionString("Application");
++if (string.IsNullOrWhiteSpace(connectionString))
++    throw new Exception("Please Set Connection String");
++
++builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
++{
++    containerBuilder.RegisterModule<EpcModule>();
++    containerBuilder.RegisterModule(new FileManagementModule(connectionString));
++});
++builder.Services.AddTusServices(builder.Configuration);
++// امضای آدرس فایل‌ها، دسترسی عکس/امضا، بندانگشتی‌ها و پاک‌سازی کش
++builder.Services.AddSingleton<SignedFileUrl>();
++builder.Services.AddSingleton<MediaAccess>();
++builder.Services.AddSingleton<ImageThumbnailService>();
++builder.Services.AddSingleton(_ => new MediaResponses(
++    string.Join(" ", new[] { "'self'" }.Concat(allowedOrigins))));
++builder.Services.AddHostedService<MediaCacheSweeper>();
++
++var app = builder.Build();
++
++// ServiceLocator
++var autofacContainer = app.Services.GetAutofacRoot();
++ServiceLocator.SetCurrent(new AutofacServiceLocator(autofacContainer));
++
++// ======== Exception pages ========
++if (app.Environment.IsDevelopment())
++{
++    app.UseDeveloperExceptionPage();
++    IdentityModelEventSource.ShowPII = true;
++}
++else
++{
++    app.UseHsts();
++}
++
++// Compression
++app.UseResponseCompression();
++
++// HTTPS + Routing
++app.UseHttpsRedirection();
++app.UseRouting();
++
++// CORS (برای API + Static files هم اعمال شود)
++app.UseCors("FileManagement");
++
++// ======== فایل‌ها ========
++// هیچ پوشه‌ای به‌صورت Static عمومی سرو نمی‌شود (wwwroot شامل امضاها/عکس‌ها/آپلودهای نیمه‌کاره بود).
++// پیوست‌ها، امضاها و عکس‌ها فقط از MediaEndpoints با آدرس امضاشده/توکن سرو می‌شوند.
++if (app.Environment.IsDevelopment())
++{
++    var locations = app.Services.GetRequiredService<FileStorageLocations>();
++    app.Logger.LogInformation("Storage — files: {Files} | photos: {Photos} | signatures: {Signatures} | cache: {Cache}",
++        locations.FilesRoot, locations.PhotosRoot, locations.SignaturesRoot, locations.CacheRoot);
++}
++
++// Custom middlewares
++app.ConfigureExceptionHandler();
++app.UseAntiXssMiddleware();
++
++// Auth
++app.UseAuthentication();
++app.UseAuthorization();
++
++// فایل‌ها، امضا و عکس (هرکدام کنترل دسترسی خودش را دارد)
++app.MapMediaEndpoints();
++
++// Controllers (secured)
++app.MapControllers().RequireAuthorization("FileManagementApi");
++
++// TUS endpoint (secured)
++app.MapTus("/api/Upload/tus", async httpContext =>
++{
++    var sp = httpContext.RequestServices;
++    return TusConfiguration.GetTusConfiguration(sp, httpContext);
++}).RequireAuthorization("FileManagementApi");
++
++app.MapRazorPages();
++app.MapDefaultControllerRoute();
++
++app.Run();
+diff --git a/FileManagement.Presentation.Api/Security/MediaAccess.cs b/FileManagement.Presentation.Api/Security/MediaAccess.cs
+new file mode 100644
+index 0000000..47cabb8
+--- /dev/null
++++ b/FileManagement.Presentation.Api/Security/MediaAccess.cs
+@@ -0,0 +1,93 @@
++using System.Globalization;
++
++namespace FileManagement.Presentation.Api.Security;
++
++/// <summary>
++/// کنترل دسترسی به تصاویر پرسنلی و تصاویر امضا.
++/// ─────────────────────────────────────────────────────────────────────────
++/// امضا:  فقط با آدرس امضاشده‌ای که سامانه‌ی صاحب فرایند (مثلاً مدیریت جلسات) پس از بررسی دسترسی
++///         صادر می‌کند:  /media/signature/{userName}?exp=…&amp;sig=…
++///         sig = HMAC-SHA256(FileSettings:SignatureUrlKey, "signature|{userName}|{exp}")  (Base64Url)
++///         بدون کلید، تصاویر امضا اصلاً در دسترس نیستند (fail-closed).
++///
++/// عکس:   با توکن کوتاه‌مدت «mt» که هر کاربر واردشده از  GET api/Media/Token  می‌گیرد (یا SSO با همان کلید
++///         می‌سازد): mt = "{exp}.{HMAC(FileSettings:PhotoTokenKey, "photo|{exp}")}". توکن برای همه‌ی کاربران
++///         در یک بازه یکسان است تا آدرس عکس‌ها ثابت بماند و از کش مرورگر خوانده شوند.
++/// </summary>
++public sealed class MediaAccess
++{
++    public const string PhotoTokenParam = "mt";
++
++    private readonly HmacSigner _signatureSigner;
++    private readonly HmacSigner _photoSigner;
++    private readonly TimeSpan _photoLifetime;
++    private readonly TimeSpan _photoBucket;
++
++    public MediaAccess(IConfiguration configuration, ILogger<MediaAccess> logger)
++    {
++        _signatureSigner = new HmacSigner(configuration["FileSettings:SignatureUrlKey"], false, logger, "FileSettings:SignatureUrlKey");
++        if (!_signatureSigner.IsConfigured)
++            logger.LogWarning("FileSettings:SignatureUrlKey is not set; signature images are not served.");
++
++        _photoSigner = new HmacSigner(configuration["FileSettings:PhotoTokenKey"], true, logger, "FileSettings:PhotoTokenKey");
++        _photoLifetime = TimeSpan.FromHours(Math.Clamp(configuration.GetValue("FileSettings:PhotoTokenLifetimeHours", 12), 1, 72));
++        _photoBucket = TimeSpan.FromHours(1);
++        AllowAnonymousPhotos = configuration.GetValue("FileSettings:AllowAnonymousPhotos", false);
++    }
++
++    /// <summary>دوره‌ی گذار: عکس‌ها بدون توکن هم سرو شوند (برای سامانه‌هایی که هنوز به‌روز نشده‌اند)</summary>
++    public bool AllowAnonymousPhotos { get; }
++
++    public bool SignaturesEnabled => _signatureSigner.IsConfigured;
++
++    // ─────────────── امضا ───────────────
++
++    public static string SignaturePayload(string userName, long exp)
++        => $"signature|{userName.ToLowerInvariant()}|{exp.ToString(CultureInfo.InvariantCulture)}";
++
++    public bool IsValidSignatureUrl(string userName, string? exp, string? sig, out long expiresAt)
++    {
++        expiresAt = 0;
++        if (!SignaturesEnabled) return false;
++        if (!long.TryParse(exp, NumberStyles.None, CultureInfo.InvariantCulture, out expiresAt)) return false;
++        var remaining = HmacSigner.Remaining(expiresAt);
++        if (remaining <= 0 || remaining > TimeSpan.FromDays(2).TotalSeconds) return false;
++        return _signatureSigner.Verify(SignaturePayload(userName, expiresAt), sig);
++    }
++
++    // ─────────────── عکس ───────────────
++
++    public (string Token, DateTimeOffset ExpiresAt) IssuePhotoToken()
++    {
++        var exp = HmacSigner.BucketedExpiry(_photoLifetime, _photoBucket);
++        return ($"{exp}.{_photoSigner.Compute($"photo|{exp}")}", DateTimeOffset.FromUnixTimeSeconds(exp));
++    }
++
++    public bool IsValidPhotoToken(string? token, out long expiresAt)
++    {
++        expiresAt = 0;
++        if (string.IsNullOrEmpty(token) || token.Length > 160) return false;
++        var dot = token.IndexOf('.');
++        if (dot <= 0) return false;
++        if (!long.TryParse(token.AsSpan(0, dot), NumberStyles.None, CultureInfo.InvariantCulture, out expiresAt)) return false;
++        var remaining = HmacSigner.Remaining(expiresAt);
++        if (remaining <= 0 || remaining > TimeSpan.FromDays(4).TotalSeconds) return false;
++        return _photoSigner.Verify($"photo|{expiresAt}", token[(dot + 1)..]);
++    }
++
++    /// <summary>
++    /// اجازه‌ی دیدن عکس: کاربر واردشده (Bearer)، توکن mt معتبر، یا حالت گذار.
++    /// خروجی maxAge: حداکثر زمان مجاز کش در مرورگر (ثانیه)
++    /// </summary>
++    public bool CanViewPhoto(HttpContext context, out long maxAge)
++    {
++        if (IsValidPhotoToken(context.Request.Query[PhotoTokenParam], out var exp))
++        {
++            maxAge = Math.Clamp(HmacSigner.Remaining(exp), 0, 6 * 3600);
++            return true;
++        }
++
++        maxAge = 3600;
++        return context.User.Identity?.IsAuthenticated == true || AllowAnonymousPhotos;
++    }
++}
 diff --git a/FileManagement.Presentation.Api/Security/SignedFileUrl.cs b/FileManagement.Presentation.Api/Security/SignedFileUrl.cs
 new file mode 100644
-index 0000000..72bcebd
+index 0000000..05db146
 --- /dev/null
 +++ b/FileManagement.Presentation.Api/Security/SignedFileUrl.cs
-@@ -0,0 +1,98 @@
-+﻿using System.Security.Cryptography;
+@@ -0,0 +1,111 @@
++using System.Security.Cryptography;
 +using System.Text;
 +using Microsoft.AspNetCore.WebUtilities;
 +
 +namespace FileManagement.Presentation.Api.Security;
 +
 +/// <summary>
-+/// آدرس امضاشده و موقت برای فایل‌های ایستا (/files/...).
++/// امضای HMAC-SHA256 با انقضای «پله‌ای».
 +/// ─────────────────────────────────────────────────────────────────────────
-+/// قبلاً هر کسی که مسیر فایل را می‌دانست (حتی بدون ورود) می‌توانست آن را دانلود کند؛ مسیرها هم
-+/// شامل شماره جلسه و نام فایل و قابل حدس بودند. حالا مسیر فقط از API احرازهویت‌شده (GetMeta/GetMetas/...)
-+/// با امضای HMAC و تاریخ انقضا برگردانده می‌شود و Middleware هر درخواست بدون امضای معتبر را رد می‌کند.
-+/// تگ‌های img/iframe/video فرانت بدون تغییر کار می‌کنند چون امضا در Query String است.
++/// زمان انقضا به ابتدای بازه‌ی جاری گرد می‌شود؛ بنابراین در طول یک بازه برای یک فایل همیشه همان آدرس
++/// ساخته می‌شود و مرورگر می‌تواند فایل را از کش خودش بدهد (قبلاً هر بار آدرس تازه‌ای ساخته می‌شد و
++/// هیچ تصویری کش نمی‌شد). مهلت باقی‌مانده هر آدرس همیشه حداقل «مهلت − طول بازه» است.
++/// </summary>
++public sealed class HmacSigner
++{
++    private readonly byte[] _key;
++
++    public HmacSigner(string? key, bool required, ILogger logger, string name)
++    {
++        IsConfigured = !string.IsNullOrWhiteSpace(key);
++        if (IsConfigured)
++        {
++            _key = Encoding.UTF8.GetBytes(key!);
++        }
++        else
++        {
++            // بدون کلید ثابت، با هر راه‌اندازی مجدد لینک‌های قبلی باطل می‌شوند و سامانه‌های دیگر نمی‌توانند لینک بسازند
++            _key = RandomNumberGenerator.GetBytes(32);
++            if (required) logger.LogWarning("{Name} is not set; a random key is used until the next restart.", name);
++        }
++    }
++
++    public bool IsConfigured { get; }
++
++    public static long BucketedExpiry(TimeSpan lifetime, TimeSpan bucket)
++    {
++        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
++        var size = Math.Max(60, (long)bucket.TotalSeconds);
++        return now - now % size + (long)lifetime.TotalSeconds;
++    }
++
++    public string Compute(string payload)
++    {
++        using var hmac = new HMACSHA256(_key);
++        return WebEncoders.Base64UrlEncode(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload)));
++    }
++
++    public bool Verify(string payload, string? signature)
++    {
++        if (string.IsNullOrEmpty(signature) || signature.Length > 128) return false;
++        return CryptographicOperations.FixedTimeEquals(
++            Encoding.ASCII.GetBytes(Compute(payload)), Encoding.ASCII.GetBytes(signature));
++    }
++
++    /// <summary>ثانیه‌های باقی‌مانده تا انقضا (منفی = منقضی)</summary>
++    public static long Remaining(long expiresAt) => expiresAt - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
++}
++
++/// <summary>
++/// آدرس امضاشده و موقت برای فایل‌های پیوست (/files/...).
++/// مسیر فقط از API احرازهویت‌شده (GetMeta/GetMetas/...) با امضا برگردانده می‌شود و Middleware
++/// هر درخواست بدون امضای معتبر را رد می‌کند. تگ‌های img/iframe/video بدون توکن کار می‌کنند چون
++/// امضا در Query String است.
 +/// </summary>
 +public sealed class SignedFileUrl
 +{
 +    public const string ExpiresParam = "exp";
 +    public const string SignatureParam = "sig";
 +
-+    private readonly byte[] _key;
++    private readonly HmacSigner _signer;
 +    private readonly TimeSpan _lifetime;
++    private readonly TimeSpan _bucket;
 +
 +    public bool Enforced { get; }
 +
 +    public SignedFileUrl(IConfiguration configuration, ILogger<SignedFileUrl> logger)
 +    {
-+        var key = configuration["FileSettings:UrlSigningKey"];
-+        if (string.IsNullOrWhiteSpace(key))
-+        {
-+            // بدون کلید ثابت، با هر راه‌اندازی مجدد لینک‌های قبلی باطل می‌شوند (در چند سرور باید کلید ثابت تنظیم شود)
-+            _key = RandomNumberGenerator.GetBytes(32);
-+            logger.LogWarning("FileSettings:UrlSigningKey is not set; a random key is used until the next restart.");
-+        }
-+        else
-+        {
-+            _key = Encoding.UTF8.GetBytes(key);
-+        }
-+
-+        _lifetime = TimeSpan.FromMinutes(Math.Clamp(configuration.GetValue("FileSettings:UrlLifetimeMinutes", 120), 5, 24 * 60));
++        _signer = new HmacSigner(configuration["FileSettings:UrlSigningKey"], true, logger, "FileSettings:UrlSigningKey");
++        _lifetime = TimeSpan.FromMinutes(Math.Clamp(configuration.GetValue("FileSettings:UrlLifetimeMinutes", 180), 10, 24 * 60));
++        // آدرس هر فایل در طول یک بازه ثابت می‌ماند (پیش‌فرض یک‌سوم مهلت)
++        _bucket = TimeSpan.FromTicks(_lifetime.Ticks / 3);
 +        Enforced = configuration.GetValue("FileSettings:RequireSignedUrls", true);
 +    }
 +
@@ -215,24 +4363,16 @@ index 0000000..72bcebd
 +    {
 +        if (string.IsNullOrWhiteSpace(publicPath)) return publicPath;
 +        var path = Normalize(publicPath);
-+        var exp = DateTimeOffset.UtcNow.Add(_lifetime).ToUnixTimeSeconds();
-+        return $"{path}?{ExpiresParam}={exp}&{SignatureParam}={Compute(path, exp)}";
++        var exp = HmacSigner.BucketedExpiry(_lifetime, _bucket);
++        return $"{EncodePath(path)}?{ExpiresParam}={exp}&{SignatureParam}={_signer.Compute($"{path}|{exp}")}";
 +    }
 +
-+    public bool IsValid(PathString path, string? exp, string? sig)
++    /// <summary>اعتبار امضا؛ در صورت معتبر بودن، زمان انقضا برگردانده می‌شود</summary>
++    public bool IsValid(PathString path, string? exp, string? sig, out long expiresAt)
 +    {
-+        if (!long.TryParse(exp, out var expiresAt) || string.IsNullOrEmpty(sig)) return false;
-+        if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expiresAt) return false;
-+
-+        var expected = Compute(Normalize(path.Value ?? string.Empty), expiresAt);
-+        return CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(sig));
-+    }
-+
-+    private string Compute(string path, long exp)
-+    {
-+        using var hmac = new HMACSHA256(_key);
-+        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes($"{path}|{exp}"));
-+        return WebEncoders.Base64UrlEncode(hash);
++        expiresAt = 0;
++        if (!long.TryParse(exp, out expiresAt) || HmacSigner.Remaining(expiresAt) <= 0) return false;
++        return _signer.Verify($"{Normalize(path.Value ?? string.Empty)}|{expiresAt}", sig);
 +    }
 +
 +    /// <summary>مسیر با / شروع شود و حروف رمزگذاری‌شده‌ی URL یکسان مقایسه شوند</summary>
@@ -241,28 +4381,7 @@ index 0000000..72bcebd
 +        var decoded = Uri.UnescapeDataString(path.Split('?')[0]).Replace('\\', '/');
 +        return decoded.StartsWith('/') ? decoded : "/" + decoded;
 +    }
-+}
 +
-+public static class SignedFileUrlMiddlewareExtensions
-+{
-+    /// <summary>فقط درخواست‌های دارای امضای معتبر به فایل‌های زیر <paramref name="requestPath"/> می‌رسند.</summary>
-+    public static IApplicationBuilder UseSignedFileUrls(this IApplicationBuilder app, string requestPath)
-+    {
-+        var signer = app.ApplicationServices.GetRequiredService<SignedFileUrl>();
-+        if (!signer.Enforced) return app;
-+
-+        return app.Use(async (context, next) =>
-+        {
-+            if (context.Request.Path.StartsWithSegments(requestPath, StringComparison.OrdinalIgnoreCase)
-+                && !HttpMethods.IsOptions(context.Request.Method)
-+                && !signer.IsValid(context.Request.Path,
-+                    context.Request.Query[SignedFileUrl.ExpiresParam], context.Request.Query[SignedFileUrl.SignatureParam]))
-+            {
-+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-+                return;
-+            }
-+
-+            await next();
-+        });
-+    }
++    private static string EncodePath(string path)
++        => string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
 +}

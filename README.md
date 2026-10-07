@@ -348,6 +348,15 @@ npm test           # تست‌های واحد (Karma + Jasmine)
 
 بارگذاری تکه‌ای (۵ مگابایت) با تازه‌سازی توکن در هر تکه، تلاش مجدد برای خطاهای شبکه/۵xx و ازسرگیری؛ در FileManagement سقف حجم بزرگ و لینک امضاشده برای فایل‌ها (`/files`) اعمال شده است.
 
+**تصاویر امضا:** دیگر آدرس عمومی `/EpcSignature/{user}.jpg` وجود ندارد. سرور جلسات در فهرست اعضا (`SignatureUrl`، `SignerSignatureUrl`)
+آدرس موقت امضاشده (`/media/signature/{user}?exp&sig`) را فقط به خود عضو، مدیر جلسه و بینندگان صورتجلسه (پس از امضا) می‌دهد.
+کلید: `FileManagement:SignatureUrlKey` (همان `FileSettings:SignatureUrlKey` مدیریت فایل)، مدت: `FileManagement:SignatureUrlLifetimeMinutes`.
+
+**عکس‌های پرسنلی:** با توکن کوتاه‌مدت `mt` (`core/media/media-token.ts`: `userPhotoUrl()`، `MediaTokenService` در شروع برنامه).
+
+**نمایش سریع:** کارت‌های فایل بندانگشتی ۳۲۰ پیکسلی (WebP) می‌گیرند و پیش‌نمایش تصویر تدریجی است (بندانگشتی فوراً، نسخه‌ی ۱۹۲۰ پیکسلی پس از بارگذاری)؛
+همه با کش مرورگر و سرور. جزئیات و جدول مشکلات رفع‌شده در `integrations/README.md`.
+
 ## ۸. چاپ و قالب‌ها
 
 - «تنظیمات › چاپ و قالب‌ها» (دسترسی `MT_PrintTemplates` یا `MT_Settings`): سربرگ و طراح قالب با پیش‌نمایش زنده، چاپ آزمایشی و بازگشت به پیش‌فرض.
@@ -363,6 +372,8 @@ npm test           # تست‌های واحد (Karma + Jasmine)
 
 1. در UserManagement دسترسی‌های `MT_Admin`، `MT_Board_ViewAll` و `MT_PrintTemplates` را تعریف و به سمت‌ها بدهید.
 2. patchهای `integrations/` را روی SSO، UserManagement و FileManagement اعمال کنید و `Realtime:*` را با کلید مشترک تنظیم کنید.
+   کلیدهای فایل (`UrlSigningKey`، `SignatureUrlKey`، `PhotoTokenKey`) را بسازید و پوشه‌ی `wwwroot/EpcSignature` مدیریت فایل را به
+   `App_Data/signatures` منتقل کنید (راهنما: `integrations/README.md`).
 3. روی IIS ویژگی WebSocket را فعال کنید.
 4. بک‌اند را منتشر کنید؛ Seeder کلیدهای ۲۸ تا ۳۰ را اضافه می‌کند.
 5. فرانت: `npm ci` و `npx ng build` (فونت وزیرمتن از بسته‌ی npm کپی می‌شود).

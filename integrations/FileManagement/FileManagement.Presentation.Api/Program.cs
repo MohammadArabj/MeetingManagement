@@ -8,12 +8,11 @@ using FileManagement.Infrastructure.Tus;
 using FileManagement.Presentation.Api;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.ResponseCompression;
-using Microsoft.AspNetCore.StaticFiles;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Logging;
 using Microsoft.IdentityModel.Tokens;
 using System.IO.Compression;
 using tusdotnet;
+using FileManagement.Presentation.Api.Media;
 using FileManagement.Presentation.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -72,15 +71,18 @@ builder.Services.AddCors(options =>
             "Tus-Max-Size",
             "Upload-Metadata");
 
-        // اگر Origins دارید
         if (allowedOrigins.Length > 0)
         {
             p.WithOrigins(allowedOrigins).AllowCredentials();
         }
+        else if (builder.Environment.IsDevelopment())
+        {
+            // فقط در محیط توسعه: هر مبدأ مجاز (در Production بدون AllowedOrigins هیچ مبدأیی مجاز نیست)
+            p.SetIsOriginAllowed(_ => true).AllowCredentials();
+        }
         else
         {
-            // اگر تنظیم نکردید، برای اینکه محیط Dev از کار نیفتد (ریسک امنیتی)
-            p.SetIsOriginAllowed(_ => true).AllowCredentials();
+            p.SetIsOriginAllowed(_ => false);
         }
     });
 });
@@ -112,7 +114,13 @@ builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
     containerBuilder.RegisterModule(new FileManagementModule(connectionString));
 });
 builder.Services.AddTusServices(builder.Configuration);
-builder.Services.AddSingleton<FileManagement.Presentation.Api.Security.SignedFileUrl>();
+// امضای آدرس فایل‌ها، دسترسی عکس/امضا، بندانگشتی‌ها و پاک‌سازی کش
+builder.Services.AddSingleton<SignedFileUrl>();
+builder.Services.AddSingleton<MediaAccess>();
+builder.Services.AddSingleton<ImageThumbnailService>();
+builder.Services.AddSingleton(_ => new MediaResponses(
+    string.Join(" ", new[] { "'self'" }.Concat(allowedOrigins))));
+builder.Services.AddHostedService<MediaCacheSweeper>();
 
 var app = builder.Build();
 
@@ -141,73 +149,15 @@ app.UseRouting();
 // CORS (برای API + Static files هم اعمال شود)
 app.UseCors("FileManagement");
 
-// ======== Static files: /files از FileBasePath ========
-// این دقیقاً همان چیزی است که لازم دارید تا Path مثل "/files/...." مستقیم لود شود
-var basePathFromConfig = builder.Configuration["FileSettings:FileBasePath"];
-var contentRoot = app.Environment.ContentRootPath ?? Directory.GetCurrentDirectory();
-
-var fileBasePath = string.IsNullOrWhiteSpace(basePathFromConfig)
-    ? Path.Combine(contentRoot, "files")
-    : basePathFromConfig;
-
-if (!Path.IsPathRooted(fileBasePath))
-    fileBasePath = Path.GetFullPath(Path.Combine(contentRoot, fileBasePath));
-
-fileBasePath = Path.GetFullPath(fileBasePath);
-Directory.CreateDirectory(fileBasePath);
-
-var contentTypeProvider = new FileExtensionContentTypeProvider();
-contentTypeProvider.Mappings[".pdf"] = "application/pdf";
-contentTypeProvider.Mappings[".txt"] = "text/plain";
-contentTypeProvider.Mappings[".csv"] = "text/csv";
-contentTypeProvider.Mappings[".json"] = "application/json";
-contentTypeProvider.Mappings[".xml"] = "application/xml";
-
-// برای اینکه PDF داخل iframe بلاک نشود، CSP frame-ancestors تنظیم می‌کنیم
-// اگر Angular روی Origin دیگری است، باید توی AllowedOrigins باشد
-string frameAncestors = "'self'";
-if (allowedOrigins.Length > 0)
-    frameAncestors += " " + string.Join(" ", allowedOrigins);
-
-// ✅ فایل‌های جلسات/مصوبات فقط با آدرس امضاشده‌ی موقت (صادرشده توسط API احرازهویت‌شده) قابل دریافت‌اند
-app.UseSignedFileUrls("/files");
-
-app.UseStaticFiles(new StaticFileOptions
+// ======== فایل‌ها ========
+// هیچ پوشه‌ای به‌صورت Static عمومی سرو نمی‌شود (wwwroot شامل امضاها/عکس‌ها/آپلودهای نیمه‌کاره بود).
+// پیوست‌ها، امضاها و عکس‌ها فقط از MediaEndpoints با آدرس امضاشده/توکن سرو می‌شوند.
+if (app.Environment.IsDevelopment())
 {
-    FileProvider = new PhysicalFileProvider(fileBasePath),
-    RequestPath = "/files",
-    ContentTypeProvider = contentTypeProvider,
-    ServeUnknownFileTypes = false,
-    OnPrepareResponse = ctx =>
-    {
-        // اجازه‌ی نمایش داخل iframe
-        ctx.Context.Response.Headers.Remove("X-Frame-Options");
-        ctx.Context.Response.Headers["Content-Security-Policy"] = $"frame-ancestors {frameAncestors};";
-
-        // اگر فایل‌ها حساس هستند، کش را کم کنید
-        ctx.Context.Response.Headers["Cache-Control"] = "private, max-age=300";
-    }
-});
-// Static files for profile photos with protection headers
-var photoPath = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(contentRoot, "wwwroot"), "photo");
-Directory.CreateDirectory(photoPath);
-
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(photoPath),
-    RequestPath = "/photo",
-    OnPrepareResponse = ctx =>
-    {
-        ctx.Context.Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
-        ctx.Context.Response.Headers["Pragma"] = "no-cache";
-        ctx.Context.Response.Headers["Content-Disposition"] = "inline";
-        // جلوگیری از embedding در سایت‌های دیگر
-        ctx.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-        ctx.Context.Response.Headers["Content-Security-Policy"] = $"frame-ancestors {frameAncestors};";
-    }
-});
-// wwwroot (اگر دارید)
-app.UseStaticFiles();
+    var locations = app.Services.GetRequiredService<FileStorageLocations>();
+    app.Logger.LogInformation("Storage — files: {Files} | photos: {Photos} | signatures: {Signatures} | cache: {Cache}",
+        locations.FilesRoot, locations.PhotosRoot, locations.SignaturesRoot, locations.CacheRoot);
+}
 
 // Custom middlewares
 app.ConfigureExceptionHandler();
@@ -216,6 +166,9 @@ app.UseAntiXssMiddleware();
 // Auth
 app.UseAuthentication();
 app.UseAuthorization();
+
+// فایل‌ها، امضا و عکس (هرکدام کنترل دسترسی خودش را دارد)
+app.MapMediaEndpoints();
 
 // Controllers (secured)
 app.MapControllers().RequireAuthorization("FileManagementApi");

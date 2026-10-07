@@ -1,42 +1,84 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace FileManagement.Presentation.Api.Security;
 
 /// <summary>
-/// آدرس امضاشده و موقت برای فایل‌های ایستا (/files/...).
+/// امضای HMAC-SHA256 با انقضای «پله‌ای».
 /// ─────────────────────────────────────────────────────────────────────────
-/// قبلاً هر کسی که مسیر فایل را می‌دانست (حتی بدون ورود) می‌توانست آن را دانلود کند؛ مسیرها هم
-/// شامل شماره جلسه و نام فایل و قابل حدس بودند. حالا مسیر فقط از API احرازهویت‌شده (GetMeta/GetMetas/...)
-/// با امضای HMAC و تاریخ انقضا برگردانده می‌شود و Middleware هر درخواست بدون امضای معتبر را رد می‌کند.
-/// تگ‌های img/iframe/video فرانت بدون تغییر کار می‌کنند چون امضا در Query String است.
+/// زمان انقضا به ابتدای بازه‌ی جاری گرد می‌شود؛ بنابراین در طول یک بازه برای یک فایل همیشه همان آدرس
+/// ساخته می‌شود و مرورگر می‌تواند فایل را از کش خودش بدهد (قبلاً هر بار آدرس تازه‌ای ساخته می‌شد و
+/// هیچ تصویری کش نمی‌شد). مهلت باقی‌مانده هر آدرس همیشه حداقل «مهلت − طول بازه» است.
+/// </summary>
+public sealed class HmacSigner
+{
+    private readonly byte[] _key;
+
+    public HmacSigner(string? key, bool required, ILogger logger, string name)
+    {
+        IsConfigured = !string.IsNullOrWhiteSpace(key);
+        if (IsConfigured)
+        {
+            _key = Encoding.UTF8.GetBytes(key!);
+        }
+        else
+        {
+            // بدون کلید ثابت، با هر راه‌اندازی مجدد لینک‌های قبلی باطل می‌شوند و سامانه‌های دیگر نمی‌توانند لینک بسازند
+            _key = RandomNumberGenerator.GetBytes(32);
+            if (required) logger.LogWarning("{Name} is not set; a random key is used until the next restart.", name);
+        }
+    }
+
+    public bool IsConfigured { get; }
+
+    public static long BucketedExpiry(TimeSpan lifetime, TimeSpan bucket)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var size = Math.Max(60, (long)bucket.TotalSeconds);
+        return now - now % size + (long)lifetime.TotalSeconds;
+    }
+
+    public string Compute(string payload)
+    {
+        using var hmac = new HMACSHA256(_key);
+        return WebEncoders.Base64UrlEncode(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload)));
+    }
+
+    public bool Verify(string payload, string? signature)
+    {
+        if (string.IsNullOrEmpty(signature) || signature.Length > 128) return false;
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.ASCII.GetBytes(Compute(payload)), Encoding.ASCII.GetBytes(signature));
+    }
+
+    /// <summary>ثانیه‌های باقی‌مانده تا انقضا (منفی = منقضی)</summary>
+    public static long Remaining(long expiresAt) => expiresAt - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+}
+
+/// <summary>
+/// آدرس امضاشده و موقت برای فایل‌های پیوست (/files/...).
+/// مسیر فقط از API احرازهویت‌شده (GetMeta/GetMetas/...) با امضا برگردانده می‌شود و Middleware
+/// هر درخواست بدون امضای معتبر را رد می‌کند. تگ‌های img/iframe/video بدون توکن کار می‌کنند چون
+/// امضا در Query String است.
 /// </summary>
 public sealed class SignedFileUrl
 {
     public const string ExpiresParam = "exp";
     public const string SignatureParam = "sig";
 
-    private readonly byte[] _key;
+    private readonly HmacSigner _signer;
     private readonly TimeSpan _lifetime;
+    private readonly TimeSpan _bucket;
 
     public bool Enforced { get; }
 
     public SignedFileUrl(IConfiguration configuration, ILogger<SignedFileUrl> logger)
     {
-        var key = configuration["FileSettings:UrlSigningKey"];
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            // بدون کلید ثابت، با هر راه‌اندازی مجدد لینک‌های قبلی باطل می‌شوند (در چند سرور باید کلید ثابت تنظیم شود)
-            _key = RandomNumberGenerator.GetBytes(32);
-            logger.LogWarning("FileSettings:UrlSigningKey is not set; a random key is used until the next restart.");
-        }
-        else
-        {
-            _key = Encoding.UTF8.GetBytes(key);
-        }
-
-        _lifetime = TimeSpan.FromMinutes(Math.Clamp(configuration.GetValue("FileSettings:UrlLifetimeMinutes", 120), 5, 24 * 60));
+        _signer = new HmacSigner(configuration["FileSettings:UrlSigningKey"], true, logger, "FileSettings:UrlSigningKey");
+        _lifetime = TimeSpan.FromMinutes(Math.Clamp(configuration.GetValue("FileSettings:UrlLifetimeMinutes", 180), 10, 24 * 60));
+        // آدرس هر فایل در طول یک بازه ثابت می‌ماند (پیش‌فرض یک‌سوم مهلت)
+        _bucket = TimeSpan.FromTicks(_lifetime.Ticks / 3);
         Enforced = configuration.GetValue("FileSettings:RequireSignedUrls", true);
     }
 
@@ -45,24 +87,16 @@ public sealed class SignedFileUrl
     {
         if (string.IsNullOrWhiteSpace(publicPath)) return publicPath;
         var path = Normalize(publicPath);
-        var exp = DateTimeOffset.UtcNow.Add(_lifetime).ToUnixTimeSeconds();
-        return $"{path}?{ExpiresParam}={exp}&{SignatureParam}={Compute(path, exp)}";
+        var exp = HmacSigner.BucketedExpiry(_lifetime, _bucket);
+        return $"{EncodePath(path)}?{ExpiresParam}={exp}&{SignatureParam}={_signer.Compute($"{path}|{exp}")}";
     }
 
-    public bool IsValid(PathString path, string? exp, string? sig)
+    /// <summary>اعتبار امضا؛ در صورت معتبر بودن، زمان انقضا برگردانده می‌شود</summary>
+    public bool IsValid(PathString path, string? exp, string? sig, out long expiresAt)
     {
-        if (!long.TryParse(exp, out var expiresAt) || string.IsNullOrEmpty(sig)) return false;
-        if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expiresAt) return false;
-
-        var expected = Compute(Normalize(path.Value ?? string.Empty), expiresAt);
-        return CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(sig));
-    }
-
-    private string Compute(string path, long exp)
-    {
-        using var hmac = new HMACSHA256(_key);
-        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes($"{path}|{exp}"));
-        return WebEncoders.Base64UrlEncode(hash);
+        expiresAt = 0;
+        if (!long.TryParse(exp, out expiresAt) || HmacSigner.Remaining(expiresAt) <= 0) return false;
+        return _signer.Verify($"{Normalize(path.Value ?? string.Empty)}|{expiresAt}", sig);
     }
 
     /// <summary>مسیر با / شروع شود و حروف رمزگذاری‌شده‌ی URL یکسان مقایسه شوند</summary>
@@ -71,28 +105,7 @@ public sealed class SignedFileUrl
         var decoded = Uri.UnescapeDataString(path.Split('?')[0]).Replace('\\', '/');
         return decoded.StartsWith('/') ? decoded : "/" + decoded;
     }
-}
 
-public static class SignedFileUrlMiddlewareExtensions
-{
-    /// <summary>فقط درخواست‌های دارای امضای معتبر به فایل‌های زیر <paramref name="requestPath"/> می‌رسند.</summary>
-    public static IApplicationBuilder UseSignedFileUrls(this IApplicationBuilder app, string requestPath)
-    {
-        var signer = app.ApplicationServices.GetRequiredService<SignedFileUrl>();
-        if (!signer.Enforced) return app;
-
-        return app.Use(async (context, next) =>
-        {
-            if (context.Request.Path.StartsWithSegments(requestPath, StringComparison.OrdinalIgnoreCase)
-                && !HttpMethods.IsOptions(context.Request.Method)
-                && !signer.IsValid(context.Request.Path,
-                    context.Request.Query[SignedFileUrl.ExpiresParam], context.Request.Query[SignedFileUrl.SignatureParam]))
-            {
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                return;
-            }
-
-            await next();
-        });
-    }
+    private static string EncodePath(string path)
+        => string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
 }

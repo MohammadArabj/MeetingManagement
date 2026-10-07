@@ -1,4 +1,5 @@
 ﻿using FileManagement.Application;
+using FileManagement.Common;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -75,11 +76,11 @@ public static class TusConfiguration
                         return;
                     }
                     var filename = metadata["filename"].GetString(System.Text.Encoding.UTF8);
-                    var extension = Path.GetExtension(filename)?.ToLowerInvariant();
-                    // بررسی پسوندهای ممنوع 
-                    if (!string.IsNullOrEmpty(extension) && settings.BlockedExtensions.Contains(extension))
+                    // پسوندهای اجرایی ممنوع + فهرست مجاز FileSettings:FileExtensions (همان سیاست تکمیل آپلود)
+                    var policyError = new FileTypePolicy(configuration).Validate(filename);
+                    if (policyError != null)
                     {
-                        eventContext.FailRequest($"File extension '{extension}' is not allowed");
+                        eventContext.FailRequest(System.Net.HttpStatusCode.UnsupportedMediaType, policyError);
                         return;
                     }
                     // بررسی حجم 
