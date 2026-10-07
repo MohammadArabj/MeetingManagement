@@ -1,0 +1,70 @@
+<div class="app-shell" >
+
+    <!-- ─── Header ─────────────────────────────────────────────────── -->
+    <div class="app-shell-header">
+        <app-header></app-header>
+    </div>
+
+    <!-- ─── Body ─────────────────────────────────────────────────────
+       RTL: flex-direction:row → اولین فرزند (sidebar) سمت راست قرار می‌گیرد
+  ──────────────────────────────────────────────────────────────── -->
+    <div class="app-shell-body">
+        <app-sidebar></app-sidebar>
+
+        <main class="app-shell-main">
+            <div class="content-wrapper">
+                <div class="content-container">
+                    <router-outlet></router-outlet>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ─── Footer ─────────────────────────────────────────────────── -->
+    <footer class="app-footer">
+        <div class="footer-container">
+            <div class="footer-left">
+                <div class="footer-logo"><i class="fas fa-poll"></i></div>
+                <div class="footer-info">
+                    <p class="footer-brand">سامانه نظرسنجی</p>
+                    <p class="footer-copyright">© {{ currentYear }}</p>
+                </div>
+            </div>
+            <div class="footer-right">
+                <div class="footer-links">
+                    <a class="footer-link" href="#">راهنما</a>
+                    <span class="footer-divider">•</span>
+                    <a class="footer-link" href="#">پشتیبانی</a>
+                </div>
+                <p class="footer-version">نسخه ۱.۰.۰</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ─── Loading ────────────────────────────────────────────────── -->
+    @if (isLoading()) {
+    <div class="global-loading-overlay active">
+        <div class="loading-content">
+            <div class="loading-spinner">
+                <div class="spinner-ring ring-1"></div>
+                <div class="spinner-ring ring-2"></div>
+                <div class="spinner-ring ring-3"></div>
+            </div>
+            <p class="loading-text">در حال بارگذاری...</p>
+            <div class="loading-dots">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            </div>
+        </div>
+    </div>
+    }
+
+    <!-- ─── Offline ─────────────────────────────────────────────────── -->
+    @if (!isOnline()) {
+    <div class="offline-indicator">
+        <div class="offline-content">
+            <i class="fas fa-wifi-slash"></i>
+            <span>اتصال اینترنت قطع است</span>
+        </div>
+    </div>
+    }
+</div>

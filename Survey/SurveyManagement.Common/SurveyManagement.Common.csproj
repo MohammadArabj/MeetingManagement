@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Question\**" />
+    <Compile Remove="Response\**" />
+    <Compile Remove="SurveyAccess\**" />
+    <Compile Remove="Survey\**" />
+    <EmbeddedResource Remove="Question\**" />
+    <EmbeddedResource Remove="Response\**" />
+    <EmbeddedResource Remove="SurveyAccess\**" />
+    <EmbeddedResource Remove="Survey\**" />
+    <None Remove="Question\**" />
+    <None Remove="Response\**" />
+    <None Remove="SurveyAccess\**" />
+    <None Remove="Survey\**" />
+  </ItemGroup>
+
+</Project>

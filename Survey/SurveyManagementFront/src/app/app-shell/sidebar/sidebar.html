@@ -1,0 +1,46 @@
+<!-- Mobile overlay -->
+@if (open()) {
+<div class="sb-overlay" (click)="closeSidebar()"></div>
+}
+
+<aside class="sidebar" [class.open]="open()" [class.collapsed]="collapsed()">
+
+  <div class="sb-head">
+    <div class="sb-title">
+      <div class="dot"></div>
+      <div class="t">پنل نظرسنجی</div>
+    </div>
+
+    <button class="sb-btn" type="button" (click)="toggleCollapse()" aria-label="جمع/باز">
+      <i class="fa" [class.fa-angle-double-left]="!collapsed()" [class.fa-angle-double-right]="collapsed()"></i>
+    </button>
+  </div>
+
+  <div class="sb-search">
+    <i class="fa fa-search"></i>
+    <input type="text" [value]="q()" (input)="q.set(($any($event.target).value))" placeholder="جستجو در منو..." />
+  </div>
+
+  <div class="sb-body">
+    @for (g of grouped(); track g.section) {
+    <div class="sb-section">
+      <div class="sb-section-title">{{ g.section }}</div>
+
+      @for (it of g.items; track it.route) {
+      <a class="sb-item" [routerLink]="it.route" routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: it.exact ?? false }">
+        <i class="{{ it.icon }}"></i>
+        <span class="lbl">{{ it.label }}</span>
+      </a>
+      }
+    </div>
+    }
+  </div>
+
+  <div class="sb-foot">
+    <div class="chip">
+      <i class="fa fa-shield-alt"></i>
+      <span>Secure • On-Prem</span>
+    </div>
+  </div>
+</aside>

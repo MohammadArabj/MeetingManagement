@@ -1,0 +1,159 @@
+
+  @if (loading()) {
+  <!-- Loading State -->
+  <div style="text-align:center;padding:80px 0">
+    <div
+      style="display:inline-block;width:50px;height:50px;border:4px solid var(--line);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite">
+    </div>
+    <p class="muted" style="margin-top:20px">در حال بارگذاری سوالات...</p>
+  </div>
+  } @else {
+  <!-- Page Header -->
+  <div class="pageHead">
+    <div>
+      <h1 class="h1">سوالات نظرسنجی</h1>
+      <p class="sub">مدیریت، ویرایش و مرتب‌سازی سوالات</p>
+    </div>
+
+    <div class="row">
+      <button type="button" class="btn ghost" (click)="backToSurveys()">
+        <i class="fa fa-arrow-right"></i>
+        بازگشت
+      </button>
+
+      <button type="button" class="btn primary" (click)="addNewQuestion()" hasPermission="SV_Questions_Create">
+        <i class="fa fa-plus"></i>
+        افزودن سوال
+      </button>
+    </div>
+  </div>
+
+  <section class="card pad-lg">
+    @if (!hasQuestions()) {
+    <!-- ═══════════════════════════════════════════════════════════════
+             Empty State - راهنمای گام‌به‌گام
+             ═══════════════════════════════════════════════════════════════ -->
+    <div style="max-width:600px;margin:0 auto;padding:48px 24px;text-align:center">
+
+      <!-- آیکون بزرگ -->
+      <div style="font-size:5rem;margin-bottom:24px;opacity:0.9">❓</div>
+
+      <!-- عنوان اصلی -->
+      <h2 class="h2" style="margin-bottom:12px;color:var(--ink)">
+        هنوز سوالی اضافه نشده است
+      </h2>
+
+      <!-- توضیح -->
+      <p class="muted" style="font-size:1rem;line-height:1.7;margin-bottom:32px">
+        برای شروع، اولین سوال خود را اضافه کنید.<br />
+        می‌توانید انواع مختلفی از سوالات مانند چندگزینه‌ای، متنی، امتیازدهی و ... ایجاد کنید.
+      </p>
+
+      <!-- دکمه اصلی -->
+      <button type="button" class="btn primary" style="min-width:200px;height:52px;font-size:1.05rem"
+        (click)="addNewQuestion()">
+        <i class="fa fa-plus" style="margin-left:8px"></i>
+        افزودن اولین سوال
+      </button>
+
+      <div class="sp-24"></div>
+
+      <!-- راهنمای سریع -->
+      <div
+        style="background:rgba(29,78,216,0.05);border:1px solid rgba(29,78,216,0.2);border-radius:18px;padding:24px;text-align:right">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          <div
+            style="width:40px;height:40px;background:var(--primary);border-radius:12px;display:grid;place-items:center">
+            <i class="fa fa-lightbulb" style="color:#fff;font-size:1.2rem"></i>
+          </div>
+          <h3 style="margin:0;font-size:1.1rem;font-weight:900">نکات مهم</h3>
+        </div>
+
+        <ul style="list-style:none;padding:0;margin:0;text-align:right">
+          <li style="padding:10px 0;border-bottom:1px solid rgba(148,163,184,0.15)">
+            <div style="display:flex;gap:12px">
+              <span style="color:var(--primary);font-weight:900">۱.</span>
+              <span>می‌توانید ترتیب سوالات را با drag & drop تغییر دهید</span>
+            </div>
+          </li>
+          <li style="padding:10px 0;border-bottom:1px solid rgba(148,163,184,0.15)">
+            <div style="display:flex;gap:12px">
+              <span style="color:var(--primary);font-weight:900">۲.</span>
+              <span>امکان تعریف منطق شرطی برای نمایش یا پرش سوالات</span>
+            </div>
+          </li>
+          <li style="padding:10px 0">
+            <div style="display:flex;gap:12px">
+              <span style="color:var(--primary);font-weight:900">۳.</span>
+              <span>می‌توانید هر زمان به این صفحه بازگردید و سوالات جدید اضافه کنید</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+    } @else {
+    <!-- ═══════════════════════════════════════════════════════════════
+             Questions Grid - لیست سوالات
+             ═══════════════════════════════════════════════════════════════ -->
+
+    <!-- Info Bar -->
+    <div
+      style="display:flex;gap:12px;padding:12px 16px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:14px;margin-bottom:16px">
+      <i class="fa fa-info-circle" style="color:var(--primary);font-size:1.2rem;margin-top:2px"></i>
+      <div style="flex:1">
+        <p style="margin:0;color:var(--ink);font-weight:800;line-height:1.6">
+          برای تغییر ترتیب سوالات، آنها را بگیرید و به موقعیت مورد نظر بکشید
+        </p>
+      </div>
+    </div>
+
+    <!-- Grid -->
+    <div class="grid-container">
+      <ag-grid-angular #agGrid id="questionsGrid" class="ag-theme-material ag-grid-custom font-sahel"
+        style="width: 100%; height: 640px;" [rowData]="questions()" [gridOptions]="gridOptions()" [modules]="modules()"
+        [rowDragManaged]="true" (gridReady)="onGridReady($event)">
+      </ag-grid-angular>
+    </div>
+
+    <div class="sp-12"></div>
+
+    <!-- Footer Actions -->
+    <div class="row">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="badge ok" style="font-size:0.9rem">
+          <i class="fa fa-check-circle"></i>
+          {{ questions().length }} سوال
+        </span>
+        <span class="muted small">
+          می‌توانید سوالات بیشتری اضافه کنید یا به مرحله پابلیش بروید
+        </span>
+      </div>
+
+      <div class="row">
+        <button type="button" class="btn sm ghost" (click)="addNewQuestion()">
+          <i class="fa fa-plus"></i>
+          افزودن سوال جدید
+        </button>
+      </div>
+    </div>
+    }
+  </section>
+  }
+
+<style>
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .ag-grid-custom {
+    border-radius: var(--r2);
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+
+  .sp-24 {
+    height: 24px;
+  }
+</style>

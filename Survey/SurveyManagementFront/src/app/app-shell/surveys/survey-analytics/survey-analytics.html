@@ -1,0 +1,630 @@
+<div class="analyticsWrap">
+
+    <div class="analyticsToolbar">
+        <div class="analyticsToolbar__tabs">
+            <button type="button" class="tabBtn" [class.active]="activeTab() === 'overview'"
+                (click)="setTab('overview')">
+                <i class="fa fa-chart-pie"></i> نمای کلی
+            </button>
+            <button type="button" class="tabBtn" [class.active]="activeTab() === 'dashboard'"
+                (click)="setTab('dashboard')">
+                <i class="fa fa-table-cells-large"></i> نمای جامع همه سوالات
+            </button>
+            <button type="button" class="tabBtn" [class.active]="activeTab() === 'questions'"
+                (click)="setTab('questions')">
+                <i class="fa fa-list-check"></i> سوال به سوال
+            </button>
+        </div>
+
+        <div class="analyticsToolbar__actions">
+            <button type="button" class="btn sm ghost" (click)="refresh()" [disabled]="loading()">
+                <i class="fa fa-sync" [class.fa-spin]="loading()"></i>
+                بروزرسانی
+            </button>
+
+            <button type="button" class="btn sm outline" (click)="exportToHtml()"
+                [disabled]="!hasData() || exportingHtml()">
+                @if (exportingHtml()) {
+                <i class="fa fa-spinner fa-spin"></i>
+                } @else {
+                <i class="fa fa-globe"></i>
+                }
+                داشبورد HTML
+            </button>
+
+            <button type="button" class="btn primary" (click)="exportToExcel()"
+                [disabled]="!hasData() || exportingExcel()">
+                @if (exportingExcel()) {
+                <i class="fa fa-spinner fa-spin"></i>
+                در حال تولید فایل...
+                } @else {
+                <i class="fa fa-file-excel"></i>
+                خروجی Excel
+                }
+            </button>
+        </div>
+    </div>
+
+    <div class="sp-16"></div>
+
+    @if (loading() && !analytics()) {
+    <div class="analyticsLoading">
+        <div class="analyticsSpinner"></div>
+        <p>در حال محاسبه تحلیل نظرسنجی...</p>
+    </div>
+    }
+
+    @if (!loading() && analytics() && !hasData()) {
+    <div class="analyticsEmpty">
+        <i class="fa fa-chart-line fa-3x"></i>
+        <h3>هنوز داده‌ای برای تحلیل وجود ندارد</h3>
+        <p>به‌محض دریافت اولین پاسخ، تحلیل‌ها اینجا نمایش داده می‌شوند.</p>
+    </div>
+    }
+
+    @if (analytics() && hasData()) {
+    <!-- ============ نمای کلی ============ -->
+    @if (activeTab() === 'overview') {
+    <div class="overviewGrid">
+
+        <!-- کارت‌های آماری -->
+        <div class="statCards">
+            <div class="statCard">
+                <div class="statCard__icon blue"><i class="fa fa-users"></i></div>
+                <div class="statCard__body">
+                    <span class="statCard__value">{{ analytics()!.overview.totalResponses }}</span>
+                    <span class="statCard__label">کل پاسخ‌ها</span>
+                </div>
+            </div>
+
+            <div class="statCard">
+                <div class="statCard__icon orange"><i class="fa fa-clock"></i></div>
+                <div class="statCard__body">
+                    <span class="statCard__value">{{ analytics()!.overview.averageTimeSpentMinutes }} دقیقه</span>
+                    <span class="statCard__label">میانگین زمان پاسخ‌دهی</span>
+                </div>
+            </div>
+
+            @if (analytics()!.overview.fastestCompletionTimeText) {
+            <div class="statCard">
+                <div class="statCard__icon cyan"><i class="fa fa-bolt"></i></div>
+                <div class="statCard__body">
+                    <span class="statCard__value">{{ analytics()!.overview.fastestCompletionTimeText }}</span>
+                    <span class="statCard__label">سریع‌ترین پاسخ</span>
+                </div>
+            </div>
+            }
+
+            @if (analytics()!.overview.medianCompletionTimeText) {
+            <div class="statCard">
+                <div class="statCard__icon pink"><i class="fa fa-stopwatch"></i></div>
+                <div class="statCard__body">
+                    <span class="statCard__value">{{ analytics()!.overview.medianCompletionTimeText }}</span>
+                    <span class="statCard__label">میانه زمان پاسخ‌دهی</span>
+                </div>
+            </div>
+            }
+
+            @if (analytics()!.overview.slowestCompletionTimeText) {
+            <div class="statCard">
+                <div class="statCard__icon purple"><i class="fa fa-hourglass-end"></i></div>
+                <div class="statCard__body">
+                    <span class="statCard__value">{{ analytics()!.overview.slowestCompletionTimeText }}</span>
+                    <span class="statCard__label">کندترین پاسخ</span>
+                </div>
+            </div>
+            }
+        </div>
+
+        <!-- ✅ هشدار محرمانگی — اگه به‌خاطر k-anonymity گروهی سرکوب شده باشه -->
+        @if (analytics()!.overview.suppressedForPrivacy > 0) {
+        <div class="sp-12"></div>
+        <div class="privacyNotice">
+            <i class="fa fa-shield-halved"></i>
+            به‌دلیل حفظ محرمانگی، {{ analytics()!.overview.suppressedForPrivacy }} پاسخ در دسته‌های کوچک (کمتر از ۵
+            نفر) به‌صورت مجزا نمایش داده نمی‌شوند و در ردیف «سایر» جمع شده‌اند.
+        </div>
+        }
+
+        <div class="sp-16"></div>
+
+        <!-- نمودارهای دموگرافیک -->
+        <div class="chartsGrid">
+
+            @if (ageChartData(); as data) {
+            <div class="chartCard">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-birthday-cake"></i> سن</h4>
+                </div>
+                <app-chart-canvas type="pie" [data]="data" [options]="doughnutOptions"
+                    [height]="240"></app-chart-canvas>
+            </div>
+            }
+            @if (genderChartData(); as data) {
+            <div class="chartCard">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-venus-mars"></i> جنسیت</h4>
+                </div>
+                <app-chart-canvas type="pie" [data]="data" [options]="doughnutOptions"
+                    [height]="240"></app-chart-canvas>
+            </div>
+            }
+            @if (officeChartData(); as data) {
+            <div class="chartCard">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-building"></i> امور</h4>
+                </div>
+                <app-chart-canvas type="pie" [data]="data" [options]="doughnutOptions"
+                    [height]="240"></app-chart-canvas>
+            </div>
+            }
+            @if (employmentTypeChartData(); as data) {
+            <div class="chartCard">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-id-badge"></i> نوع استخدام</h4>
+                </div>
+                <app-chart-canvas type="pie" [data]="data" [options]="doughnutOptions"
+                    [height]="240"></app-chart-canvas>
+            </div>
+            }
+            @if (educationChartData(); as data) {
+            <div class="chartCard">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-graduation-cap"></i> مدرک تحصیلی</h4>
+                </div>
+                <app-chart-canvas type="pie" [data]="data" [options]="doughnutOptions"
+                    [height]="240"></app-chart-canvas>
+            </div>
+            }
+            @if (shiftWorkerChartData(); as data) {
+            <div class="chartCard">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-business-time"></i> نوبت‌کاری</h4>
+                </div>
+                <app-chart-canvas type="pie" [data]="data" [options]="doughnutOptions"
+                    [height]="240"></app-chart-canvas>
+            </div>
+            }
+            @if (experienceChartData(); as data) {
+            <div class="chartCard">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-hourglass-half"></i> سابقه</h4>
+                </div>
+                <app-chart-canvas type="pie" [data]="data" [options]="doughnutOptions"
+                    [height]="240"></app-chart-canvas>
+            </div>
+            }
+            @if (gradeChartData(); as data) {
+            <div class="chartCard">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-layer-group"></i> گرید سازمانی</h4>
+                </div>
+                <app-chart-canvas type="pie" [data]="data" [options]="doughnutOptions"
+                    [height]="240"></app-chart-canvas>
+            </div>
+            }
+            @if (groupChartData(); as data) {
+            <div class="chartCard">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-sitemap"></i> گروه سازمانی</h4>
+                </div>
+                <app-chart-canvas type="pie" [data]="data" [options]="doughnutOptions"
+                    [height]="240"></app-chart-canvas>
+            </div>
+            }
+
+            @if (trendChartData(); as data) {
+            <div class="chartCard wide">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-chart-line"></i> روند پاسخ‌ها در طول زمان</h4>
+                </div>
+                <app-chart-canvas type="line" [data]="data" [options]="barOptions" [height]="260"></app-chart-canvas>
+            </div>
+            }
+
+            @if (dayOfWeekChartData(); as data) {
+            <div class="chartCard">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-calendar-week"></i> پاسخ‌ها بر اساس روز هفته</h4>
+                </div>
+                <app-chart-canvas type="bar" [data]="data" [options]="barOptions" [height]="240"></app-chart-canvas>
+            </div>
+            }
+
+            @if (hourOfDayChartData(); as data) {
+            <div class="chartCard">
+                <div class="chartCard__head">
+                    <h4><i class="fa fa-clock"></i> پاسخ‌ها بر اساس ساعت روز</h4>
+                </div>
+                <app-chart-canvas type="bar" [data]="data" [options]="barOptions" [height]="240"></app-chart-canvas>
+            </div>
+            }
+
+        </div>
+    </div>
+    }
+
+    <!-- ============ سوال‌به‌سوال ============ -->
+    @if (activeTab() === 'questions') {
+    <div class="questionsAnalytics">
+
+        <div class="questionsSearchBox">
+            <i class="fa fa-search"></i>
+            <input type="search" class="in" placeholder="جستجو در سوالات..." [ngModel]="questionSearchTerm()"
+                (ngModelChange)="questionSearchTerm.set($event)">
+        </div>
+
+        <div class="sp-12"></div>
+
+        @for (q of filteredQuestions(); track q.questionGuid) {
+        <div class="questionAnalyticsCard">
+
+            <div class="questionAnalyticsCard__head" (click)="toggleQuestion(q.questionGuid)">
+                <div class="questionAnalyticsCard__headMain">
+                    <span class="qTypeBadge">{{ q.questionTypeName }}</span>
+                    <h4>{{ q.questionText }}</h4>
+                </div>
+                <div class="questionAnalyticsCard__headMeta">
+                    <span class="answerRateBadge">
+                        <i class="fa fa-reply"></i>
+                        {{ q.totalAnswered }} پاسخ ({{ q.answerRate }}%)
+                    </span>
+                    @if (q.totalSkipped > 0) {
+                    <span class="skipBadge">
+                        <i class="fa fa-forward"></i>
+                        {{ q.totalSkipped }} رد شده
+                    </span>
+                    }
+                    <i class="fa" [class.fa-chevron-down]="!isExpanded(q.questionGuid)"
+                        [class.fa-chevron-up]="isExpanded(q.questionGuid)"></i>
+                </div>
+            </div>
+
+            @if (isExpanded(q.questionGuid)) {
+            <div class="questionAnalyticsCard__body">
+
+                <!-- سوالات گزینه‌ای -->
+                @if (isChoiceQuestion(q)) {
+                <div class="choiceAnalytics">
+                    <div class="choiceAnalytics__chart">
+                        <app-chart-canvas type="doughnut" [data]="optionChartData(q)" [options]="doughnutOptions"
+                            [height]="260"></app-chart-canvas>
+                    </div>
+                    <div class="choiceAnalytics__list">
+                        @for (opt of q.optionStats; track opt.optionText) {
+                        <div class="choiceRow">
+                            <span class="choiceRow__dot" [style.background]="opt.color || '#1d4ed8'"></span>
+                            <span class="choiceRow__label">{{ opt.optionText }}</span>
+                            <div class="choiceRow__bar">
+                                <div class="choiceRow__barFill" [style.width.%]="opt.percentage"
+                                    [style.background]="opt.color || '#1d4ed8'"></div>
+                            </div>
+                            <span class="choiceRow__value">{{ opt.count }} ({{ opt.percentage }}%)</span>
+                        </div>
+                        }
+                    </div>
+                </div>
+                }
+
+                <!-- سوالات عددی/امتیازی -->
+                @if (isNumericQuestion(q)) {
+                <div class="numericAnalytics">
+                    <div class="numericStatsGrid">
+                        <div class="numStatCard">
+                            <span class="numStatCard__value">{{ q.numericStats!.average }}</span>
+                            <span class="numStatCard__label">میانگین</span>
+                        </div>
+                        <div class="numStatCard">
+                            <span class="numStatCard__value">{{ q.numericStats!.median }}</span>
+                            <span class="numStatCard__label">میانه</span>
+                        </div>
+                        <div class="numStatCard">
+                            <span class="numStatCard__value">{{ q.numericStats!.min }}</span>
+                            <span class="numStatCard__label">حداقل</span>
+                        </div>
+                        <div class="numStatCard">
+                            <span class="numStatCard__value">{{ q.numericStats!.max }}</span>
+                            <span class="numStatCard__label">حداکثر</span>
+                        </div>
+                    </div>
+                    <div class="sp-12"></div>
+                    <app-chart-canvas type="bar" [data]="numericHistogramData(q)" [options]="barOptions"
+                        [height]="220"></app-chart-canvas>
+                </div>
+                }
+
+                <!-- سوالات متنی -->
+                @if (isTextQuestion(q)) {
+                <div class="textAnalytics">
+
+                    <div class="textAnalytics__topRow">
+                        <div class="sentimentChart">
+                            <app-chart-canvas type="doughnut" [data]="sentimentChartData(q)" [options]="doughnutOptions"
+                                [height]="200"></app-chart-canvas>
+                        </div>
+                        <div class="sentimentStats">
+                            <div class="sentimentStat positive">
+                                <i class="fa fa-smile"></i>
+                                <span>{{ q.textAnalytics!.sentiment.positivePercentage }}% مثبت</span>
+                            </div>
+                            <div class="sentimentStat negative">
+                                <i class="fa fa-frown"></i>
+                                <span>{{ q.textAnalytics!.sentiment.negativePercentage }}% منفی</span>
+                            </div>
+                            <div class="sentimentStat neutral">
+                                <i class="fa fa-meh"></i>
+                                <span>{{ q.textAnalytics!.sentiment.neutralPercentage }}% خنثی</span>
+                            </div>
+                            <div class="textMetaRow">
+                                <span><i class="fa fa-font"></i> میانگین {{ q.textAnalytics!.averageWordCount }}
+                                    کلمه</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (q.textAnalytics!.topWords.length > 0) {
+                    <div class="sp-16"></div>
+                    <div class="wordCloud">
+                        @for (w of q.textAnalytics!.topWords; track w.word) {
+                        <span class="wordTag" [style.fontSize.px]="wordFontSize(w.count, q)">
+                            {{ w.word }}
+                            <small>{{ w.count }}</small>
+                        </span>
+                        }
+                    </div>
+                    }
+
+                    @if (q.textAnalytics!.sentiment.samples.length > 0) {
+                    <div class="sp-16"></div>
+                    <div class="sentimentSamples">
+                        <h5>نمونه پاسخ‌ها</h5>
+                        @for (s of q.textAnalytics!.sentiment.samples; track s.text) {
+                        <div class="sentimentSampleRow" [class]="s.sentiment">
+                            <i class="fa" [class]="sentimentIcon(s.sentiment)"></i>
+                            <span>{{ s.text }}</span>
+                        </div>
+                        }
+                    </div>
+                    }
+                </div>
+                }
+
+                <!-- سوالات تاریخ -->
+                @if (isDateQuestion(q)) {
+                <app-chart-canvas type="bar" [data]="dateChartData(q)" [options]="barOptions"
+                    [height]="220"></app-chart-canvas>
+                }
+
+                <!-- سوالات رتبه‌بندی -->
+                @if (isRankingQuestion(q)) {
+                <app-chart-canvas type="bar" [data]="rankingChartData(q)" [options]="barOptions"
+                    [height]="240"></app-chart-canvas>
+                }
+
+                <!-- سوالات آپلود فایل -->
+                @if (isFileQuestion(q)) {
+                <div class="fileAnalytics">
+                    <i class="fa fa-file-upload"></i>
+                    <span>{{ q.fileUploadCount }} فایل آپلود شده</span>
+                </div>
+                }
+
+            </div>
+            }
+        </div>
+        }
+
+        @if (filteredQuestions().length === 0) {
+        <div class="analyticsEmpty">
+            <i class="fa fa-search fa-2x"></i>
+            <p>سوالی با این عبارت یافت نشد</p>
+        </div>
+        }
+    </div>
+    }
+    <!-- ============ نمای جامع (Dashboard Grid) ============ -->
+    @if (activeTab() === 'dashboard') {
+    <div class="dashboardView">
+
+        <!-- هدر آمار -->
+        <div class="dashboardHead">
+            <div class="dashboardHead__stats">
+                <div class="miniStat">
+                    <span class="miniStat__value">{{ filteredQuestions().length }}</span>
+                    <span class="miniStat__label">سوال</span>
+                </div>
+                <div class="miniStat">
+                    <span class="miniStat__value">{{ averageAnswerRate() }}%</span>
+                    <span class="miniStat__label">میانگین پاسخ‌دهی</span>
+                </div>
+                <div class="miniStat">
+                    <span class="miniStat__value">{{ requiredQuestionsCount() }}</span>
+                    <span class="miniStat__label">الزامی</span>
+                </div>
+                @if (highestAnswerRateQuestion(); as h) {
+                <div class="miniStat highlight-good">
+                    <span class="miniStat__value">{{ h.answerRate }}%</span>
+                    <span class="miniStat__label" [title]="h.questionText">بیشترین</span>
+                </div>
+                }
+                @if (lowestAnswerRateQuestion(); as l) {
+                <div class="miniStat highlight-warn">
+                    <span class="miniStat__value">{{ l.answerRate }}%</span>
+                    <span class="miniStat__label" [title]="l.questionText">کمترین</span>
+                </div>
+                }
+            </div>
+
+            <div class="dashboardHead__controls">
+                <div class="densitySwitch">
+                    <button type="button" class="densitySwitch__btn" [class.active]="dashboardDensity() === 'compact'"
+                        (click)="setDensity('compact')" title="نمای فشرده">
+                        <i class="fa fa-table-cells"></i>
+                    </button>
+                    <button type="button" class="densitySwitch__btn"
+                        [class.active]="dashboardDensity() === 'comfortable'" (click)="setDensity('comfortable')"
+                        title="نمای راحت">
+                        <i class="fa fa-table-cells-large"></i>
+                    </button>
+                </div>
+
+                <div class="questionsSearchBox">
+                    <i class="fa fa-search"></i>
+                    <input type="search" class="in" placeholder="جستجو در سوالات..." [ngModel]="questionSearchTerm()"
+                        (ngModelChange)="questionSearchTerm.set($event)">
+                </div>
+            </div>
+        </div>
+
+        <div class="sp-12"></div>
+
+        <div class="dashboardGrid" [class]="'density-' + dashboardDensity()">
+            <!-- بقیه @for همان قبلی بدون تغییر، فقط dashCard هم کلاس density می‌گیرد -->
+            @for (q of filteredQuestions(); track q.questionGuid) {
+            <div class="dashCard" [class]="'type-' + typeColorClass(q) + ' density-' + dashboardDensity()">
+                <!-- محتوای کارت دقیقاً همان قبلی -->
+
+                <div class="dashCard__head">
+                    <div class="dashCard__headIcon"><i class="fa" [class]="typeIcon(q)"></i></div>
+                    <div class="dashCard__headText">
+                        <span class="dashCard__order">سوال {{ q.sortOrder }}</span>
+                        <h4>{{ q.questionText }}</h4>
+                    </div>
+                    @if (q.isRequired) {
+                    <span class="reqDot" title="سوال الزامی"></span>
+                    }
+                </div>
+
+                <div class="dashCard__metaRow">
+                    <span class="qTypeBadge">{{ q.questionTypeName }}</span>
+                    <span class="answerRateBadge"><i class="fa fa-reply"></i> {{ q.totalAnswered }} پاسخ</span>
+                    @if (q.totalSkipped > 0) {
+                    <span class="skipBadge"><i class="fa fa-forward"></i> {{ q.totalSkipped }}</span>
+                    }
+                    <span class="answerRateMini" [class.low]="q.answerRate < 50">{{ q.answerRate }}%</span>
+                </div>
+
+                <div class="dashCard__progressTrack">
+                    <div class="dashCard__progressFill" [style.width.%]="q.answerRate"></div>
+                </div>
+
+                <div class="dashCard__body">
+
+                    <!-- سوالات گزینه‌ای -->
+                    @if (isChoiceQuestion(q)) {
+                    <div class="dashChoice">
+                        <div class="dashChoice__chart">
+                            <app-chart-canvas type="doughnut" [data]="optionChartData(q)"
+                                [options]="miniDoughnutOptions" [height]="140"></app-chart-canvas>
+                        </div>
+                        <div class="dashChoice__list">
+                            @for (opt of q.optionStats!.slice(0, 4); track opt.optionText) {
+                            <div class="dashChoiceRow">
+                                <span class="dashChoiceRow__dot" [style.background]="opt.color || '#1d4ed8'"></span>
+                                <span class="dashChoiceRow__label">{{ opt.optionText }}</span>
+                                <span class="dashChoiceRow__value">{{ opt.percentage }}%</span>
+                            </div>
+                            }
+                            @if (q.optionStats!.length > 4) {
+                            <div class="dashChoiceRow__more">+{{ q.optionStats!.length - 4 }} گزینه دیگر</div>
+                            }
+                        </div>
+                    </div>
+                    }
+
+                    <!-- سوالات عددی -->
+                    @if (isNumericQuestion(q)) {
+                    <div class="dashNumeric">
+                        <div class="dashNumeric__stats">
+                            <div class="dashNumeric__stat">
+                                <span>{{ q.numericStats!.average }}</span>
+                                <small>میانگین</small>
+                            </div>
+                            <div class="dashNumeric__stat">
+                                <span>{{ q.numericStats!.min }}</span>
+                                <small>حداقل</small>
+                            </div>
+                            <div class="dashNumeric__stat">
+                                <span>{{ q.numericStats!.max }}</span>
+                                <small>حداکثر</small>
+                            </div>
+                        </div>
+                        <app-chart-canvas type="bar" [data]="numericHistogramData(q)" [options]="miniBarOptions"
+                            [height]="110"></app-chart-canvas>
+                    </div>
+                    }
+
+                    <!-- سوالات متنی -->
+                    @if (isTextQuestion(q)) {
+                    <div class="dashText">
+                        <div class="sentimentBarMini">
+                            <span class="seg positive"
+                                [style.width.%]="q.textAnalytics!.sentiment.positivePercentage"></span>
+                            <span class="seg negative"
+                                [style.width.%]="q.textAnalytics!.sentiment.negativePercentage"></span>
+                            <span class="seg neutral"
+                                [style.width.%]="q.textAnalytics!.sentiment.neutralPercentage"></span>
+                        </div>
+                        <div class="sentimentLegendMini">
+                            <span class="positive"><i class="fa fa-smile"></i> {{
+                                q.textAnalytics!.sentiment.positivePercentage }}%</span>
+                            <span class="negative"><i class="fa fa-frown"></i> {{
+                                q.textAnalytics!.sentiment.negativePercentage }}%</span>
+                            <span class="neutral"><i class="fa fa-meh"></i> {{
+                                q.textAnalytics!.sentiment.neutralPercentage
+                                }}%</span>
+                        </div>
+
+                        @if (q.textAnalytics!.topWords.length > 0) {
+                        <div class="dashWordCloud">
+                            @for (w of q.textAnalytics!.topWords.slice(0, 10); track w.word) {
+                            <span class="miniWordTag">{{ w.word }}</span>
+                            }
+                        </div>
+                        }
+                    </div>
+                    }
+
+                    <!-- سوالات تاریخ -->
+                    @if (isDateQuestion(q)) {
+                    <app-chart-canvas type="bar" [data]="dateChartData(q)" [options]="miniBarOptions"
+                        [height]="110"></app-chart-canvas>
+                    }
+
+                    <!-- سوالات رتبه‌بندی -->
+                    @if (isRankingQuestion(q)) {
+                    <app-chart-canvas type="bar" [data]="rankingChartData(q)" [options]="miniBarOptions"
+                        [height]="110"></app-chart-canvas>
+                    }
+
+                    <!-- سوالات آپلود فایل -->
+                    @if (isFileQuestion(q)) {
+                    <div class="dashFile">
+                        <i class="fa fa-file-arrow-up"></i>
+                        <span>{{ q.fileUploadCount }} فایل آپلود شده</span>
+                    </div>
+                    }
+
+                    @if (q.totalAnswered === 0) {
+                    <div class="dashEmpty">
+                        <i class="fa fa-inbox"></i>
+                        هنوز پاسخی ثبت نشده
+                    </div>
+                    }
+
+                </div>
+            </div>
+            }
+        </div>
+
+        @if (filteredQuestions().length === 0) {
+        <div class="analyticsEmpty">
+            <i class="fa fa-search fa-2x"></i>
+            <p>سوالی با این عبارت یافت نشد</p>
+        </div>
+        }
+    </div>
+    }
+    }
+
+</div>

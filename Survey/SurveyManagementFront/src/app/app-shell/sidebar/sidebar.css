@@ -1,0 +1,465 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Survey Sidebar — جایگزین کامل sidebar.component.css
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+
+/* ─── Mobile overlay ─────────────────────────────────────────────── */
+.sb-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .45);
+    backdrop-filter: blur(4px);
+    z-index: 998;
+    animation: fadeOverlay 200ms ease;
+}
+
+@keyframes fadeOverlay {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* ─── Sidebar container ──────────────────────────────────────────── */
+.sidebar {
+    /* در RTL این سمت راست قرار می‌گیرد (اولین فرزند flex-row) */
+    width: var(--sb-w);
+    min-width: var(--sb-w);
+    height: 100%;
+    /* پر کردن کامل ارتفاع app-shell-body */
+    display: flex;
+    flex-direction: column;
+    background: var(--sb-bg);
+    border-left: 1px solid var(--sb-border);
+    /* در RTL: لبه‌ی چپ (رو به محتوا) */
+    overflow: hidden;
+    transition: width var(--sb-ease), min-width var(--sb-ease);
+    flex-shrink: 0;
+    position: relative;
+}
+
+/* سایه ظریف برای جدایش از محتوا */
+.sidebar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 20px;
+    height: 100%;
+    background: linear-gradient(to left, rgba(0, 0, 0, .04) 0%, transparent 100%);
+    pointer-events: none;
+}
+
+.sidebar.collapsed {
+    width: var(--sb-w-collapsed);
+    min-width: var(--sb-w-collapsed);
+}
+
+/* ─── Head ───────────────────────────────────────────────────────── */
+.sb-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: 0 .875rem;
+    height: 60px;
+    border-bottom: 1px solid var(--sb-border);
+    flex-shrink: 0;
+    background: var(--sb-bg);
+}
+
+/* عنوان سایدبار */
+.sb-title {
+    display: flex;
+    align-items: center;
+    gap: .625rem;
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+    transition: opacity var(--sb-ease), transform var(--sb-ease);
+}
+
+.collapsed .sb-title {
+    opacity: 0;
+    transform: translateX(8px);
+    pointer-events: none;
+}
+
+.sb-title .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--grad);
+    flex-shrink: 0;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, .18);
+}
+
+.sb-title .t {
+    font-size: .875rem;
+    font-weight: 700;
+    color: var(--sb-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -.01em;
+}
+
+/* دکمه collapse */
+.sb-btn {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid var(--sb-border);
+    border-radius: 7px;
+    background: var(--sb-surface);
+    color: var(--sb-muted);
+    cursor: pointer;
+    font-size: .8125rem;
+    transition: background 140ms ease, color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.sb-btn:hover {
+    background: var(--sb-active-bg);
+    color: var(--sb-active-color);
+    border-color: rgba(102, 126, 234, .3);
+    transform: scale(1.06);
+}
+
+.collapsed .sb-btn {
+    margin: 0 auto;
+}
+
+/* ─── Search ─────────────────────────────────────────────────────── */
+.sb-search {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: .625rem .75rem;
+    padding: .5rem .75rem;
+    background: var(--sb-surface);
+    border: 1px solid var(--sb-border);
+    border-radius: 8px;
+    flex-shrink: 0;
+    transition: opacity var(--sb-ease), margin var(--sb-ease);
+}
+
+.sb-search:focus-within {
+    border-color: rgba(102, 126, 234, .4);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, .08);
+}
+
+.sb-search .fa {
+    color: var(--sb-muted);
+    font-size: .75rem;
+    flex-shrink: 0;
+}
+
+.sb-search input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: .8125rem;
+    color: var(--sb-text);
+    font-family: inherit;
+    direction: rtl;
+}
+
+.sb-search input::placeholder {
+    color: var(--sb-muted);
+}
+
+/* مخفی در حالت collapsed */
+.collapsed .sb-search {
+    opacity: 0;
+    margin: 0 .75rem;
+    height: 0;
+    padding: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+/* ─── Body ───────────────────────────────────────────────────────── */
+.sb-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: .375rem .5rem .75rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--sb-border) transparent;
+}
+
+.sb-body::-webkit-scrollbar {
+    width: 3px;
+}
+
+.sb-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sb-body::-webkit-scrollbar-thumb {
+    background: var(--sb-border);
+    border-radius: 999px;
+}
+
+/* ─── Section ────────────────────────────────────────────────────── */
+.sb-section {
+    margin-bottom: .25rem;
+}
+
+.sb-section+.sb-section {
+    margin-top: .25rem;
+    padding-top: .375rem;
+    border-top: 1px solid var(--sb-border);
+}
+
+.sb-section-title {
+    font-size: .6rem;
+    font-weight: 800;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--sb-muted);
+    padding: .5rem .625rem .25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    opacity: 1;
+    max-height: 32px;
+    transition: opacity var(--sb-ease), max-height var(--sb-ease), padding var(--sb-ease);
+}
+
+.collapsed .sb-section-title {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+/* ─── Nav item ───────────────────────────────────────────────────── */
+.sb-item {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .575rem .75rem;
+    border-radius: 9px;
+    color: var(--sb-muted);
+    text-decoration: none;
+    font-size: .8125rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    position: relative;
+    transition: background 120ms ease, color 120ms ease, padding 120ms ease;
+    margin-bottom: 2px;
+    direction: rtl;
+}
+
+.sb-item i {
+    font-size: .9375rem;
+    flex-shrink: 0;
+    width: 18px;
+    text-align: center;
+    transition: color 120ms ease, transform 120ms ease;
+}
+
+.sb-item .lbl {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 1;
+    transition: opacity var(--sb-ease);
+}
+
+/* hover */
+.sb-item:hover {
+    background: var(--sb-hover);
+    color: var(--sb-text);
+}
+
+.sb-item:hover i {
+    transform: scale(1.1);
+}
+
+/* active */
+.sb-item.active {
+    background: var(--sb-active-bg);
+    color: var(--sb-text);
+    font-weight: 700;
+}
+
+.sb-item.active i {
+    color: var(--sb-text);
+}
+
+/* خط نشانگر active — سمت چپ (رو به محتوا در RTL) */
+.sb-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 20%;
+    bottom: 20%;
+    width: 3px;
+    background: var(--grad);
+    border-radius: 0 3px 3px 0;
+}
+
+/* حالت collapsed */
+.collapsed .sb-item {
+    padding: .575rem 0;
+    justify-content: center;
+    gap: 0;
+}
+
+.collapsed .sb-item .lbl {
+    opacity: 0;
+    width: 0;
+    pointer-events: none;
+}
+
+/* tooltip در حالت collapsed */
+.collapsed .sb-item[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--sb-text);
+    color: var(--sb-bg);
+    font-size: .75rem;
+    font-weight: 600;
+    padding: .3rem .7rem;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 300;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
+    direction: rtl;
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────── */
+.sb-foot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: .75rem .875rem;
+    border-top: 1px solid var(--sb-border);
+    flex-shrink: 0;
+    background: var(--sb-bg);
+}
+
+.sb-foot .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    padding: .3rem .75rem;
+    border-radius: 999px;
+    background: var(--sb-surface);
+    border: 1px solid var(--sb-border);
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    color: var(--sb-muted);
+    white-space: nowrap;
+    transition: opacity var(--sb-ease);
+}
+
+.sb-foot .chip i {
+    font-size: .5625rem;
+    color: #10b981;
+}
+
+.collapsed .sb-foot .chip span {
+    display: none;
+}
+
+.collapsed .sb-foot .chip {
+    padding: .4rem;
+    border-radius: 8px;
+}
+
+/* ─── Mobile ─────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .sb-overlay {
+        display: block;
+    }
+
+    .sidebar {
+        position: fixed;
+        top: 0;
+        right: -100%;
+        /* از سمت راست ظاهر می‌شود */
+        height: 100vh;
+        width: var(--sb-w) !important;
+        min-width: var(--sb-w) !important;
+        z-index: 999;
+        border-left: none;
+        box-shadow: -6px 0 32px rgba(0, 0, 0, .14);
+        transition: right var(--sb-ease);
+    }
+
+    .sidebar.open {
+        right: 0;
+    }
+
+    /* در موبایل همیشه expanded */
+    .sidebar .sb-title {
+        opacity: 1 !important;
+        transform: none !important;
+    }
+
+    .sidebar .sb-search {
+        opacity: 1 !important;
+        height: auto !important;
+        margin: .625rem .75rem !important;
+        padding: .5rem .75rem !important;
+    }
+
+    .sidebar .sb-section-title {
+        opacity: 1 !important;
+        max-height: 32px !important;
+        padding: .5rem .625rem .25rem !important;
+    }
+
+    .sidebar .sb-item {
+        padding: .575rem .75rem !important;
+        justify-content: flex-start !important;
+        gap: .75rem !important;
+    }
+
+    .sidebar .sb-item .lbl {
+        opacity: 1 !important;
+        width: auto !important;
+    }
+
+    .sidebar .sb-foot .chip span {
+        display: inline !important;
+    }
+}
+
+/* ─── Focus & Accessibility ──────────────────────────────────────── */
+.sb-btn:focus-visible,
+.sb-item:focus-visible {
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .sidebar,
+    .sb-item,
+    .sb-btn,
+    .sb-search,
+    .sb-title,
+    .sb-section-title,
+    .sb-foot .chip {
+        transition: none !important;
+    }
+}

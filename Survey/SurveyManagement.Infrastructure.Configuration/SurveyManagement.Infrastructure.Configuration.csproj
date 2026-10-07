@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Autofac.Extras.DynamicProxy" Version="8.1.0" />
+    <PackageReference Include="Epc.Autofac" Version="2.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SurveyManagement.Application\SurveyManagement.Application.csproj" />
+    <ProjectReference Include="..\SurveyManagement.Domain\SurveyManagement.Domain.csproj" />
+    <ProjectReference Include="..\SurveyManagement.Infrastructure.Acl\SurveyManagement.Infrastructure.Acl.csproj" />
+    <ProjectReference Include="..\SurveyManagement.Infrastructure.Persistence\SurveyManagement.Infrastructure.Persistence.csproj" />
+    <ProjectReference Include="..\SurveyManagement.Infrastructure.Query\SurveyManagement.Infrastructure.Query.csproj" />
+    <ProjectReference Include="..\SurveyManagement.Presentation.Facade.Command\SurveyManagement.Presentation.Facade.Command.csproj" />
+    <ProjectReference Include="..\SurveyManagement.Presentation.Facade.Query\SurveyManagement.Presentation.Facade.Query.csproj" />
+  </ItemGroup>
+
+</Project>

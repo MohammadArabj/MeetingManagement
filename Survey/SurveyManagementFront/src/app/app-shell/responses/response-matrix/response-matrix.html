@@ -1,0 +1,179 @@
+<div class="matrixWrap">
+
+    <div class="matrixToolbar">
+        <div class="matrixToolbar__right">
+            <div class="matrixSearch">
+                <i class="fa fa-search matrixSearch__icon"></i>
+                <input type="search" class="in" placeholder="جستجو در دموگرافیک یا پاسخ‌ها..." [ngModel]="searchTerm()"
+                    (ngModelChange)="searchTerm.set($event)">
+            </div>
+            @if (matrix()) {
+            <span class="matrixCount">
+                <i class="fa fa-users"></i>
+                {{ filteredRows().length }} از {{ matrix()!.rows.length }} پاسخ
+            </span>
+            <span class="matrixCount alt">
+                <i class="fa fa-list-ol"></i>
+                {{ questions().length }} سوال
+            </span>
+            }
+        </div>
+
+        <div class="matrixToolbar__left">
+            <button type="button" class="btn sm ghost" (click)="refresh()" [disabled]="loading()">
+                <i class="fa fa-sync" [class.fa-spin]="loading()"></i>
+                بروزرسانی
+            </button>
+            <button type="button" class="btn primary" (click)="openExportDialog()"
+                [disabled]="exporting() || !hasData()">
+                @if (exporting()) {
+                <i class="fa fa-spinner fa-spin"></i>
+                در حال تولید فایل...
+                } @else {
+                <i class="fa fa-file-excel"></i>
+                خروجی Excel
+                }
+            </button>
+        </div>
+    </div>
+
+    <div class="sp-12"></div>
+
+    @if (loading() && !matrix()) {
+    <div class="matrixLoading">
+        <div class="matrixSpinner"></div>
+        <p>در حال بارگذاری ماتریس پاسخ‌ها...</p>
+    </div>
+    }
+
+    @if (!loading() && matrix() && !hasData()) {
+    <div class="matrixEmpty">
+        <i class="fa fa-table fa-3x"></i>
+        <h3>هنوز پاسخی ثبت نشده</h3>
+        <p>به‌محض دریافت اولین پاسخ کامل، جدول اینجا نمایش داده می‌شود.</p>
+    </div>
+    }
+
+    @if (matrix() && hasData()) {
+    <div class="matrixTableScroll">
+        <table class="matrixTable">
+            <thead>
+                <tr>
+                    <th class="col-sticky col-idx">#</th>
+                    <th class="col-demo">سن</th>
+                    <th class="col-demo">جنسیت</th>
+                    <th class="col-demo">امور</th>
+                    <th class="col-demo">نوع استخدام</th>
+                    <th class="col-demo">مدرک تحصیلی</th>
+                    <th class="col-demo">نوبت‌کاری</th>
+                    <th class="col-demo">سابقه</th>
+                    <th class="col-demo">گرید سازمانی</th>
+                    <th class="col-demo">گروه سازمانی</th>
+                    <th class="col-date">تاریخ اتمام</th>
+                    <th class="col-time">زمان</th>
+                    @for (q of questions(); track q.questionGuid) {
+                    <th class="col-question" [title]="q.questionText">
+                        <span class="qHeaderText">{{ q.questionText }}</span>
+                        @if (q.isRequired) { <span class="qRequiredStar">*</span> }
+                    </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @for (row of filteredRows(); track row.responseGuid; let i = $index) {
+                <tr>
+                    <td class="col-sticky col-idx">{{ i + 1 }}</td>
+                    <td class="col-demo">{{ row.age ?? '-' }}</td>
+                    <td class="col-demo">{{ row.gender || '-' }}</td>
+                    <td class="col-demo">{{ row.office || '-' }}</td>
+                    <td class="col-demo">{{ row.employmentType || '-' }}</td>
+                    <td class="col-demo">{{ row.education || '-' }}</td>
+                    <td class="col-demo">{{ row.shiftWorker || '-' }}</td>
+                    <td class="col-demo">{{ row.experienceYears ?? '-' }}</td>
+                    <td class="col-demo">{{ row.organizationalGrade || '-' }}</td>
+                    <td class="col-demo">{{ row.organizationalGroup || '-' }}</td>
+                    <td class="col-date">{{ row.completedAt || '-' }}</td>
+                    <td class="col-time">{{ row.timeSpentText || '-' }}</td>
+                    @for (q of questions(); track q.questionGuid) {
+                    <td class="col-question">
+                        <span [title]="answerFor(row, q.questionGuid)">{{ answerFor(row, q.questionGuid) }}</span>
+                    </td>
+                    }
+                </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    }
+
+</div>
+
+<!-- دیالوگ انتخاب ستون‌های خروجی — بدون تغییر ساختاری -->
+@if (showExportDialog()) {
+<div class="exportOverlay" (click)="closeExportDialog()">
+    <div class="exportDialog" (click)="$event.stopPropagation()">
+        <div class="exportDialog__head">
+            <div>
+                <h3><i class="fa fa-file-excel"></i> تنظیم ستون‌های خروجی Excel</h3>
+                <p>ستون‌های موردنیاز را انتخاب کنید و با دکمه‌های بالا/پایین ترتیب آن‌ها را در فایل خروجی مشخص کنید.</p>
+            </div>
+            <button type="button" class="exportDialog__close" (click)="closeExportDialog()">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+
+        <div class="exportDialog__toolbar">
+            <label class="selectAllRow">
+                <input type="checkbox" [checked]="allColumnsSelected()" (change)="toggleSelectAll()">
+                <span>انتخاب همه ستون‌ها</span>
+            </label>
+            <div class="exportDialog__toolbar-actions">
+                <span class="selectedBadge">{{ selectedColumnsCount() }} از {{ exportColumns().length }} انتخاب
+                    شده</span>
+                <button type="button" class="btn xs ghost" (click)="resetToDefault()">
+                    <i class="fa fa-undo"></i> بازگشت به پیش‌فرض
+                </button>
+            </div>
+        </div>
+
+        <div class="exportDialog__body">
+            @for (col of exportColumns(); track col.key; let i = $index) {
+            <div class="exportColRow" [class.disabled]="!col.selected">
+                <div class="exportColRow__order">
+                    <button type="button" class="orderBtn" [disabled]="i === 0" (click)="moveColumnUp(i)"
+                        title="انتقال به بالا">
+                        <i class="fa fa-chevron-up"></i>
+                    </button>
+                    <span class="orderIndex">{{ i + 1 }}</span>
+                    <button type="button" class="orderBtn" [disabled]="i === exportColumns().length - 1"
+                        (click)="moveColumnDown(i)" title="انتقال به پایین">
+                        <i class="fa fa-chevron-down"></i>
+                    </button>
+                </div>
+
+                <label class="exportColRow__check">
+                    <input type="checkbox" [checked]="col.selected" (change)="toggleColumn(col.key)">
+                    <span class="exportColRow__checkbox"></span>
+                </label>
+
+                <div class="exportColRow__info">
+                    <span class="exportColRow__label">{{ col.label }}</span>
+                    <span class="exportColRow__type" [class.question]="col.type === 'question'">
+                        {{ col.type === 'meta' ? 'اطلاعات پاسخ‌دهی' : 'سوال نظرسنجی' }}
+                    </span>
+                </div>
+            </div>
+            }
+        </div>
+
+        <div class="exportDialog__footer">
+            <button type="button" class="btn ghost" (click)="closeExportDialog()">انصراف</button>
+            <button type="button" class="btn primary" (click)="confirmExport()"
+                [disabled]="selectedColumnsCount() === 0">
+                <i class="fa fa-download"></i>
+                دانلود Excel ({{ selectedColumnsCount() }} ستون)
+            </button>
+        </div>
+    </div>
+</div>
+}

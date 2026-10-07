@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Question - Copy\**" />
+    <Compile Remove="Response - Copy\**" />
+    <Compile Remove="Survey - Copy\**" />
+    <Compile Remove="SurveyAccess - Copy\**" />
+    <EmbeddedResource Remove="Question - Copy\**" />
+    <EmbeddedResource Remove="Response - Copy\**" />
+    <EmbeddedResource Remove="Survey - Copy\**" />
+    <EmbeddedResource Remove="SurveyAccess - Copy\**" />
+    <None Remove="Question - Copy\**" />
+    <None Remove="Response - Copy\**" />
+    <None Remove="Survey - Copy\**" />
+    <None Remove="SurveyAccess - Copy\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Epc.Application" Version="2.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SurveyManagement.Common\SurveyManagement.Common.csproj" />
+  </ItemGroup>
+
+</Project>

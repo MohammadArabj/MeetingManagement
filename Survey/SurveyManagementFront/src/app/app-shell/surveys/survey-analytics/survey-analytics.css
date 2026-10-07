@@ -1,0 +1,1069 @@
+.analyticsWrap {
+    max-width: 1300px;
+    margin: 0 auto;
+}
+
+/* Toolbar */
+.analyticsToolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.analyticsToolbar__tabs {
+    display: flex;
+    gap: 8px;
+}
+
+.tabBtn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border: 2px solid var(--line);
+    border-radius: 999px;
+    background: white;
+    font-weight: 800;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .2s;
+    font-family: inherit;
+}
+
+.tabBtn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.tabBtn.active {
+    background: linear-gradient(135deg, var(--primary), #3b82f6);
+    border-color: var(--primary);
+    color: white;
+}
+
+/* Loading / Empty */
+.analyticsLoading,
+.analyticsEmpty {
+    text-align: center;
+    padding: 80px 40px;
+    color: var(--muted);
+}
+
+.analyticsSpinner {
+    width: 44px;
+    height: 44px;
+    border: 4px solid var(--line);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    margin: 0 auto 16px;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.analyticsEmpty i {
+    opacity: .4;
+    margin-bottom: 16px;
+}
+
+.analyticsEmpty h3 {
+    margin: 0 0 8px;
+    font-weight: 900;
+}
+
+/* Stat Cards */
+.statCards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+}
+
+.statCard {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px;
+    background: white;
+    border: 2px solid var(--line);
+    border-radius: 18px;
+}
+
+.statCard__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.statCard__icon.blue {
+    background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+}
+
+.statCard__icon.green {
+    background: linear-gradient(135deg, #16a34a, #22c55e);
+}
+
+.statCard__icon.orange {
+    background: linear-gradient(135deg, #d97706, #f59e0b);
+}
+
+.statCard__icon.purple {
+    background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+}
+
+.statCard__icon.cyan {
+    background: linear-gradient(135deg, #0891b2, #06b6d4);
+}
+
+.statCard__icon.pink {
+    background: linear-gradient(135deg, #db2777, #ff4d6d);
+}
+
+.statCard__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.statCard__value {
+    font-size: 1.3rem;
+    font-weight: 950;
+    color: var(--ink);
+}
+
+.statCard__label {
+    font-size: .82rem;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+/* Charts Grid */
+.chartsGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.chartCard {
+    background: white;
+    border: 2px solid var(--line);
+    border-radius: 18px;
+    padding: 18px;
+}
+
+.chartCard.wide {
+    grid-column: 1 / -1;
+}
+
+.chartCard__head h4 {
+    margin: 0 0 12px;
+    font-size: 1rem;
+    font-weight: 900;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chartCard__head i {
+    color: var(--primary);
+}
+
+/* Questions search */
+.questionsSearchBox {
+    position: relative;
+}
+
+.questionsSearchBox i {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+}
+
+.questionsSearchBox .in {
+    width: 100%;
+    padding: 12px 44px 12px 16px;
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    font-family: inherit;
+    outline: none;
+}
+
+.questionsSearchBox .in:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(29, 78, 216, .1);
+}
+
+/* Question Analytics Card */
+.questionAnalyticsCard {
+    background: white;
+    border: 2px solid var(--line);
+    border-radius: 18px;
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+
+.questionAnalyticsCard__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    cursor: pointer;
+    flex-wrap: wrap;
+}
+
+.questionAnalyticsCard__head:hover {
+    background: rgba(29, 78, 216, .03);
+}
+
+.questionAnalyticsCard__headMain {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 260px;
+}
+
+.questionAnalyticsCard__headMain h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--ink);
+}
+
+.qTypeBadge {
+    padding: 4px 12px;
+    background: rgba(100, 116, 139, .1);
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 800;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.questionAnalyticsCard__headMeta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.answerRateBadge,
+.skipBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.answerRateBadge {
+    background: rgba(34, 197, 94, .1);
+    color: var(--ok);
+}
+
+.skipBadge {
+    background: rgba(251, 146, 60, .1);
+    color: #d97706;
+}
+
+.questionAnalyticsCard__body {
+    padding: 0 20px 22px;
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+}
+
+/* Choice Analytics */
+.choiceAnalytics {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 24px;
+    align-items: center;
+}
+
+.choiceAnalytics__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.choiceRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.choiceRow__dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.choiceRow__label {
+    min-width: 130px;
+    font-weight: 700;
+    font-size: .88rem;
+    color: var(--ink);
+}
+
+.choiceRow__bar {
+    flex: 1;
+    height: 10px;
+    background: rgba(100, 116, 139, .1);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.choiceRow__barFill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width .4s;
+}
+
+.choiceRow__value {
+    font-size: .8rem;
+    font-weight: 800;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+/* Numeric Analytics */
+.numericStatsGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.numStatCard {
+    text-align: center;
+    padding: 14px;
+    background: rgba(249, 250, 251, .7);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+.numStatCard__value {
+    display: block;
+    font-size: 1.3rem;
+    font-weight: 950;
+    color: var(--primary);
+}
+
+.numStatCard__label {
+    font-size: .78rem;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+/* Text Analytics */
+.textAnalytics__topRow {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 20px;
+    align-items: center;
+}
+
+.sentimentStats {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sentimentStat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 800;
+    font-size: .9rem;
+}
+
+.sentimentStat.positive {
+    color: #16a34a;
+}
+
+.sentimentStat.negative {
+    color: #dc2626;
+}
+
+.sentimentStat.neutral {
+    color: #64748b;
+}
+
+.textMetaRow {
+    font-size: .8rem;
+    color: var(--muted);
+    margin-top: 6px;
+}
+
+.wordCloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: baseline;
+    padding: 16px;
+    background: rgba(249, 250, 251, .6);
+    border-radius: 14px;
+}
+
+.wordTag {
+    font-weight: 800;
+    color: var(--primary);
+    white-space: nowrap;
+}
+
+.wordTag small {
+    font-size: 10px;
+    color: var(--muted);
+    margin-right: 3px;
+}
+
+.sentimentSamples h5 {
+    margin: 0 0 10px;
+    font-weight: 900;
+}
+
+.sentimentSampleRow {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    font-size: .88rem;
+    line-height: 1.6;
+}
+
+.sentimentSampleRow.positive {
+    background: rgba(34, 197, 94, .06);
+    color: #166534;
+}
+
+.sentimentSampleRow.negative {
+    background: rgba(255, 77, 109, .06);
+    color: #991b1b;
+}
+
+.sentimentSampleRow.neutral {
+    background: rgba(148, 163, 184, .08);
+    color: #334155;
+}
+
+/* File */
+.fileAnalytics {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px;
+    background: rgba(29, 78, 216, .05);
+    border-radius: 12px;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+@media (max-width: 900px) {
+    .chartsGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .choiceAnalytics {
+        grid-template-columns: 1fr;
+    }
+
+    .textAnalytics__topRow {
+        grid-template-columns: 1fr;
+    }
+
+    .numericStatsGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.analyticsToolbar__actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ==================== Dashboard View (نمای جامع) ==================== */
+
+.dashboardHead {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.dashboardHead__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.miniStat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 10px 18px;
+    background: white;
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    min-width: 100px;
+}
+
+.miniStat__value {
+    font-size: 1.15rem;
+    font-weight: 950;
+    color: var(--ink);
+}
+
+.miniStat__label {
+    font-size: .72rem;
+    color: var(--muted);
+    font-weight: 700;
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.miniStat.highlight-good {
+    border-color: rgba(34, 197, 94, .35);
+    background: rgba(34, 197, 94, .05);
+}
+
+.miniStat.highlight-good .miniStat__value {
+    color: #16a34a;
+}
+
+.miniStat.highlight-warn {
+    border-color: rgba(255, 77, 109, .35);
+    background: rgba(255, 77, 109, .05);
+}
+
+.miniStat.highlight-warn .miniStat__value {
+    color: #dc2626;
+}
+
+/* گرید مسنری با CSS columns (بدون نیاز به JS) */
+.dashboardGrid {
+    column-count: 2;
+    column-gap: 18px;
+}
+
+@media (max-width: 980px) {
+    .dashboardGrid {
+        column-count: 1;
+    }
+}
+
+.dashCard {
+    break-inside: avoid;
+    margin-bottom: 18px;
+    background: white;
+    border: 2px solid var(--line);
+    border-radius: 20px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow .25s, transform .25s;
+}
+
+.dashCard:hover {
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .08);
+    transform: translateY(-2px);
+}
+
+/* نوار رنگی سمت راست هر کارت بر اساس نوع سوال */
+.dashCard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 5px;
+}
+
+.dashCard.type-choice::before {
+    background: linear-gradient(180deg, #1d4ed8, #3b82f6);
+}
+
+.dashCard.type-numeric::before {
+    background: linear-gradient(180deg, #d97706, #f59e0b);
+}
+
+.dashCard.type-text::before {
+    background: linear-gradient(180deg, #7c3aed, #8b5cf6);
+}
+
+.dashCard.type-date::before {
+    background: linear-gradient(180deg, #0891b2, #06b6d4);
+}
+
+.dashCard.type-ranking::before {
+    background: linear-gradient(180deg, #db2777, #ff4d6d);
+}
+
+.dashCard.type-file::before {
+    background: linear-gradient(180deg, #16a34a, #22c55e);
+}
+
+.dashCard.type-default::before {
+    background: linear-gradient(180deg, #64748b, #94a3b8);
+}
+
+.dashCard__head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.dashCard__headIcon {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1rem;
+}
+
+.type-choice .dashCard__headIcon {
+    background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+}
+
+.type-numeric .dashCard__headIcon {
+    background: linear-gradient(135deg, #d97706, #f59e0b);
+}
+
+.type-text .dashCard__headIcon {
+    background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+}
+
+.type-date .dashCard__headIcon {
+    background: linear-gradient(135deg, #0891b2, #06b6d4);
+}
+
+.type-ranking .dashCard__headIcon {
+    background: linear-gradient(135deg, #db2777, #ff4d6d);
+}
+
+.type-file .dashCard__headIcon {
+    background: linear-gradient(135deg, #16a34a, #22c55e);
+}
+
+.type-default .dashCard__headIcon {
+    background: linear-gradient(135deg, #64748b, #94a3b8);
+}
+
+.dashCard__headText {
+    flex: 1;
+    min-width: 0;
+}
+
+.dashCard__order {
+    font-size: .72rem;
+    font-weight: 800;
+    color: var(--muted);
+}
+
+.dashCard__headText h4 {
+    margin: 2px 0 0;
+    font-size: .95rem;
+    font-weight: 850;
+    color: var(--ink);
+    line-height: 1.5;
+}
+
+.reqDot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #ff4d6d;
+    flex-shrink: 0;
+    margin-top: 6px;
+    box-shadow: 0 0 0 3px rgba(255, 77, 109, .15);
+}
+
+.dashCard__metaRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.answerRateMini {
+    margin-right: auto;
+    font-size: .8rem;
+    font-weight: 900;
+    color: var(--ok);
+}
+
+.answerRateMini.low {
+    color: #dc2626;
+}
+
+.dashCard__progressTrack {
+    height: 5px;
+    background: rgba(100, 116, 139, .1);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 14px;
+}
+
+.dashCard__progressFill {
+    height: 100%;
+    background: linear-gradient(90deg, #1d4ed8, #3b82f6);
+    border-radius: 999px;
+    transition: width .5s;
+}
+
+.dashCard__body {
+    min-height: 40px;
+}
+
+/* گزینه‌ای */
+.dashChoice {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+}
+
+.dashChoice__chart {
+    width: 130px;
+    flex-shrink: 0;
+}
+
+.dashChoice__list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.dashChoiceRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: .8rem;
+}
+
+.dashChoiceRow__dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.dashChoiceRow__label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink);
+    font-weight: 700;
+}
+
+.dashChoiceRow__value {
+    font-weight: 900;
+    color: var(--muted);
+    flex-shrink: 0;
+}
+
+.dashChoiceRow__more {
+    font-size: .72rem;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+/* عددی */
+.dashNumeric__stats {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.dashNumeric__stat {
+    flex: 1;
+    text-align: center;
+    padding: 8px;
+    background: rgba(249, 250, 251, .7);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.dashNumeric__stat span {
+    display: block;
+    font-weight: 950;
+    color: #d97706;
+    font-size: 1rem;
+}
+
+.dashNumeric__stat small {
+    font-size: .68rem;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+/* متنی */
+.sentimentBarMini {
+    display: flex;
+    height: 10px;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.sentimentBarMini .seg.positive {
+    background: #22c55e;
+}
+
+.sentimentBarMini .seg.negative {
+    background: #ff4d6d;
+}
+
+.sentimentBarMini .seg.neutral {
+    background: #94a3b8;
+}
+
+.sentimentLegendMini {
+    display: flex;
+    gap: 12px;
+    font-size: .74rem;
+    font-weight: 800;
+    margin-bottom: 10px;
+}
+
+.sentimentLegendMini .positive {
+    color: #16a34a;
+}
+
+.sentimentLegendMini .negative {
+    color: #dc2626;
+}
+
+.sentimentLegendMini .neutral {
+    color: #64748b;
+}
+
+.dashWordCloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.miniWordTag {
+    font-size: .72rem;
+    font-weight: 800;
+    padding: 3px 9px;
+    background: rgba(124, 58, 237, .08);
+    color: #7c3aed;
+    border-radius: 999px;
+}
+
+/* فایل */
+.dashFile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(34, 197, 94, .06);
+    border-radius: 10px;
+    font-weight: 800;
+    color: #16a34a;
+    font-size: .85rem;
+}
+
+/* خالی */
+.dashEmpty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    color: var(--muted);
+    font-size: .82rem;
+    font-weight: 700;
+}
+
+/* Controls */
+.dashboardHead__controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.densitySwitch {
+    display: flex;
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.densitySwitch__btn {
+    width: 38px;
+    height: 38px;
+    border: none;
+    background: white;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .9rem;
+    transition: all .2s;
+}
+
+.densitySwitch__btn:hover {
+    background: rgba(29, 78, 216, .06);
+    color: var(--primary);
+}
+
+.densitySwitch__btn.active {
+    background: linear-gradient(135deg, var(--primary), #3b82f6);
+    color: white;
+}
+
+/* ==================== نمای فشرده (Compact) ==================== */
+.dashboardGrid.density-compact {
+    column-count: 3;
+    column-gap: 12px;
+}
+
+@media (max-width: 1200px) {
+    .dashboardGrid.density-compact {
+        column-count: 2;
+    }
+}
+
+@media (max-width: 700px) {
+    .dashboardGrid.density-compact {
+        column-count: 1;
+    }
+}
+
+.dashCard.density-compact {
+    padding: 13px;
+    border-radius: 14px;
+    margin-bottom: 12px;
+}
+
+.dashCard.density-compact::before {
+    width: 3px;
+}
+
+.dashCard.density-compact .dashCard__head {
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.dashCard.density-compact .dashCard__headIcon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: .78rem;
+}
+
+.dashCard.density-compact .dashCard__order {
+    font-size: .65rem;
+}
+
+.dashCard.density-compact .dashCard__headText h4 {
+    font-size: .82rem;
+    line-height: 1.4;
+}
+
+.dashCard.density-compact .dashCard__metaRow {
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.dashCard.density-compact .qTypeBadge,
+.dashCard.density-compact .answerRateBadge,
+.dashCard.density-compact .skipBadge {
+    font-size: .66rem;
+    padding: 3px 8px;
+}
+
+.dashCard.density-compact .answerRateMini {
+    font-size: .72rem;
+}
+
+.dashCard.density-compact .dashCard__progressTrack {
+    height: 4px;
+    margin-bottom: 8px;
+}
+
+.dashCard.density-compact .dashChoice {
+    gap: 8px;
+}
+
+.dashCard.density-compact .dashChoice__chart {
+    width: 74px;
+}
+
+.dashCard.density-compact .dashChoiceRow {
+    font-size: .7rem;
+    gap: 5px;
+}
+
+.dashCard.density-compact .dashChoiceRow__dot {
+    width: 7px;
+    height: 7px;
+}
+
+.dashCard.density-compact .dashNumeric__stats {
+    gap: 5px;
+    margin-bottom: 6px;
+}
+
+.dashCard.density-compact .dashNumeric__stat {
+    padding: 5px;
+}
+
+.dashCard.density-compact .dashNumeric__stat span {
+    font-size: .82rem;
+}
+
+.dashCard.density-compact .dashNumeric__stat small {
+    font-size: .6rem;
+}
+
+.dashCard.density-compact .sentimentLegendMini {
+    font-size: .66rem;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.dashCard.density-compact .miniWordTag {
+    font-size: .64rem;
+    padding: 2px 7px;
+}
+
+.dashCard.density-compact .dashWordCloud {
+    gap: 4px;
+}
+
+/* حالت فشرده: کارت‌های عددی/تاریخ/رتبه‌بندی چارت کوچک‌تر می‌گیرند (height را در تایپ‌اسکریپت هم می‌توان شرطی کرد) */

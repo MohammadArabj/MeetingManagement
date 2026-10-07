@@ -1,0 +1,171 @@
+@if (isLoading()) {
+<div style="text-align:center;padding:80px 0">
+  <div
+    style="display:inline-block;width:50px;height:50px;border:4px solid var(--line);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite">
+  </div>
+  <p class="muted" style="margin-top:20px">در حال بارگذاری آمار...</p>
+</div>
+}
+@else if (hasStats()) {
+<div class="page">
+
+  <div class="pageHead">
+    <div>
+      <h1 class="h1">آمار و گزارش نظرسنجی</h1>
+      @if (statistics(); as s) { <p class="sub">{{ s.title }}</p> }
+    </div>
+    <div class="row">
+      <button type="button" class="btn ghost" (click)="backToList()">
+        <i class="fa fa-arrow-right"></i> بازگشت
+      </button>
+    </div>
+  </div>
+
+  @if (statistics(); as s) {
+
+  <section class="grid grid-3">
+    <div class="card pad">
+      <div style="text-align:center">
+        <i class="fa fa-users" style="font-size:3rem;color:var(--primary);margin-bottom:12px"></i>
+        <h3 style="margin:0 0 4px 0;font-size:2rem;font-weight:950">{{ s.totalResponses || 0 }}</h3>
+        <p class="muted" style="margin:0">تعداد پاسخ‌ها</p>
+      </div>
+    </div>
+    <div class="card pad">
+      <div style="text-align:center">
+        <i class="fa fa-list-ol" style="font-size:3rem;color:var(--primary);margin-bottom:12px"></i>
+        <h3 style="margin:0 0 4px 0;font-size:2rem;font-weight:950">{{ s.totalQuestions || 0 }}</h3>
+        <p class="muted" style="margin:0">تعداد سوالات</p>
+      </div>
+    </div>
+    <div class="card pad">
+      <div style="text-align:center">
+        <i class="fa fa-clock" style="font-size:3rem;color:var(--warn);margin-bottom:12px"></i>
+        <h3 style="margin:0 0 4px 0;font-size:2rem;font-weight:950">{{ (s.averageTimeSpent || 0) | number:'1.0-1' }}
+        </h3>
+        <p class="muted" style="margin:0">میانگین زمان پاسخ‌دهی (دقیقه)</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="sp-16"></div>
+
+  @if (!hasResponses()) {
+  <section class="card pad-lg">
+    <div style="text-align:center;padding:48px 24px">
+      <i class="fa fa-chart-bar" style="font-size:3rem;color:var(--muted);margin-bottom:16px"></i>
+      <div class="h2">هنوز پاسخی ثبت نشده است</div>
+      <div class="sp-12"></div>
+      <button type="button" class="btn primary" (click)="backToList()">بازگشت به لیست</button>
+    </div>
+  </section>
+  } @else {
+
+  <section class="card pad-lg">
+    <div class="sectionTitle">روند پاسخ‌ها بر اساس تاریخ تکمیل</div>
+    <div class="hr"></div>
+    <div style="height: 280px;"><canvas #trendChart></canvas></div>
+  </section>
+
+  <div class="sp-16"></div>
+
+  <section class="card pad-lg">
+    <div class="sectionRow">
+      <div class="sectionTitle">بریک‌داون دموگرافیک پاسخ‌دهندگان</div>
+      <span class="badge">۹ بُعد</span>
+    </div>
+    <div class="hr"></div>
+
+    @if (!hasAnyDemographicData()) {
+    <div class="emptyState">
+      <i class="fa fa-user-secret fa-2x text-muted mb-3"></i>
+      <p class="muted" style="margin-top:8px">
+        داده دموگرافیکی برای نمایش وجود ندارد (احتمالاً پاسخ‌ها ناشناس بوده‌اند یا هنوز به آستانه حداقلی حریم خصوصی
+        نرسیده‌اند).
+      </p>
+    </div>
+    } @else {
+    <div class="grid grid-3">
+      @for (def of demographicDefs; track def.key) {
+      <div class="chartCard">
+        <div class="chartCard__head">
+          <h4><i class="fa {{ def.icon }}"></i> {{ def.label }}</h4>
+        </div>
+        @if (hasData(def)) {
+        <div style="height: 220px;"><canvas #demoChart></canvas></div>
+        } @else {
+        <div class="muted small" style="text-align:center;padding:40px 0">داده‌ای برای این بُعد موجود نیست</div>
+        }
+      </div>
+      }
+    </div>
+    }
+  </section>
+  }
+  }
+
+  @if (changeLogs().length > 0) {
+  <div class="sp-16"></div>
+  <section class="card pad-lg">
+    <div class="sectionTitle">تاریخچه تغییرات</div>
+    <div class="hr"></div>
+    <div class="timeline">
+      @for (log of changeLogs(); track log.id) {
+      <div class="timeline-item" style="display:flex;gap:16px;padding:16px 0;border-bottom:1px solid var(--line)">
+        <div style="width:8px;height:8px;background:var(--primary);border-radius:50%;margin-top:6px;flex-shrink:0">
+        </div>
+        <div style="flex:1">
+          <div class="row">
+            <b>{{ log.changeType }}</b>
+            <span class="muted small">{{ log.changeDate | date:'yyyy/MM/dd HH:mm' }}</span>
+          </div>
+          @if (log.description) { <p class="muted small" style="margin:4px 0 0 0">{{ log.description }}</p> }
+          <div class="row" style="margin-top:8px">
+            <span class="muted tiny">نسخه: {{ log.version }}</span>
+            <span class="muted tiny">توسط: {{ log.changedBy }}</span>
+          </div>
+        </div>
+      </div>
+      }
+    </div>
+  </section>
+  }
+
+</div>
+}
+@else {
+<div style="text-align:center;padding:80px 0">
+  <i class="fa fa-chart-bar" style="font-size:4rem;color:var(--muted);margin-bottom:24px"></i>
+  <h2 class="h2">آماری یافت نشد</h2>
+  <div class="sp-12"></div>
+  <button type="button" class="btn primary" (click)="backToList()">بازگشت به لیست</button>
+</div>
+}
+
+<style>
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .chartCard {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px;
+    background: rgba(255, 255, 255, .6);
+  }
+
+  .chartCard__head h4 {
+    margin: 0 0 8px 0;
+    font-size: .9rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .emptyState {
+    text-align: center;
+    padding: 40px 10px;
+  }
+</style>

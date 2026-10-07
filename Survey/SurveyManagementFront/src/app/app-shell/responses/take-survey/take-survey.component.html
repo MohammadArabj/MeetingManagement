@@ -1,0 +1,1043 @@
+<!-- ============================================================
+     فاز: بارگذاری
+     ============================================================ -->
+@if (phase() === 'loading') {
+<div class="ts-loading">
+  <div class="ts-loading__spinner">
+    <div class="ts-spinner"></div>
+  </div>
+  <p class="ts-loading__text">در حال بارگذاری نظرسنجی...</p>
+</div>
+}
+
+<!-- ============================================================
+     فاز: خطا
+     ============================================================ -->
+@if (phase() === 'error') {
+<div class="ts-error">
+  <div class="ts-error__icon">
+    <i class="fa fa-exclamation-triangle"></i>
+  </div>
+  <h3 class="ts-error__title">مشکلی پیش آمده!</h3>
+  <p class="ts-error__msg">{{ errorMessage() }}</p>
+  <div class="ts-error__actions">
+    <!-- <button type="button" class="ts-btn ts-btn--outline" (click)="goBack()">
+      <i class="fa fa-arrow-right"></i> بازگشت
+    </button> -->
+    <button type="button" class="ts-btn ts-btn--primary" (click)="retry()">
+      <i class="fa fa-redo"></i> تلاش مجدد
+    </button>
+  </div>
+</div>
+}
+
+@if (phase() === 'blocked') {
+<div class="ts-blocked">
+  <div class="ts-blocked__card">
+
+    @if (logoUrl()) {
+    <div class="ts-blocked__logo">
+      <img [src]="logoUrl()!" alt="Logo" />
+    </div>
+    }
+
+    <div class="ts-blocked__icon">
+      <i class="fa" [class.fa-check-circle]="blockReason() === 'alreadyAnswered'"
+        [class.fa-clock]="blockReason() === 'notStarted'" [class.fa-calendar-times]="blockReason() === 'ended'"
+        [class.fa-users-slash]="blockReason() === 'full'"></i>
+    </div>
+
+    @switch (blockReason()) {
+    @case ('notStarted') {
+    <h2 class="ts-blocked__title">این نظرسنجی هنوز شروع نشده است</h2>
+    <p class="ts-blocked__msg">
+      تاریخ شروع این نظرسنجی {{ survey()?.startDate }} است. لطفاً از آن تاریخ به بعد مراجعه کنید.
+    </p>
+    }
+    @case ('ended') {
+    <h2 class="ts-blocked__title">مهلت پاسخ‌دهی به این نظرسنجی تمام شده است</h2>
+    <p class="ts-blocked__msg">
+      این نظرسنجی در تاریخ {{ survey()?.endDate }} بسته شده و امکان ثبت پاسخ جدید وجود ندارد.
+    </p>
+    }
+    @case ('full') {
+    <h2 class="ts-blocked__title">ظرفیت این نظرسنجی تکمیل شده است</h2>
+    <p class="ts-blocked__msg">
+      متأسفانه ظرفیت پاسخ‌دهی به این نظرسنجی به پایان رسیده است.
+    </p>
+    }
+    @default {
+    <h2 class="ts-blocked__title">شما قبلاً در این نظرسنجی شرکت کرده‌اید</h2>
+    <p class="ts-blocked__msg">
+      پاسخ شما با موفقیت ثبت شده و این نظرسنجی امکان پاسخ‌دهی مجدد را ندارد.
+      از مشارکت شما سپاسگزاریم.
+    </p>
+    }
+    }
+
+    <div class="ts-blocked__meta">
+      <div class="ts-meta-item">
+        <i class="fa fa-poll"></i>
+        <span>{{ survey()?.title }}</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+}
+<!-- ============================================================
+     فاز: خوش‌آمدگویی
+     ============================================================ -->
+@if (phase() === 'welcome') {
+<div class="ts-welcome">
+  <div class="ts-welcome__card">
+
+    @if (logoUrl()) {
+    <div class="ts-welcome__logo">
+      <img [src]="logoUrl()!" alt="Logo" />
+    </div>
+    }
+
+    <h1 class="ts-welcome__title">{{ survey()?.title }}</h1>
+
+    @if (survey()?.description) {
+    <p class="ts-welcome__desc">{{ survey()?.description }}</p>
+    }
+
+    @if (survey()?.welcomeMessage) {
+    <div class="ts-welcome__message">
+      <i class="fa fa-quote-right"></i>
+      <div class="ts-welcome__message-content" [innerHTML]="welcomeMessageHtml()"></div>
+    </div>
+    }
+    <div class="ts-welcome__privacy">
+      <i class="fa fa-shield-alt"></i>
+      <p>
+        این نظرسنجی توسط واحد فناوری اطلاعات و ارتباطات (فاوا) انجام می‌شود و نتایج آن صرفاً به‌صورت محرمانه
+        و بدون افشای اطلاعات هویتی شرکت‌کنندگان، جهت پایش و بهبود عملکرد، در اختیار واحد مربوطه قرار خواهد گرفت.
+      </p>
+    </div>
+
+    <div class="ts-welcome__meta">
+      <div class="ts-meta-item">
+        <i class="fa fa-list-ol"></i>
+        <span>{{ totalQuestions() }} سوال</span>
+      </div>
+      @if (survey()?.startDate && survey()?.endDate) {
+      <div class="ts-meta-item">
+        <i class="fa fa-calendar-alt"></i>
+        <span>{{ survey()?.startDate }} تا {{ survey()?.endDate }}</span>
+      </div>
+      }
+      @if (survey()?.allowSaveDraft) {
+      <div class="ts-meta-item">
+        <i class="fa fa-save"></i>
+        <span>امکان ذخیره پیش‌نویس</span>
+      </div>
+      }
+      @if (survey()?.allowAnonymous) {
+      <div class="ts-meta-item">
+        <i class="fa fa-user-secret"></i>
+        <span>پاسخ‌دهی ناشناس</span>
+      </div>
+      }
+    </div>
+
+    <button type="button" class="ts-btn ts-btn--start" (click)="startSurvey()">
+      <span>شروع نظرسنجی</span>
+      <i class="fa fa-arrow-left"></i>
+    </button>
+    <!-- <button type="button" class="ts-btn ts-btn--ghost" (click)="goBack()">
+      <i class="fa fa-home"></i>
+      بازگشت به صفحه اصلی
+    </button> -->
+
+  </div>
+</div>
+}
+
+<!-- ============================================================
+     فاز: نظرسنجی
+     ============================================================ -->
+@if (phase() === 'survey') {
+<div class="ts-survey">
+
+  <!-- ===== هدر ===== -->
+  <div class="ts-header">
+    <div class="ts-header__right">
+      @if (logoUrl()) {
+      <img [src]="logoUrl()!" alt="" class="ts-header__logo" />
+      }
+      <div>
+        <h2 class="ts-header__title">{{ survey()?.title }}</h2>
+        @if (survey()?.description) {
+        <p class="ts-header__desc">{{ survey()?.description }}</p>
+        }
+      </div>
+    </div>
+    <div class="ts-header__left">
+      <div class="ts-timer">
+        <i class="fa fa-clock"></i>
+        <span>{{ formattedTime() }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Progress Bar ===== -->
+  @if (survey()?.showProgressBar) {
+  <div class="ts-progress">
+    <div class="ts-progress__bar">
+      <div class="ts-progress__fill" [style.width.%]="isSlideMode() ? progress() : 0"></div>
+    </div>
+    @if (isSlideMode()) {
+    <div class="ts-progress__label">
+      سوال {{ currentQuestionIndex() + 1 }} از {{ totalQuestions() }}
+    </div>
+    }
+  </div>
+  }
+
+  <!-- ============================================================
+       حالت اسلایدی
+       ============================================================ -->
+
+  @if (isSlideMode()) {
+
+  @if (hasCriteria()) {
+  <!-- ============ حالت اسلایدی معیار محور: هر اسلاید = یک معیار ============ -->
+
+  @if (totalGroups() > 1) {
+  <div class="ts-qmap">
+    @for (g of questionGroups(); track g.key; let i = $index) {
+    <button type="button" class="ts-qmap__dot" [class.active]="i === currentGroupIndex()"
+      [class.answered]="isGroupAnswered(i)" (click)="goToGroup(i)" [title]="g.title || ('بخش ' + (i + 1))">
+      {{ i + 1 }}
+    </button>
+    }
+  </div>
+  }
+
+  @if (currentGroup(); as grp) {
+  <div class="ts-question-wrap" [class.slide-next]="slideDirection() === 'next'"
+    [class.slide-prev]="slideDirection() === 'prev'">
+
+    @if (grp.title) {
+    <div class="ts-criterion-header">
+      <h3>{{ grp.title }}</h3>
+      @if (grp.description) { <p>{{ grp.description }}</p> }
+    </div>
+    }
+
+    <div class="ts-onepage">
+      @for (q of grp.questions; track q.guid) {
+      <ng-container *ngTemplateOutlet="groupQuestionTpl; context: { $implicit: q }"></ng-container>
+      }
+    </div>
+  </div>
+
+  <div class="ts-nav">
+    <button type="button" class="ts-btn ts-btn--secondary" (click)="previousGroup()" [disabled]="isFirstGroup()">
+      <i class="fa fa-arrow-right"></i> قبلی
+    </button>
+    <div class="ts-nav__center"></div>
+    <button type="button" class="ts-btn ts-btn--primary" (click)="nextGroup()">
+      @if (isLastGroup()) {
+      <i class="fa fa-check"></i> ثبت نهایی
+      } @else {
+      بعدی <i class="fa fa-arrow-left"></i>
+      }
+    </button>
+  </div>
+  }
+
+  } @else {
+  <!-- ============ همان کد قبلی — بدون تغییر ============ -->
+
+  <!-- Question Map -->
+  @if (totalQuestions() > 1) {
+  <div class="ts-qmap">
+    @for (q of questions(); track q.guid; let i = $index) {
+    <button type="button" class="ts-qmap__dot" [class.active]="i === currentQuestionIndex()"
+      [class.answered]="isQuestionAnswered(i)" [class.required]="q.isRequired" (click)="goToQuestion(i)"
+      [title]="'سوال ' + (i + 1)">
+      {{ i + 1 }}
+    </button>
+    }
+  </div>
+  }
+
+  <!-- Question Card -->
+  @if (currentQuestion(); as q) {
+  <div class="ts-question-wrap" [class.slide-next]="slideDirection() === 'next'"
+    [class.slide-prev]="slideDirection() === 'prev'">
+
+    <div class="ts-question">
+      <div class="ts-question__number">
+        <span>{{ currentQuestionIndex() + 1 }}</span>
+      </div>
+
+      <h3 class="ts-question__text">
+        {{ q.questionText }}
+        @if (q.isRequired) { <span class="ts-required">*</span> }
+      </h3>
+
+      @if (q.helpText) {
+      <p class="ts-question__help">
+        <i class="fa fa-info-circle"></i>
+        {{ q.helpText }}
+      </p>
+      }
+
+      @if (q.imageUrl) {
+      <div class="ts-question__media">
+        <img [src]="q.imageUrl" alt="Question image" />
+      </div>
+      }
+      @if (q.videoUrl) {
+      <div class="ts-question__media">
+        <video controls>
+          <source [src]="q.videoUrl" type="video/mp4" />
+        </video>
+      </div>
+      }
+
+      <!-- ===== Answer (Slide) ===== -->
+      <form [formGroup]="answerForm" class="ts-answer">
+
+        <!-- TEXT -->
+        @if (q.questionType === QuestionType.TEXT) {
+        <div class="ts-field" [class.ts-field--error]="!!currentValidationError()">
+          <input type="text" class="ts-input" formControlName="textAnswer"
+            [placeholder]="q.placeholder || 'پاسخ خود را وارد کنید'" [maxlength]="q.maxLength || 500" />
+          @if (q.minLength || q.maxLength) {
+          <div class="ts-field__hint">
+            @if (q.minLength) { حداقل {{ q.minLength }} کاراکتر }
+            @if (q.minLength && q.maxLength) { — }
+            @if (q.maxLength) { حداکثر {{ q.maxLength }} کاراکتر }
+          </div>
+          }
+        </div>
+        }
+
+        <!-- LONG_TEXT -->
+        @if (q.questionType === QuestionType.LONG_TEXT) {
+        <div class="ts-field" [class.ts-field--error]="!!currentValidationError()">
+          <textarea class="ts-textarea" formControlName="textAnswer" rows="5"
+            [placeholder]="q.placeholder || 'پاسخ خود را وارد کنید'" [maxlength]="q.maxLength || 2000"></textarea>
+          @if (q.minLength || q.maxLength) {
+          <div class="ts-field__hint">
+            @if (q.minLength) { حداقل {{ q.minLength }} کاراکتر }
+            @if (q.minLength && q.maxLength) { — }
+            @if (q.maxLength) { حداکثر {{ q.maxLength }} کاراکتر }
+          </div>
+          }
+        </div>
+        }
+
+        <!-- MULTIPLE_CHOICE -->
+        @if (q.questionType === QuestionType.MULTIPLE_CHOICE) {
+        <div class="ts-options" [class.ts-options--error]="!!currentValidationError()">
+          @for (option of q.options; track option.guid) {
+          <div class="ts-option" [class.selected]="answerForm.value.selectedOptionGuid === option.guid"
+            (click)="onOptionSelected(option.guid)">
+            <div class="ts-option__radio">
+              <input type="radio" [value]="option.guid" formControlName="selectedOptionGuid" />
+            </div>
+            <div class="ts-option__content">
+              @if (option.imageUrl) { <img [src]="option.imageUrl" class="ts-option__img" /> }
+              <span>{{ option.optionText }}</span>
+              @if (option.color) { <span class="ts-option__color" [style.background]="option.color"></span> }
+            </div>
+          </div>
+          }
+          @if (q.allowOtherOption) {
+          <div class="ts-other">
+            <label>{{ q.otherOptionText || 'سایر' }}:</label>
+            <input type="text" class="ts-input" formControlName="otherAnswer" placeholder="لطفاً مشخص کنید" />
+          </div>
+          }
+        </div>
+        }
+
+        <!-- CHECKBOX -->
+        @if (q.questionType === QuestionType.CHECKBOX) {
+        <div class="ts-options" [class.ts-options--error]="!!currentValidationError()"
+          formArrayName="selectedOptionGuids">
+          @for (option of q.options; track $index) {
+          <div class="ts-option checkbox" [class.selected]="answerForm.get('selectedOptionGuids')?.value?.[$index]">
+            <div class="ts-option__check">
+              <input type="checkbox" [formControlName]="$index" />
+            </div>
+            <div class="ts-option__content">
+              @if (option.imageUrl) { <img [src]="option.imageUrl" class="ts-option__img" /> }
+              <span>{{ option.optionText }}</span>
+              @if (option.color) { <span class="ts-option__color" [style.background]="option.color"></span> }
+            </div>
+          </div>
+          }
+          @if (q.allowOtherOption) {
+          <div class="ts-other">
+            <label>{{ q.otherOptionText || 'سایر' }}:</label>
+            <input type="text" class="ts-input" formControlName="otherAnswer" placeholder="لطفاً مشخص کنید" />
+          </div>
+          }
+        </div>
+        @if (q.minSelections || q.maxSelections) {
+        <div class="ts-field__hint">
+          @if (q.minSelections) { حداقل {{ q.minSelections }} گزینه }
+          @if (q.maxSelections) { — حداکثر {{ q.maxSelections }} گزینه }
+        </div>
+        }
+        }
+
+        <!-- DROPDOWN -->
+        @if (q.questionType === QuestionType.DROPDOWN) {
+        <div class="ts-field" [class.ts-field--error]="!!currentValidationError()">
+          <select class="ts-select" formControlName="selectedOptionGuid">
+            <option value="">یک گزینه انتخاب کنید</option>
+            @for (option of q.options; track option.guid) {
+            <option [value]="option.guid">{{ option.optionText }}</option>
+            }
+          </select>
+        </div>
+        }
+
+        <!-- RATING -->
+        @if (q.questionType === QuestionType.RATING) {
+        <div class="ts-rating" [class.ts-rating--error]="!!currentValidationError()">
+          @if (q.minScaleLabel || q.maxScaleLabel) {
+          <div class="ts-rating__labels">
+            <span>{{ q.minScaleLabel }}</span>
+            <span>{{ q.maxScaleLabel }}</span>
+          </div>
+          }
+          <div class="ts-rating__buttons">
+            @for (r of [1,2,3,4,5]; track r) {
+            <button type="button" class="ts-rating__btn" [class.active]="answerForm.value.numericAnswer === r"
+              (click)="onRatingSelected(r)">
+              <span class="ts-rating__star">
+                <i class="fa" [class.fa-star]="answerForm.value.numericAnswer >= r"
+                  [class.far]="answerForm.value.numericAnswer < r || !answerForm.value.numericAnswer"
+                  [class.fas]="answerForm.value.numericAnswer >= r"></i>
+              </span>
+              <span class="ts-rating__num">{{ r }}</span>
+            </button>
+            }
+          </div>
+        </div>
+        }
+
+        <!-- DATE -->
+        @if (q.questionType === QuestionType.DATE) {
+        <div class="ts-field" [class.ts-field--error]="!!currentValidationError()">
+          <input type="date" class="ts-input" formControlName="dateAnswer" />
+        </div>
+        }
+
+        <!-- FILE_UPLOAD -->
+        @if (q.questionType === QuestionType.FILE_UPLOAD) {
+        <div class="ts-upload" [class.ts-upload--error]="!!currentValidationError()">
+          <div class="ts-upload__zone">
+            <i class="fa fa-cloud-upload-alt"></i>
+            <p>فایل خود را انتخاب کنید یا اینجا رها کنید</p>
+            @if (q.maxFileSize) { <small>حداکثر حجم: {{ q.maxFileSize }} MB</small> }
+            @if (q.allowedFileTypes) { <small>فرمت‌های مجاز: {{ q.allowedFileTypes }}</small> }
+            <input type="file" class="ts-upload__input" (change)="onFileSelected($event)" />
+          </div>
+          @if (answerForm.value.fileName) {
+          <div class="ts-upload__file">
+            <i class="fa fa-file"></i>
+            <span>{{ answerForm.value.fileName }}</span>
+            <i class="fa fa-check-circle ts-upload__ok"></i>
+          </div>
+          }
+        </div>
+        }
+
+        <!-- MATRIX -->
+        @if (q.questionType === QuestionType.MATRIX) {
+        <div class="ts-matrix" [class.ts-matrix--error]="!!currentValidationError()" formGroupName="matrixAnswers">
+          <div class="table-responsive">
+            <table class="ts-matrix__table">
+              <thead>
+                <tr>
+                  <th></th>
+                  @for (col of q.matrixColumns; track col) { <th>{{ col }}</th> }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of q.matrixRows; track row) {
+                <tr>
+                  <td class="ts-matrix__row-label">{{ row }}</td>
+                  @for (col of q.matrixColumns; track col) {
+                  <td>
+                    <label class="ts-matrix__radio">
+                      <input type="radio" [formControlName]="row" [value]="col" />
+                      <span></span>
+                    </label>
+                  </td>
+                  }
+                </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+        }
+
+      </form>
+
+      <!-- ✅ پیام خطای inline زیر سوال — نمایش می‌یابد وقتی validation شکست بخورد -->
+      @if (currentValidationError()) {
+      <div class="ts-validation-error">
+        <i class="fa fa-exclamation-circle"></i>
+        <span>{{ currentValidationError() }}</span>
+      </div>
+      }
+
+    </div>
+  </div>
+
+  <!-- Navigation (Slide) -->
+  <div class="ts-nav">
+    <button type="button" class="ts-btn ts-btn--secondary" (click)="previousQuestion()" [disabled]="isFirstQuestion()">
+      <i class="fa fa-arrow-right"></i>
+      قبلی
+    </button>
+
+    <div class="ts-nav__center">
+      <!-- ✅ دکمه پیش‌نویس با استایل واضح -->
+      <!-- @if (survey()?.allowSaveDraft) {
+        <button type="button" class="ts-btn ts-btn--draft" (click)="saveDraft()">
+          <i class="fa fa-save"></i>
+          ذخیره پیش‌نویس
+        </button>
+        } -->
+    </div>
+
+    <button type="button" class="ts-btn ts-btn--primary" (click)="nextQuestion()">
+      @if (isLastQuestion()) {
+      <i class="fa fa-check"></i>
+      ثبت نهایی
+      } @else {
+      بعدی
+      <i class="fa fa-arrow-left"></i>
+      }
+    </button>
+  </div>
+  <!-- <div class="ts-back-bar">
+      <button type="button" class="ts-btn ts-btn--ghost" (click)="goBack()">
+        <i class="fa fa-home"></i>
+        بازگشت به صفحه اصلی
+      </button>
+    </div> -->
+  <div class="ts-keyboard-hint">
+    <kbd>Enter ↵</kbd> برای ادامه
+  </div>
+
+  }
+
+  }
+  }
+
+  @if (!isSlideMode()) {
+  <div class="ts-list-wrap">
+
+    @if (hasCriteria()) {
+    @for (group of questionGroups(); track group.key) {
+    <div class="ts-criterion-section">
+      @if (group.title) {
+      <div class="ts-criterion-header">
+        <h3>{{ group.title }}</h3>
+        @if (group.description) { <p>{{ group.description }}</p> }
+      </div>
+      }
+      <div class="ts-list">
+        @for (q of group.questions; track q.guid; let i = $index) {
+        @if (getControlForQuestion(q); as control) {
+        <ng-container
+          *ngTemplateOutlet="listRowTpl; context: { $implicit: control, index: i, question: q }"></ng-container>
+        }
+        }
+      </div>
+    </div>
+    }
+    } @else {
+    <div class="ts-list">
+      @for (control of surveyControls; track $index; let i = $index) {
+      @if (getQuestion(control); as q) {
+      <ng-container
+        *ngTemplateOutlet="listRowTpl; context: { $implicit: control, index: i, question: q }"></ng-container>
+      }
+      }
+    </div>
+    }
+
+    <!-- Submit Bar -->
+    <div class="ts-nav ts-nav--onepage">
+      <button type="button" class="ts-btn ts-btn--primary" (click)="submitOnePage()">
+        <i class="fa fa-check-circle"></i> ثبت نهایی
+      </button>
+    </div>
+
+  </div>
+  }
+
+</div>
+}
+
+<!-- ============================================================
+     فاز: در حال ارسال
+     ============================================================ -->
+@if (phase() === 'submitting') {
+<div class="ts-loading">
+  <div class="ts-loading__spinner">
+    <div class="ts-spinner"></div>
+  </div>
+  <p class="ts-loading__text">در حال ثبت پاسخ‌های شما...</p>
+</div>
+}
+
+<!-- ============================================================
+     فاز: تشکر
+     ============================================================ -->
+@if (phase() === 'thankyou') {
+<div class="ts-thankyou">
+  <div class="ts-thankyou__card">
+    <div class="ts-thankyou__icon">
+      <i class="fa fa-check-circle"></i>
+    </div>
+
+    <h2 class="ts-thankyou__title">ممنون از مشارکت شما!</h2>
+
+    @if (survey()?.thankYouMessage) {
+    <div class="ts-thankyou__msg" [innerHTML]="thankYouMessageHtml()"></div>
+    } @else {
+    <p class="ts-thankyou__msg">پاسخ‌های شما با موفقیت ثبت شد. از اینکه وقت گذاشتید سپاسگزاریم.</p>
+    }
+
+    <div class="ts-thankyou__stats">
+      <div class="ts-thankyou__stat">
+        <i class="fa fa-list-ol"></i>
+        <span>{{ totalQuestions() }} سوال پاسخ داده شد</span>
+      </div>
+      <div class="ts-thankyou__stat">
+        <i class="fa fa-clock"></i>
+        <span>زمان: {{ formattedTime() }}</span>
+      </div>
+    </div>
+
+    <!-- <button type="button" class="ts-btn ts-btn--outline" (click)="goBack()">
+      <i class="fa fa-home"></i>
+      بازگشت
+    </button> -->
+  </div>
+
+  <div class="ts-confetti">
+    @for (i of [1,2,3,4,5,6,7,8,9,10,11,12]; track i) {
+    <div class="ts-confetti__piece" [style.--i]="i"></div>
+    }
+  </div>
+</div>
+}
+<ng-template #listRowTpl let-control let-index="index" let-q="question">
+  <div class="ts-list-row"
+    [class.ts-list-row--full]="q.questionType === QuestionType.MATRIX || q.questionType === QuestionType.LONG_TEXT"
+    [id]="'question-' + q.guid" [class.invalid]="isQuestionInvalid(q.guid)" [formGroup]="control">
+
+    <!-- ===== ستون سوال ===== -->
+    <div class="ts-list-row__q">
+      <span class="ts-list-row__badge">{{ index + 1 }}</span>
+      <div class="ts-list-row__qtext">
+        <h4>
+          {{ q.questionText }}
+          @if (q.isRequired) { <span class="ts-required">*</span> }
+        </h4>
+        @if (q.helpText) {
+        <p class="ts-list-row__help"><i class="fa fa-info-circle"></i>{{ q.helpText }}</p>
+        }
+        @if (q.imageUrl) {
+        <div class="ts-list-row__media"><img [src]="q.imageUrl" alt="" /></div>
+        }
+        @if (q.videoUrl) {
+        <div class="ts-list-row__media">
+          <video controls>
+            <source [src]="q.videoUrl" type="video/mp4" />
+          </video>
+        </div>
+        }
+      </div>
+    </div>
+
+    <!-- ===== ستون پاسخ ===== -->
+    <div class="ts-list-row__a">
+
+      <!-- TEXT -->
+      @if (q.questionType === QuestionType.TEXT) {
+      <div class="ts-field ts-field--inline">
+        <input type="text" class="ts-input" formControlName="textAnswer"
+          [placeholder]="q.placeholder || 'پاسخ خود را وارد کنید'" [maxlength]="q.maxLength || 500" />
+      </div>
+      }
+
+      <!-- LONG_TEXT -->
+      @if (q.questionType === QuestionType.LONG_TEXT) {
+      <div class="ts-field ts-field--inline">
+        <textarea class="ts-textarea" formControlName="textAnswer" rows="3"
+          [placeholder]="q.placeholder || 'پاسخ خود را وارد کنید'" [maxlength]="q.maxLength || 2000"></textarea>
+      </div>
+      }
+
+      <!-- MULTIPLE_CHOICE -->
+      @if (q.questionType === QuestionType.MULTIPLE_CHOICE) {
+      <div class="ts-pills">
+        @for (option of q.options; track option.guid) {
+        <label class="ts-pill" [class.selected]="control.get('selectedOptionGuid')?.value === option.guid">
+          <input type="radio" [value]="option.guid" formControlName="selectedOptionGuid"
+            (change)="onOptionSelectedInGroup(control, option.guid)" />
+          @if (option.imageUrl) { <img [src]="option.imageUrl" class="ts-pill__img" /> }
+          <span>{{ option.optionText }}</span>
+          @if (option.color) { <span class="ts-option__color" [style.background]="option.color"></span> }
+        </label>
+        }
+        @if (q.allowOtherOption) {
+        <input type="text" class="ts-input ts-pill-other" formControlName="otherAnswer"
+          [placeholder]="q.otherOptionText || 'سایر'" />
+        }
+      </div>
+      }
+
+      <!-- CHECKBOX -->
+      @if (q.questionType === QuestionType.CHECKBOX) {
+      <div class="ts-pills" formArrayName="selectedOptionGuids">
+        @for (option of q.options; track $index) {
+        <label class="ts-pill" [class.selected]="control.get('selectedOptionGuids')?.value?.[$index]">
+          <input type="checkbox" [formControlName]="$index" />
+          @if (option.imageUrl) { <img [src]="option.imageUrl" class="ts-pill__img" /> }
+          <span>{{ option.optionText }}</span>
+          @if (option.color) { <span class="ts-option__color" [style.background]="option.color"></span> }
+        </label>
+        }
+        @if (q.allowOtherOption) {
+        <input type="text" class="ts-input ts-pill-other" formControlName="otherAnswer"
+          [placeholder]="q.otherOptionText || 'سایر'" />
+        }
+      </div>
+      }
+
+      <!-- DROPDOWN -->
+      @if (q.questionType === QuestionType.DROPDOWN) {
+      <div class="ts-field ts-field--inline">
+        <select class="ts-select" formControlName="selectedOptionGuid">
+          <option value="">یک گزینه انتخاب کنید</option>
+          @for (option of q.options; track option.guid) {
+          <option [value]="option.guid">{{ option.optionText }}</option>
+          }
+        </select>
+      </div>
+      }
+
+      <!-- RATING -->
+      @if (q.questionType === QuestionType.RATING) {
+      <div class="ts-rating ts-rating--inline">
+        <div class="ts-rating__buttons">
+          @for (r of [1,2,3,4,5]; track r) {
+          <button type="button" class="ts-rating__btn ts-rating__btn--sm"
+            [class.active]="control.get('numericAnswer')?.value === r" (click)="onRatingSelectedInGroup(control, r)">
+            <i class="fa" [class.fa-star]="control.get('numericAnswer')?.value >= r"
+              [class.far]="control.get('numericAnswer')?.value < r || !control.get('numericAnswer')?.value"
+              [class.fas]="control.get('numericAnswer')?.value >= r"></i>
+            <span>{{ r }}</span>
+          </button>
+          }
+        </div>
+      </div>
+      }
+
+      <!-- DATE -->
+      @if (q.questionType === QuestionType.DATE) {
+      <div class="ts-field ts-field--inline">
+        <input type="date" class="ts-input" formControlName="dateAnswer" />
+      </div>
+      }
+
+      <!-- FILE_UPLOAD -->
+      @if (q.questionType === QuestionType.FILE_UPLOAD) {
+      <div class="ts-upload ts-upload--inline">
+        <div class="ts-upload__zone">
+          <i class="fa fa-cloud-upload-alt"></i>
+          <p>انتخاب فایل</p>
+          <input type="file" class="ts-upload__input" (change)="onFileSelectedInGroup($event, control, q)" />
+        </div>
+        @if (control.get('fileName')?.value) {
+        <div class="ts-upload__file">
+          <i class="fa fa-file"></i>
+          <span>{{ control.get('fileName')?.value }}</span>
+          <i class="fa fa-check-circle ts-upload__ok"></i>
+        </div>
+        }
+      </div>
+      }
+
+      <!-- MATRIX -->
+      @if (q.questionType === QuestionType.MATRIX) {
+      <div class="ts-matrix" formGroupName="matrixAnswers">
+        <div class="table-responsive">
+          <table class="ts-matrix__table">
+            <thead>
+              <tr>
+                <th></th>
+                @for (col of q.matrixColumns; track col) { <th>{{ col }}</th> }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of q.matrixRows; track row) {
+              <tr>
+                <td class="ts-matrix__row-label">{{ row }}</td>
+                @for (col of q.matrixColumns; track col) {
+                <td>
+                  <label class="ts-matrix__radio">
+                    <input type="radio" [formControlName]="row" [value]="col" />
+                    <span></span>
+                  </label>
+                </td>
+                }
+              </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+      }
+
+    </div>
+
+    @if (isQuestionInvalid(q.guid)) {
+    <div class="ts-validation-error ts-list-row__error">
+      <i class="fa fa-exclamation-circle"></i>
+      <span>لطفاً به این سوال پاسخ دهید</span>
+    </div>
+    }
+  </div>
+</ng-template>
+
+<ng-template #groupQuestionTpl let-q>
+  @if (getControlForQuestion(q); as control) {
+  <div class="ts-question ts-question--compact" [id]="'question-group-' + q.guid"
+    [class.invalid]="isQuestionInvalid(q.guid)" [formGroup]="control">
+
+    <div class="ts-question__head">
+      <div class="ts-question__badge">{{ q.sortOrder }}</div>
+      <div>
+        <h4 class="ts-question__text">
+          {{ q.questionText }}
+          @if (q.isRequired) { <span class="ts-required">*</span> }
+        </h4>
+        @if (q.helpText) {
+        <p class="ts-question__help"><i class="fa fa-info-circle"></i>{{ q.helpText }}</p>
+        }
+      </div>
+    </div>
+
+    <!-- ===== Answer (Slide) ===== -->
+    <form [formGroup]="answerForm" class="ts-answer">
+
+      <!-- TEXT -->
+      @if (q.questionType === QuestionType.TEXT) {
+      <div class="ts-field" [class.ts-field--error]="!!currentValidationError()">
+        <input type="text" class="ts-input" formControlName="textAnswer"
+          [placeholder]="q.placeholder || 'پاسخ خود را وارد کنید'" [maxlength]="q.maxLength || 500" />
+        @if (q.minLength || q.maxLength) {
+        <div class="ts-field__hint">
+          @if (q.minLength) { حداقل {{ q.minLength }} کاراکتر }
+          @if (q.minLength && q.maxLength) { — }
+          @if (q.maxLength) { حداکثر {{ q.maxLength }} کاراکتر }
+        </div>
+        }
+      </div>
+      }
+
+      <!-- LONG_TEXT -->
+      @if (q.questionType === QuestionType.LONG_TEXT) {
+      <div class="ts-field" [class.ts-field--error]="!!currentValidationError()">
+        <textarea class="ts-textarea" formControlName="textAnswer" rows="5"
+          [placeholder]="q.placeholder || 'پاسخ خود را وارد کنید'" [maxlength]="q.maxLength || 2000"></textarea>
+        @if (q.minLength || q.maxLength) {
+        <div class="ts-field__hint">
+          @if (q.minLength) { حداقل {{ q.minLength }} کاراکتر }
+          @if (q.minLength && q.maxLength) { — }
+          @if (q.maxLength) { حداکثر {{ q.maxLength }} کاراکتر }
+        </div>
+        }
+      </div>
+      }
+
+      <!-- MULTIPLE_CHOICE -->
+      @if (q.questionType === QuestionType.MULTIPLE_CHOICE) {
+      <div class="ts-options" [class.ts-options--error]="!!currentValidationError()">
+        @for (option of q.options; track option.guid) {
+        <div class="ts-option" [class.selected]="answerForm.value.selectedOptionGuid === option.guid"
+          (click)="onOptionSelected(option.guid)">
+          <div class="ts-option__radio">
+            <input type="radio" [value]="option.guid" formControlName="selectedOptionGuid" />
+          </div>
+          <div class="ts-option__content">
+            @if (option.imageUrl) { <img [src]="option.imageUrl" class="ts-option__img" /> }
+            <span>{{ option.optionText }}</span>
+            @if (option.color) { <span class="ts-option__color" [style.background]="option.color"></span> }
+          </div>
+        </div>
+        }
+        @if (q.allowOtherOption) {
+        <div class="ts-other">
+          <label>{{ q.otherOptionText || 'سایر' }}:</label>
+          <input type="text" class="ts-input" formControlName="otherAnswer" placeholder="لطفاً مشخص کنید" />
+        </div>
+        }
+      </div>
+      }
+
+      <!-- CHECKBOX -->
+      @if (q.questionType === QuestionType.CHECKBOX) {
+      <div class="ts-options" [class.ts-options--error]="!!currentValidationError()"
+        formArrayName="selectedOptionGuids">
+        @for (option of q.options; track $index) {
+        <div class="ts-option checkbox" [class.selected]="answerForm.get('selectedOptionGuids')?.value?.[$index]">
+          <div class="ts-option__check">
+            <input type="checkbox" [formControlName]="$index" />
+          </div>
+          <div class="ts-option__content">
+            @if (option.imageUrl) { <img [src]="option.imageUrl" class="ts-option__img" /> }
+            <span>{{ option.optionText }}</span>
+            @if (option.color) { <span class="ts-option__color" [style.background]="option.color"></span> }
+          </div>
+        </div>
+        }
+        @if (q.allowOtherOption) {
+        <div class="ts-other">
+          <label>{{ q.otherOptionText || 'سایر' }}:</label>
+          <input type="text" class="ts-input" formControlName="otherAnswer" placeholder="لطفاً مشخص کنید" />
+        </div>
+        }
+      </div>
+      @if (q.minSelections || q.maxSelections) {
+      <div class="ts-field__hint">
+        @if (q.minSelections) { حداقل {{ q.minSelections }} گزینه }
+        @if (q.maxSelections) { — حداکثر {{ q.maxSelections }} گزینه }
+      </div>
+      }
+      }
+
+      <!-- DROPDOWN -->
+      @if (q.questionType === QuestionType.DROPDOWN) {
+      <div class="ts-field" [class.ts-field--error]="!!currentValidationError()">
+        <select class="ts-select" formControlName="selectedOptionGuid">
+          <option value="">یک گزینه انتخاب کنید</option>
+          @for (option of q.options; track option.guid) {
+          <option [value]="option.guid">{{ option.optionText }}</option>
+          }
+        </select>
+      </div>
+      }
+
+      <!-- RATING -->
+      @if (q.questionType === QuestionType.RATING) {
+      <div class="ts-rating" [class.ts-rating--error]="!!currentValidationError()">
+        @if (q.minScaleLabel || q.maxScaleLabel) {
+        <div class="ts-rating__labels">
+          <span>{{ q.minScaleLabel }}</span>
+          <span>{{ q.maxScaleLabel }}</span>
+        </div>
+        }
+        <div class="ts-rating__buttons">
+          @for (r of [1,2,3,4,5]; track r) {
+          <button type="button" class="ts-rating__btn" [class.active]="answerForm.value.numericAnswer === r"
+            (click)="onRatingSelected(r)">
+            <span class="ts-rating__star">
+              <i class="fa" [class.fa-star]="answerForm.value.numericAnswer >= r"
+                [class.far]="answerForm.value.numericAnswer < r || !answerForm.value.numericAnswer"
+                [class.fas]="answerForm.value.numericAnswer >= r"></i>
+            </span>
+            <span class="ts-rating__num">{{ r }}</span>
+          </button>
+          }
+        </div>
+      </div>
+      }
+
+      <!-- DATE -->
+      @if (q.questionType === QuestionType.DATE) {
+      <div class="ts-field" [class.ts-field--error]="!!currentValidationError()">
+        <input type="date" class="ts-input" formControlName="dateAnswer" />
+      </div>
+      }
+
+      <!-- FILE_UPLOAD -->
+      @if (q.questionType === QuestionType.FILE_UPLOAD) {
+      <div class="ts-upload" [class.ts-upload--error]="!!currentValidationError()">
+        <div class="ts-upload__zone">
+          <i class="fa fa-cloud-upload-alt"></i>
+          <p>فایل خود را انتخاب کنید یا اینجا رها کنید</p>
+          @if (q.maxFileSize) { <small>حداکثر حجم: {{ q.maxFileSize }} MB</small> }
+          @if (q.allowedFileTypes) { <small>فرمت‌های مجاز: {{ q.allowedFileTypes }}</small> }
+          <input type="file" class="ts-upload__input" (change)="onFileSelected($event)" />
+        </div>
+        @if (answerForm.value.fileName) {
+        <div class="ts-upload__file">
+          <i class="fa fa-file"></i>
+          <span>{{ answerForm.value.fileName }}</span>
+          <i class="fa fa-check-circle ts-upload__ok"></i>
+        </div>
+        }
+      </div>
+      }
+
+      <!-- MATRIX -->
+      @if (q.questionType === QuestionType.MATRIX) {
+      <div class="ts-matrix" [class.ts-matrix--error]="!!currentValidationError()" formGroupName="matrixAnswers">
+        <div class="table-responsive">
+          <table class="ts-matrix__table">
+            <thead>
+              <tr>
+                <th></th>
+                @for (col of q.matrixColumns; track col) { <th>{{ col }}</th> }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of q.matrixRows; track row) {
+              <tr>
+                <td class="ts-matrix__row-label">{{ row }}</td>
+                @for (col of q.matrixColumns; track col) {
+                <td>
+                  <label class="ts-matrix__radio">
+                    <input type="radio" [formControlName]="row" [value]="col" />
+                    <span></span>
+                  </label>
+                </td>
+                }
+              </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+      }
+
+    </form>
+
+    <!-- ✅ پیام خطای inline زیر سوال — نمایش می‌یابد وقتی validation شکست بخورد -->
+    @if (currentValidationError()) {
+    <div class="ts-validation-error">
+      <i class="fa fa-exclamation-circle"></i>
+      <span>{{ currentValidationError() }}</span>
+    </div>
+    }
+    @if (isQuestionInvalid(q.guid)) {
+    <div class="ts-validation-error">
+      <i class="fa fa-exclamation-circle"></i>
+      <span>لطفاً به این سوال پاسخ دهید</span>
+    </div>
+    }
+  </div>
+  }
+</ng-template>

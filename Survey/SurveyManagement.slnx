@@ -1,0 +1,31 @@
+<Solution>
+  <Folder Name="/Application/">
+    <Project Path="SurveyManagement.Application.Contract/SurveyManagement.Application.Contract.csproj" />
+    <Project Path="SurveyManagement.Application/SurveyManagement.Application.csproj" />
+  </Folder>
+  <Folder Name="/Common/">
+    <Project Path="SurveyManagement.Common/SurveyManagement.Common.csproj" Id="286ac1d9-bc27-40ec-8ac9-6910c21dbe7a" />
+  </Folder>
+  <Folder Name="/Domain/">
+    <Project Path="SurveyManagement.Domain/SurveyManagement.Domain.csproj" />
+  </Folder>
+  <Folder Name="/Front/">
+    <Project Path="SurveyManagementFront/SurveyManagementFront.esproj">
+      <Build />
+      <Deploy />
+    </Project>
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="SurveyManagement.Infrastructure.Acl/SurveyManagement.Infrastructure.Acl.csproj" Id="ee5af822-1702-470d-ac16-9846ceb347d0" />
+    <Project Path="SurveyManagement.Infrastructure.Configuration/SurveyManagement.Infrastructure.Configuration.csproj" />
+    <Project Path="SurveyManagement.Infrastructure.Persistence/SurveyManagement.Infrastructure.Persistence.csproj" />
+    <Project Path="SurveyManagement.Infrastructure.Query.Contract/SurveyManagement.Infrastructure.Query.Contract.csproj" />
+    <Project Path="SurveyManagement.Infrastructure.Query/SurveyManagement.Infrastructure.Query.csproj" />
+  </Folder>
+  <Folder Name="/Presentation/">
+    <Project Path="SurveyManagement.Presentation.Api/SurveyManagement.Presentation.Api.csproj" Id="83737e51-508b-4229-bd20-637bfe6fa4a8" />
+    <Project Path="SurveyManagement.Presentation.Facade.Command/SurveyManagement.Presentation.Facade.Command.csproj" Id="ead4f534-ec6a-4fe9-908d-cf367bd4f21f" />
+    <Project Path="SurveyManagement.Presentation.Facade.Contract/SurveyManagement.Presentation.Facade.Contract.csproj" Id="388e3227-d881-4654-abdd-9be7de3d2dfe" />
+    <Project Path="SurveyManagement.Presentation.Facade.Query/SurveyManagement.Presentation.Facade.Query.csproj" Id="bdc43d80-7aad-423a-bc0f-274c4bd7ccd3" />
+  </Folder>
+</Solution>

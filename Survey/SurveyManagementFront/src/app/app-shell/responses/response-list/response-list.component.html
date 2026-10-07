@@ -1,0 +1,187 @@
+@if (loading()) {
+<div class="pageHead">
+  <div>
+    <h1 class="h1">پاسخ‌های نظرسنجی</h1>
+    <p class="sub">در حال بارگذاری پاسخ‌ها...</p>
+  </div>
+</div>
+<section class="card pad-lg">
+  <div class="loadingCenter">
+    <div class="loadingSpinner"></div>
+    <p class="muted" style="margin-top:20px">در حال بارگذاری پاسخ‌ها...</p>
+  </div>
+</section>
+} @else {
+
+<div class="pageHead">
+  <div>
+    <h1 class="h1">پاسخ‌های نظرسنجی</h1>
+    <p class="sub">مدیریت پاسخ‌ها، فیلتر دموگرافیک، و خروجی گزارش</p>
+  </div>
+
+  <div class="row">
+    <span class="pill">
+      <span class="dot"></span>
+      تعداد:
+      <b>{{ responses().length }}</b>
+    </span>
+    <button type="button" class="btn ghost" (click)="toggleParticipantsPanel()">
+      <i class="fa fa-user-check"></i>
+      شرکت‌کنندگان
+    </button>
+    <button type="button" class="btn ghost" (click)="backToSurveys()">
+      <i class="fa fa-arrow-right"></i>
+      بازگشت
+    </button>
+  </div>
+</div>
+@if (showParticipantsPanel()) {
+<section class="card pad-lg participantsPanel">
+  <div class="sectionRow">
+    <div class="sectionTitle">
+      <i class="fa fa-user-check"></i>
+      فهرست شرکت‌کنندگان
+    </div>
+    <button type="button" class="btn xs ghost" (click)="showParticipantsPanel.set(false)">
+      <i class="fa fa-times"></i>
+    </button>
+  </div>
+  <div class="hr"></div>
+
+  @if (loadingParticipants()) {
+  <div class="loadingCenter" style="padding:32px 0">
+    <div class="loadingSpinner"></div>
+  </div>
+  } @else if (participantsReport()) {
+  <div class="row" style="justify-content:space-between; align-items:center">
+    <div class="muted">
+      <i class="fa fa-users"></i>
+      تعداد کل شرکت‌کنندگان: <b>{{ participantsReport()!.participants.length }}</b> نفر
+    </div>
+    <button type="button" class="btn primary" (click)="exportParticipants()" [disabled]="exportingParticipants()">
+      @if (exportingParticipants()) {
+      <i class="fa fa-spinner fa-spin"></i>
+      در حال تولید فایل...
+      } @else {
+      <i class="fa fa-file-excel"></i>
+      دانلود Excel
+      }
+    </button>
+  </div>
+
+  <div class="sp-12"></div>
+
+  @if (participantsReport()!.participants.length === 0) {
+  <div class="emptyState" style="padding:32px">
+    <i class="fa fa-user-slash fa-2x text-muted"></i>
+    <p class="muted" style="margin-top:8px">هنوز کسی در این نظرسنجی شرکت نکرده است.</p>
+  </div>
+  } @else {
+  <div class="softWrap" style="max-height:320px; overflow:auto">
+    <table class="simpleTable">
+      <thead>
+        <tr>
+          <th style="width:60px">ردیف</th>
+          <th>کد پرسنلی</th>
+          <th>نام و نام خانوادگی</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (p of participantsReport()!.participants; track p.personnelCode; let i = $index) {
+        <tr>
+          <td>{{ i + 1 }}</td>
+          <td>{{ p.personnelCode }}</td>
+          <td>{{ p.fullName }}</td>
+        </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  }
+  }
+</section>
+
+<div class="sp-12"></div>
+}
+<!-- سوییچ نمای لیستی / ماتریسی / تحلیل -->
+<div class="viewSwitch">
+  <button type="button" class="viewSwitch__btn" [class.active]="viewMode() === 'grid'" (click)="setViewMode('grid')">
+    <i class="fa fa-table"></i>
+    نمای لیستی (فیلتر و ستون‌بندی پیشرفته)
+  </button>
+  <button type="button" class="viewSwitch__btn" [class.active]="viewMode() === 'matrix'"
+    (click)="setViewMode('matrix')">
+    <i class="fa fa-th"></i>
+    نمای ماتریسی (سوال × پاسخ)
+  </button>
+  <button type="button" class="viewSwitch__btn" [class.active]="viewMode() === 'analytics'"
+    (click)="setViewMode('analytics')">
+    <i class="fa fa-chart-pie"></i>
+    تحلیل و آنالیز
+  </button>
+</div>
+
+<div class="sp-12"></div>
+
+@if (viewMode() === 'grid') {
+<section class="card pad-lg">
+
+  <!-- ✅ فیلتر متنی روی دموگرافیک (جایگزین فیلتر Status که دیگه وجود نداره) -->
+  <div class="sectionRow">
+    <div class="sectionTitle">فیلترها</div>
+    <span class="badge">دموگرافیک</span>
+  </div>
+  <div class="hr"></div>
+
+  <div class="grid grid-3">
+    <label class="field">
+      <span class="label">جستجو در گروه سنی / جنسیت / شیفت / واحد</span>
+      <input class="in" type="search" placeholder="مثلاً: شیفت شب یا واحد تولید..." [ngModel]="searchTerm()"
+        (ngModelChange)="searchTerm.set($event)">
+      <span class="help">حداقل ۲ حرف وارد کنید.</span>
+    </label>
+  </div>
+
+  <div class="sp-12"></div>
+
+  @if (!hasResponses()) {
+  <div class="emptyState">
+    <i class="fa fa-comments fa-3x text-muted mb-3"></i>
+    <h3 class="h3" style="margin:0">هیچ پاسخی یافت نشد</h3>
+    <p class="muted" style="margin-top:8px">هنوز پاسخی برای این نظرسنجی ثبت نشده است.</p>
+  </div>
+  } @else {
+
+  <div class="softWrap">
+    <ag-grid-angular #agGrid id="responsesGrid" class="ag-theme-material ag-grid-custom font-sahel"
+      style="height: 640px; width: 100%;" [rowData]="filteredResponses()" [gridOptions]="gridOptions()"
+      [modules]="modules()" (gridReady)="onGridReady($event)">
+    </ag-grid-angular>
+  </div>
+
+  <div class="sp-12"></div>
+
+  <div class="row" style="justify-content:space-between">
+    <div class="muted small">
+      نمایش {{ filteredResponses().length }} از {{ responses().length }} پاسخ
+    </div>
+
+    <div class="row" style="gap:8px">
+      <button type="button" class="btn sm ghost" (click)="exportResponses()" title="خروجی Excel">
+        <i class="fa fa-file-excel"></i>
+        خروجی
+      </button>
+    </div>
+  </div>
+  }
+</section>
+} @else if (viewMode() === 'analytics') {
+<section class="card pad-lg">
+  <app-survey-analytics [surveyGuid]="surveyGuid()"></app-survey-analytics>
+</section>
+} @else {
+<section class="card pad-lg">
+  <app-response-matrix [surveyGuid]="surveyGuid()"></app-response-matrix>
+</section>
+}
+}

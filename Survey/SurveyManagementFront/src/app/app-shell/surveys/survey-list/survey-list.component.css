@@ -1,0 +1,64 @@
+.card {
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 8px 8px 0 0;
+  padding: 1rem 1.5rem;
+}
+
+.grid-container {
+  margin-top: 1rem;
+}
+
+.ag-grid-custom {
+  font-family: 'Sahel', Arial, sans-serif;
+}
+
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.clickable-row:hover {
+  background-color: #f8f9fa;
+}
+
+.badge-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: white;
+  white-space: nowrap;
+}
+
+.grid-actions {
+  padding-top: 1rem;
+  border-top: 1px solid #dee2e6;
+}
+
+.btn-group-sm .btn {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+/* AG Grid Custom Styles */
+::ng-deep .ag-theme-material {
+  --ag-border-color: #dee2e6;
+  --ag-header-background-color: #f8f9fa;
+  --ag-odd-row-background-color: #ffffff;
+  --ag-row-hover-color: #f1f3f5;
+}
+
+::ng-deep .ag-theme-material .ag-header-cell {
+  font-weight: 600;
+  color: #495057;
+}
+
+::ng-deep .ag-theme-material .ag-cell {
+  line-height: 38px;
+}

@@ -1,0 +1,263 @@
+<!-- ============================================================ -->
+<!-- صفحه نظرسنجی‌های من — کارت‌های زیبا با فیلتر و جستجو         -->
+<!-- ============================================================ -->
+
+<!-- ===== Loading ===== -->
+@if (loading()) {
+<div class="ms-loading">
+    <div class="ms-loading__spinner"></div>
+    <p class="ms-loading__text">در حال بارگذاری نظرسنجی‌ها...</p>
+</div>
+}
+
+<!-- ===== Content ===== -->
+@else {
+
+<!-- Header -->
+<header class="ms-header">
+    <div class="ms-header__right">
+        <div class="ms-header__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                    stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+        </div>
+        <div>
+            <h1 class="ms-header__title">نظرسنجی‌های من</h1>
+            <p class="ms-header__subtitle">نظرسنجی‌هایی که به شما اختصاص داده شده است</p>
+        </div>
+    </div>
+
+    <button class="ms-btn ms-btn--ghost" (click)="refresh()" title="بروزرسانی">
+        <i class="fa fa-sync-alt"></i>
+    </button>
+</header>
+
+<!-- Stats Bar -->
+@if (hasAnySurveys()) {
+<div class="ms-stats">
+    <div class="ms-stat ms-stat--pending" (click)="setFilter('notStarted')">
+        <span class="ms-stat__number">{{ counts().notStarted }}</span>
+        <span class="ms-stat__label">شروع نشده</span>
+    </div>
+    <div class="ms-stat__divider"></div>
+    <div class="ms-stat ms-stat--progress" (click)="setFilter('inProgress')">
+        <span class="ms-stat__number">{{ counts().inProgress }}</span>
+        <span class="ms-stat__label">در حال انجام</span>
+    </div>
+    <div class="ms-stat__divider"></div>
+    <div class="ms-stat ms-stat--done" (click)="setFilter('completed')">
+        <span class="ms-stat__number">{{ counts().completed }}</span>
+        <span class="ms-stat__label">تکمیل شده</span>
+    </div>
+    <div class="ms-stat__divider"></div>
+    <div class="ms-stat ms-stat--expired" (click)="setFilter('expired')">
+        <span class="ms-stat__number">{{ counts().expired }}</span>
+        <span class="ms-stat__label">منقضی</span>
+    </div>
+</div>
+}
+
+<!-- Toolbar: Filter Tabs + Search -->
+@if (hasAnySurveys()) {
+<div class="ms-toolbar">
+    <div class="ms-tabs">
+        <button class="ms-tab" [class.ms-tab--active]="activeFilter() === 'all'" (click)="setFilter('all')">
+            همه
+            <span class="ms-tab__badge">{{ counts().all }}</span>
+        </button>
+        <button class="ms-tab" [class.ms-tab--active]="activeFilter() === 'notStarted'"
+            (click)="setFilter('notStarted')">
+            شروع نشده
+        </button>
+        <button class="ms-tab" [class.ms-tab--active]="activeFilter() === 'inProgress'"
+            (click)="setFilter('inProgress')">
+            در حال انجام
+        </button>
+        <button class="ms-tab" [class.ms-tab--active]="activeFilter() === 'completed'" (click)="setFilter('completed')">
+            تکمیل شده
+        </button>
+        <button class="ms-tab" [class.ms-tab--active]="activeFilter() === 'expired'" (click)="setFilter('expired')">
+            منقضی
+        </button>
+    </div>
+
+    <div class="ms-search">
+        <i class="fa fa-search ms-search__icon"></i>
+        <input type="text" class="ms-search__input" placeholder="جستجو در نظرسنجی‌ها..." [value]="searchQuery()"
+            (input)="onSearchInput($event)" />
+    </div>
+</div>
+}
+
+<!-- Empty State: No Surveys At All -->
+@if (!hasAnySurveys()) {
+<div class="ms-empty">
+    <div class="ms-empty__illustration">
+        <svg viewBox="0 0 200 200" fill="none">
+            <circle cx="100" cy="100" r="80" fill="#f0f4ff" stroke="#c7d2fe" stroke-width="2" />
+            <path d="M70 85h60M70 100h40M70 115h50" stroke="#818cf8" stroke-width="3" stroke-linecap="round" />
+            <circle cx="140" cy="130" r="25" fill="#e0e7ff" stroke="#818cf8" stroke-width="2" />
+            <path d="M133 130l4 4 8-8" stroke="#4f46e5" stroke-width="2.5" stroke-linecap="round"
+                stroke-linejoin="round" />
+        </svg>
+    </div>
+    <h2 class="ms-empty__title">هیچ نظرسنجی فعالی وجود ندارد</h2>
+    <p class="ms-empty__text">در حال حاضر نظرسنجی‌ای به شما اختصاص داده نشده است.<br />
+        وقتی نظرسنجی جدیدی ایجاد شود، اینجا نمایش داده می‌شود.</p>
+</div>
+}
+
+<!-- Empty State: Filter has no results -->
+@else if (isEmpty()) {
+<div class="ms-empty ms-empty--small">
+    <i class="fa fa-filter ms-empty__icon"></i>
+    <p class="ms-empty__text">نظرسنجی‌ای با این فیلتر یافت نشد</p>
+    <button class="ms-btn ms-btn--outline ms-btn--sm" (click)="setFilter('all')">نمایش همه</button>
+</div>
+}
+
+<!-- Survey Cards Grid -->
+@else {
+<div class="ms-grid">
+    @for (survey of filteredSurveys(); track trackByGuid($index, survey); let i = $index) {
+    <article class="ms-card" [class.ms-card--completed]="survey.responseStatus === ResponseStatus.Completed"
+        [class.ms-card--expired]="survey.responseStatus === ResponseStatus.Expired"
+        [class.ms-card--urgent]="survey.daysRemaining <= 2 && survey.responseStatus === ResponseStatus.NotStarted"
+        [style.animation-delay.ms]="i * 60">
+        <!-- Card Accent -->
+        <div class="ms-card__accent"
+            [style.background]="survey.themeColor ? 'linear-gradient(135deg, ' + survey.themeColor + ', ' + survey.themeColor + '88)' : ''">
+        </div>
+
+        <!-- Card Header -->
+        <div class="ms-card__header">
+            <!-- Status Badge -->
+            <span class="ms-badge" [class.ms-badge--pending]="survey.responseStatus === ResponseStatus.NotStarted"
+                [class.ms-badge--progress]="survey.responseStatus === ResponseStatus.InProgress"
+                [class.ms-badge--done]="survey.responseStatus === ResponseStatus.Completed"
+                [class.ms-badge--expired]="survey.responseStatus === ResponseStatus.Expired">
+                <i class="fa" [ngClass]="getStatusIcon(survey.responseStatus)"></i>
+                {{ survey.responseStatusText }}
+            </span>
+
+            <!-- Days Remaining -->
+            @if (!survey.isExpired && survey.responseStatus !== ResponseStatus.Completed) {
+            @if (survey.daysRemaining <= 2) { <span class="ms-days ms-days--urgent">
+                <i class="fa fa-exclamation-triangle"></i>
+                @if (survey.daysRemaining === 0) {
+                امروز آخرین مهلت!
+                } @else {
+                {{ survey.daysRemaining }} روز مانده
+                }
+                </span>
+                } @else if (survey.daysRemaining <= 7) { <span class="ms-days ms-days--warning">
+                    {{ survey.daysRemaining }} روز مانده
+                    </span>
+                    } @else {
+                    <span class="ms-days">
+                        {{ survey.daysRemaining }} روز مانده
+                    </span>
+                    }
+                    }
+        </div>
+
+        <!-- Card Body -->
+        <div class="ms-card__body">
+            <!-- Logo (if available) -->
+            @if (survey.logoUrl) {
+            <div class="ms-card__logo">
+                <img [src]="survey.logoUrl" [alt]="survey.title" loading="lazy" />
+            </div>
+            }
+
+            <h3 class="ms-card__title">{{ survey.title }}</h3>
+
+            @if (survey.description) {
+            <p class="ms-card__desc">{{ survey.description }}</p>
+            }
+
+            <!-- Meta Info -->
+            <div class="ms-card__meta">
+                <div class="ms-meta">
+                    <i class="fa fa-list-ol"></i>
+                    <span>{{ survey.totalQuestions }} سوال</span>
+                </div>
+                <div class="ms-meta">
+                    <i class="fa fa-calendar-alt"></i>
+                    <span>{{ survey.startDate }} تا {{ survey.endDate }}</span>
+                </div>
+                <div class="ms-meta">
+                    <i class="fa fa-user"></i>
+                    <span>{{ survey.createdBy }}</span>
+                </div>
+                @if (survey.totalResponses > 0) {
+                <div class="ms-meta">
+                    <i class="fa fa-users"></i>
+                    <span>{{ survey.totalResponses }} پاسخ</span>
+                </div>
+                }
+            </div>
+
+            <!-- Progress Bar (for InProgress) -->
+            @if (survey.responseStatus === ResponseStatus.InProgress) {
+            <div class="ms-progress">
+                <div class="ms-progress__bar">
+                    <div class="ms-progress__fill" [style.width.%]="survey.progressPercentage"></div>
+                </div>
+                <span class="ms-progress__text">{{ survey.progressPercentage | number:'1.0-0' }}% تکمیل شده</span>
+            </div>
+            }
+        </div>
+
+        <!-- Card Footer -->
+        <div class="ms-card__footer">
+            @if (survey.lastActivityDate) {
+            <span class="ms-card__activity">
+                <i class="fa fa-clock"></i>
+                آخرین فعالیت: {{ survey.lastActivityDate }}
+            </span>
+            }
+
+            <!-- Action Button -->
+            @switch (survey.responseStatus) {
+            @case (ResponseStatus.NotStarted) {
+            <button class="ms-btn ms-btn--primary" (click)="participate(survey)">
+                <i class="fa fa-play"></i>
+                شروع نظرسنجی
+            </button>
+            }
+            @case (ResponseStatus.InProgress) {
+            <button class="ms-btn ms-btn--continue" (click)="participate(survey)">
+                <i class="fa fa-arrow-left"></i>
+                ادامه نظرسنجی
+            </button>
+            }
+            @case (ResponseStatus.Completed) {
+            <button class="ms-btn ms-btn--done" disabled>
+                <i class="fa fa-check"></i>
+                تکمیل شده
+            </button>
+            }
+            @case (ResponseStatus.Expired) {
+            <button class="ms-btn ms-btn--expired" disabled>
+                <i class="fa fa-ban"></i>
+                منقضی شده
+            </button>
+            }
+            }
+        </div>
+
+        <!-- Full badge overlay (if full) -->
+        @if (survey.isFull) {
+        <div class="ms-card__full-overlay">
+            <span>ظرفیت تکمیل</span>
+        </div>
+        }
+    </article>
+    }
+</div>
+}
+
+}

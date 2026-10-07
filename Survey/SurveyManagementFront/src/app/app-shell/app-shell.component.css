@@ -1,0 +1,432 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   App Shell — جایگزین کامل app.component.css
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    --shell-primary: #667eea;
+    --shell-secondary: #764ba2;
+    --shell-accent: #f093fb;
+    --shell-danger: #f87171;
+    --shell-bg: #f3f4f8;
+    --shell-bg-alt: #ffffff;
+    --shell-text: #1f2937;
+    --shell-text-light: #6b7280;
+    --shell-border: #e5e7eb;
+    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-accent: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, .07);
+    --shadow-lg: 0 10px 20px rgba(0, 0, 0, .10);
+    --shadow-xl: 0 20px 40px rgba(0, 0, 0, .16);
+    --topbar-height: 72px;
+    --container-padding: 2rem;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-full: 9999px;
+    --transition-base: 200ms cubic-bezier(.4, 0, .2, 1);
+}
+
+.dark-mode {
+    --shell-bg: #111827;
+    --shell-bg-alt: #1f2937;
+    --shell-text: #f9fafb;
+    --shell-text-light: #9ca3af;
+    --shell-border: #374151;
+}
+
+/* ─── Root shell ─────────────────────────────────────────────────── */
+.app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    /* Fill viewport exactly */
+    overflow: hidden;
+    /* Children scroll independently */
+    background: var(--shell-bg);
+    color: var(--shell-text);
+}
+
+/* ─── Header strip ───────────────────────────────────────────────── */
+.app-shell-header {
+    flex-shrink: 0;
+    z-index: 200;
+}
+
+/* ─── Body row ───────────────────────────────────────────────────────
+   RTL (dir="rtl" روی html): flex row → اولین فرزند → سمت راست
+   LTR بدون global dir: از row-reverse استفاده کن (کامنت را ببین)
+────────────────────────────────────────────────────────────────── */
+.app-shell-body {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    /* ✅ RTL: sidebar (اول) = سمت راست  */
+    /* اگر پروژه dir="rtl" ندارد، خط بالا را به این تغییر بده:   */
+    /* flex-direction: row-reverse; */
+    overflow: hidden;
+    /* مانع از رشد بی‌نهایت */
+    min-height: 0;
+}
+
+/* ─── Main content ───────────────────────────────────────────────── */
+.app-shell-main {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 2rem 0;
+    background: var(--shell-bg);
+    /* scrollbar ظریف */
+    scrollbar-width: thin;
+    scrollbar-color: var(--shell-border) transparent;
+}
+
+.app-shell-main::-webkit-scrollbar {
+    width: 5px;
+}
+
+.app-shell-main::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.app-shell-main::-webkit-scrollbar-thumb {
+    background: var(--shell-border);
+    border-radius: 999px;
+}
+
+/* ─── Content wrapper ────────────────────────────────────────────────
+   ⚠️ نکته‌ی حیاتی: از fill-mode "both"/"forwards" روی این المنت
+   استفاده نکن! چون transform انیمیشن (translateY) بعد از پایان
+   انیمیشن روی المنت باقی می‌مونه و این باعث میشه این wrapper به
+   یک "containing block" جدید برای فرزندهای position:fixed تبدیل بشه
+   (رفتار استاندارد CSS). نتیجه: هر مودالی که داخل صفحات فرزند این
+   wrapper با position:fixed ساخته بشه (مثل مودال سوالات نظرسنجی)
+   به‌جای اینکه نسبت به کل viewport فیکس بشه، نسبت به همین wrapper
+   فیکس و اسکرول‌شده می‌مونه؛ در نتیجه هم overlay محدود میشه و هم
+   مودال بالای صفحه (به‌جای وسط دید کاربر) ظاهر می‌شود.
+   با حذف "both" انیمیشن دقیقاً همان‌طور اجرا می‌شود اما بعد از
+   اتمامش هیچ transform باقی‌مانده‌ای روی المنت نمی‌ماند.
+──────────────────────────────────────────────────────────────────── */
+.content-wrapper {
+    animation: fadeInUp .35s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.content-container {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 0 var(--container-padding);
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────── */
+.app-footer {
+    flex-shrink: 0;
+    background: var(--shell-bg-alt);
+    border-top: 1px solid var(--shell-border);
+    padding: 1rem 0;
+    z-index: 10;
+}
+
+.footer-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 var(--container-padding);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.footer-left {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+
+.footer-logo {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gradient-primary);
+    border-radius: var(--radius-md);
+    color: #fff;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.footer-brand {
+    font-size: .875rem;
+    font-weight: 700;
+    color: var(--shell-text);
+    margin: 0;
+}
+
+.footer-copyright {
+    font-size: .6875rem;
+    color: var(--shell-text-light);
+    margin: .125rem 0 0;
+}
+
+.footer-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .25rem;
+}
+
+.footer-links {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.footer-link {
+    font-size: .75rem;
+    color: var(--shell-text-light);
+    text-decoration: none;
+    transition: color var(--transition-base);
+}
+
+.footer-link:hover {
+    color: var(--shell-primary);
+}
+
+.footer-divider {
+    color: var(--shell-border);
+    font-size: .5rem;
+}
+
+.footer-version {
+    font-size: .625rem;
+    color: var(--shell-text-light);
+    margin: 0;
+}
+
+/* ─── Global Loading Overlay ─────────────────────────────────────── */
+.global-loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(11, 18, 32, .65);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--transition-base), visibility var(--transition-base);
+}
+
+.global-loading-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.loading-content {
+    text-align: center;
+    animation: scaleIn .25s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(.85);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.loading-spinner {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1.25rem;
+}
+
+.spinner-ring {
+    position: absolute;
+    inset: 0;
+    border: 3px solid transparent;
+    border-radius: 50%;
+    animation: spin 1.4s cubic-bezier(.5, 0, .5, 1) infinite;
+}
+
+.ring-1 {
+    border-top-color: #667eea;
+    animation-delay: -.45s;
+}
+
+.ring-2 {
+    border-top-color: #f093fb;
+    animation-delay: -.3s;
+}
+
+.ring-3 {
+    border-top-color: #764ba2;
+    animation-delay: -.15s;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.loading-text {
+    color: #fff;
+    font-size: .9375rem;
+    font-weight: 700;
+    margin: 0 0 .875rem;
+}
+
+.loading-dots {
+    display: flex;
+    justify-content: center;
+    gap: .375rem;
+}
+
+.dot {
+    width: 6px;
+    height: 6px;
+    background: rgba(255, 255, 255, .7);
+    border-radius: 50%;
+    animation: bounce 1.4s ease-in-out infinite;
+}
+
+.dot:nth-child(1) {
+    animation-delay: -.32s;
+}
+
+.dot:nth-child(2) {
+    animation-delay: -.16s;
+}
+
+@keyframes bounce {
+
+    0%,
+    80%,
+    100% {
+        transform: scale(0);
+        opacity: .4;
+    }
+
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* ─── Offline Indicator ──────────────────────────────────────────── */
+.offline-indicator {
+    position: fixed;
+    bottom: 1.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9998;
+    animation: slideUp .3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateX(-50%) translateY(60px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+    }
+}
+
+.offline-content {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .625rem 1.25rem;
+    background: #ef4444;
+    color: #fff;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    font-size: .875rem;
+    font-weight: 600;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+    :root {
+        --container-padding: 1.25rem;
+    }
+}
+
+@media (max-width: 768px) {
+    :root {
+        --container-padding: 1rem;
+    }
+
+    .app-shell {
+        height: auto;
+        overflow: visible;
+    }
+
+    .app-shell-body {
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    .app-shell-main {
+        overflow: visible;
+        padding: 1rem 0;
+    }
+
+    .footer-container {
+        flex-direction: column;
+        text-align: center;
+        gap: .75rem;
+    }
+
+    .footer-right {
+        align-items: center;
+    }
+}
+
+@media (max-width: 480px) {
+    :root {
+        --container-padding: .75rem;
+    }
+}
+
+@media print {
+
+    .app-footer,
+    .global-loading-overlay,
+    .offline-indicator {
+        display: none !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+    }
+}

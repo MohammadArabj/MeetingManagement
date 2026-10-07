@@ -1,0 +1,331 @@
+/* =========================
+   AG GRID — Mashte Theme
+   ========================= */
+.ag-theme-mashte {
+    direction: rtl;
+
+    /* رنگ‌ها (قابل تغییر) */
+    --p: #1d4ed8;
+    /* primary */
+    --a: #ff4d6d;
+    /* accent */
+    --ink: #0f172a;
+    /* text */
+    --muted: #64748b;
+    /* muted */
+    --line: rgba(148, 163, 184, .35);
+
+    font-family: var(--font-sahel) !important;
+
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, .60);
+    box-shadow: 0 14px 40px rgba(15, 23, 42, .08);
+
+    /* AG variables */
+    --ag-font-family: var(--font-sahel);
+    --ag-font-size: 13px;
+    --ag-row-height: 46px;
+    --ag-header-height: 54px;
+    --ag-cell-horizontal-padding: 14px;
+
+    --ag-border-color: rgba(148, 163, 184, .25);
+    --ag-background-color: transparent;
+
+    --ag-odd-row-background-color: rgba(255, 255, 255, .35);
+    --ag-row-hover-color: rgba(29, 78, 216, .06);
+    --ag-selected-row-background-color: rgba(29, 78, 216, .10);
+}
+
+/* Sahel فقط برای متن‌های grid */
+.ag-theme-mashte .ag-cell,
+.ag-theme-mashte .ag-header-cell-text,
+.ag-theme-mashte .ag-menu-option-text,
+.ag-theme-mashte .ag-paging-panel,
+.ag-theme-mashte input,
+.ag-theme-mashte select,
+.ag-theme-mashte textarea,
+.ag-theme-mashte button {
+    font-family: var(--font-sahel) !important;
+    color: var(--ink);
+}
+
+/* آیکون‌های خود AG Grid را خراب نکن */
+.ag-theme-mashte .ag-icon,
+.ag-theme-mashte .ag-icon::before {
+    font-family: "agGridMaterial", "agGridAlpine" !important;
+}
+
+/* FontAwesome را هم خراب نکن */
+.fa,
+.fas,
+.far,
+.fal,
+.fab,
+i[class^="fa"],
+i[class*=" fa-"] {
+    font-family: var(--fa-style-family, "Font Awesome 6 Free", "Font Awesome 5 Free", "FontAwesome") !important;
+}
+
+.fas,
+.fa-solid {
+    font-weight: 900 !important;
+}
+
+.far,
+.fa-regular {
+    font-weight: 400 !important;
+}
+
+/* Header شیشه‌ای */
+.ag-theme-mashte .ag-header {
+    background: linear-gradient(135deg, rgba(255, 255, 255, .88), rgba(255, 255, 255, .68));
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(148, 163, 184, .25);
+}
+
+.ag-theme-mashte .ag-header-cell,
+.ag-theme-mashte .ag-header-group-cell {
+    font-weight: 950;
+}
+
+.ag-theme-mashte .ag-header-cell-label {
+    justify-content: flex-start;
+    /* RTL */
+}
+
+/* خطوط و سلول‌ها */
+.ag-theme-mashte .ag-row {
+    border-bottom: 1px solid rgba(148, 163, 184, .14);
+}
+
+.ag-theme-mashte .ag-cell {
+    border-left: 1px solid rgba(148, 163, 184, .10);
+    /* جداکننده ستون در RTL */
+}
+
+.ag-theme-mashte .ag-cell:last-child {
+    border-left: none;
+}
+
+/* انتخاب ردیف: آبی ملایم (به‌جای زرد بد) */
+.ag-theme-mashte .ag-row.ag-row-selected .ag-cell {
+    background: rgba(29, 78, 216, .10) !important;
+}
+
+.ag-theme-mashte .ag-row:hover .ag-cell {
+    background: rgba(29, 78, 216, .06);
+}
+
+/* badge های داخل سلول (Draft و …) */
+.ag-theme-mashte .ag-cell .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1;
+    border: 1px solid transparent;
+}
+
+/* Draft شیک‌تر */
+.ag-theme-mashte .ag-cell .badge.bg-secondary {
+    background: rgba(100, 116, 139, .12) !important;
+    color: #334155 !important;
+    border-color: rgba(100, 116, 139, .25) !important;
+}
+
+/* Success/Info (اگر داری) */
+.ag-theme-mashte .ag-cell .badge.bg-success {
+    background: rgba(34, 197, 94, .12) !important;
+    color: #166534 !important;
+    border-color: rgba(34, 197, 94, .22) !important;
+}
+
+.ag-theme-mashte .ag-cell .badge.bg-info {
+    background: rgba(14, 165, 233, .12) !important;
+    color: #075985 !important;
+    border-color: rgba(14, 165, 233, .22) !important;
+}
+
+/* اسکرول‌بار تمیز */
+.ag-theme-mashte ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.ag-theme-mashte ::-webkit-scrollbar-track {
+    background: rgba(148, 163, 184, .12);
+    border-radius: 20px;
+}
+
+.ag-theme-mashte ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, .45);
+    border-radius: 20px;
+}
+
+.ag-theme-mashte ::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, .65);
+}
+:root {
+    --font-sahel: "Sahel", "Vazirmatn", "IRANSans", system-ui, -apple-system, "Segoe UI", Arial;
+}
+
+/* 1) فونت سراسری فقط برای متن‌ها */
+html,
+body,
+p,
+span,
+div,
+a,
+label,
+small,
+strong,
+b,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+input,
+textarea,
+select,
+button,
+table,
+th,
+td,
+.form-control,
+.form-select,
+.btn,
+.badge,
+.pill {
+    font-family: var(--font-sahel) !important;
+}
+
+/* 2) استثنا: FontAwesome */
+.fa,
+.fas,
+.far,
+.fal,
+.fab,
+i[class^="fa"],
+i[class*=" fa-"] {
+    font-family: var(--fa-style-family, "Font Awesome 6 Free", "Font Awesome 5 Free", "FontAwesome") !important;
+}
+
+.fas,
+.fa-solid {
+    font-weight: 900 !important;
+}
+
+.far,
+.fa-regular {
+    font-weight: 400 !important;
+}
+
+/* 3) استثنا: آیکون‌های خود AG Grid */
+.ag-icon,
+.ag-icon::before {
+    font-family: "agGridMaterial", "agGridAlpine" !important;
+}
+
+/* استفاده از ::ng-deep برای نفوذ به استایل‌های داخلی ng-select */
+::ng-deep ng-select {
+    height: 100%;
+}
+
+::ng-deep .ng-select-container {
+    min-height: 38px;
+    /* تنظیم ارتفاع */
+    border: 1px solid #ced4da;
+    /* رنگ بوردر شبیه بوت‌استرپ */
+    border-radius: 0.25rem;
+    background-color: #fff;
+    color: #495057;
+    align-items: center;
+}
+
+::ng-deep .ng-select-container:focus-within {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* استایل برای Placeholder */
+::ng-deep .ng-placeholder {
+    color: #6c757d;
+}
+
+/* استایل برای آیتم‌های داخل لیست بازشو */
+::ng-deep .ng-dropdown-panel {
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    margin-top: 5px;
+}
+
+/* استایل آیتم‌ها وقتی هاور می‌شوند */
+::ng-deep .ng-option {
+    padding: 10px;
+    color: #495057;
+}
+
+::ng-deep .ng-option.ng-option-marked {
+    background-color: #e9ecef;
+    color: #212529;
+}
+
+::ng-deep .ng-option.ng-option-selected {
+    color: #fff;
+    background-color: #007bff;
+}
+/* استایل‌های custom components */
+.form-control,
+.form-select,
+textarea.form-control,
+ input.in,
+ select.in,
+ textarea.in {
+    width: 100%;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, .92);
+    padding: 10px 12px;
+    border-radius: 14px;
+    outline: none;
+    color: var(--ink);
+    transition: .15s ease;
+}
+
+ .form-control:focus,
+ .form-select:focus,
+ textarea.form-control:focus,
+ input.in:focus,
+ select.in:focus,
+ textarea.in:focus {
+    border-color: rgba(29, 78, 216, .35);
+    box-shadow: 0 0 0 4px rgba(29, 78, 216, .12);
+}
+
+ .form-label,
+ .label {
+    font-weight: 900;
+    color: var(--ink);
+    margin-bottom: 6px;
+    display: block;
+}
+
+.form-text,
+.help {
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+/* استایل input color */
+input[type="color"].in {
+    height: 50px;
+    padding: 4px;
+    cursor: pointer;
+}

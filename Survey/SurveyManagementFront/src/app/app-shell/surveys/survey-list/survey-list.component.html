@@ -1,0 +1,85 @@
+<!-- Share Link Modal -->
+@if (showShareModal()) {
+<app-share-link-modal [surveyGuid]="selectedSurveyGuid()" (closed)="closeShareModal()">
+</app-share-link-modal>
+}
+@if (isPermitted()) {
+@if (loading()) {
+<div style="text-align:center;padding:80px 0">
+  <div
+    style="display:inline-block;width:50px;height:50px;border:4px solid var(--line);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite">
+  </div>
+  <p class="muted" style="margin-top:20px">در حال بارگذاری...</p>
+</div>
+} @else {
+<div class="pageHead">
+  <div>
+    <h1 class="h1">لیست نظرسنجی‌ها</h1>
+    <p class="sub">مشاهده و مدیریت نظرسنجی‌ها</p>
+  </div>
+  <div class="row">
+    @if (canCreate()) {
+    <button class="btn primary" type="button" (click)="addNewSurvey()">
+      <i class="fas fa-plus"></i>
+      ثبت نظرسنجی جدید
+    </button>
+    }
+  </div>
+</div>
+
+<section class="card pad-lg">
+  @if (!hasSurveys()) {
+  <div class="block" style="text-align:center;padding:48px 24px">
+    <div style="font-size:3rem;margin-bottom:16px">📋</div>
+    <div class="h2">هیچ نظرسنجی یافت نشد</div>
+    <div class="sp-8"></div>
+    <p class="muted">با کلیک روی دکمه "ثبت نظرسنجی جدید" اولین نظرسنجی خود را ایجاد کنید</p>
+  </div>
+  } @else {
+  <div class="grid-container">
+    <ag-grid-angular #agGrid id="surveysGrid" class="ag-theme-material ag-theme-mashte ag-grid-custom"
+      style="height: 640px; width: 100%;" [rowData]="surveys()" [gridOptions]="gridOptions()" [modules]="modules()"
+      (gridReady)="onGridReady($event)">
+    </ag-grid-angular>
+  </div>
+
+  <div class="sp-12"></div>
+
+  <div class="row">
+    <span class="muted small">نمایش {{ surveys().length }} نظرسنجی</span>
+
+    <div class="row">
+      <button class="btn sm ghost" type="button" (click)="onExportExcel()" title="خروجی Excel">
+        <i class="fas fa-file-excel"></i>
+      </button>
+      <button class="btn sm ghost" type="button" (click)="removeAllFilters()" title="حذف فیلترها">
+        <i class="fas fa-filter"></i>
+      </button>
+    </div>
+  </div>
+  }
+</section>
+}
+
+
+}
+@else {
+<div class="card" style="text-align:center;padding:48px">
+  <i class="fa fa-lock fa-3x" style="color:#f59e0b"></i>
+  <h5 style="margin-top:16px">عدم دسترسی</h5>
+  <p class="muted">شما مجوز مشاهده این صفحه را ندارید.</p>
+</div>
+}
+<style>
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .ag-grid-custom {
+    border-radius: var(--r2);
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+</style>

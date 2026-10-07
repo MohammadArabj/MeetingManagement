@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Silent Renew</title>
+</head>
+<body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/oidc-client/1.11.5/oidc-client.min.js"></script>
+  <script>
+    // این صفحه در iframe مخفی باز میشه
+    // وقتی SSO پاسخ میده، این اسکریپت نتیجه رو به parent window برمیگردونه
+    new Oidc.UserManager({ response_mode: 'query' })
+      .signinSilentCallback()
+      .catch(function (err) {
+        console.error('Silent renew error:', err);
+      });
+  </script>
+</body>
+</html>

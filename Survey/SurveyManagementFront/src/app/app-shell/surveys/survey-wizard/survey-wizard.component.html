@@ -1,0 +1,131 @@
+@if (isLoading()) {
+<div class="loadingBox">
+    <div class="loadingSpinner"></div>
+    <p class="muted" style="margin-top:16px;font-size:0.95rem">در حال بارگذاری...</p>
+</div>
+} @else {
+
+<div class="wizardContainer">
+
+    <!-- ============ نوار بالایی ثابت ============ -->
+    <div class="wizardTopBar" #topBar>
+        <div class="wizardTopBar__accent"></div>
+
+        <div class="wizardTopBar__row">
+            <div class="wizardTopBar__title">
+                <span class="wizardTopBar__eyebrow">
+                    <i class="fa fa-poll"></i>
+                    {{ isEditMode() ? 'ویرایش نظرسنجی' : 'نظرسنجی جدید' }}
+                </span>
+                <h1>{{ stepTitle() }}</h1>
+                <p class="wizardTopBar__desc">{{ stepDescription() }}</p>
+            </div>
+
+            <!-- ✅ همه‌ی مراحل همیشه قابل کلیک‌اند — هیچ‌کدام قفل نیست -->
+            <div class="wizardTopBar__stepper">
+                <div class="stepUnit" [class.active]="currentStep() === 1" [class.done]="currentStep() > 1"
+                    (click)="goToStep(1)">
+                    <span class="stepUnit__dot">
+                        @if (currentStep() > 1) { <i class="fa fa-check"></i> } @else { 1 }
+                    </span>
+                    <span class="stepUnit__label">اطلاعات</span>
+                </div>
+                <span class="stepUnit__line" [class.active]="currentStep() >= 2"></span>
+
+                <div class="stepUnit" [class.active]="currentStep() === 2" [class.done]="currentStep() > 2"
+                    (click)="goToStep(2)">
+                    <span class="stepUnit__dot">
+                        @if (currentStep() > 2) { <i class="fa fa-check"></i> } @else { 2 }
+                    </span>
+                    <span class="stepUnit__label">سوالات</span>
+                </div>
+                <span class="stepUnit__line" [class.active]="currentStep() >= 3"></span>
+
+                <div class="stepUnit" [class.active]="currentStep() === 3" [class.done]="currentStep() > 3"
+                    (click)="goToStep(3)">
+                    <span class="stepUnit__dot">
+                        @if (currentStep() > 3) { <i class="fa fa-check"></i> } @else { 3 }
+                    </span>
+                    <span class="stepUnit__label">دسترسی‌ها</span>
+                </div>
+                <span class="stepUnit__line" [class.active]="currentStep() >= 4"></span>
+
+                <div class="stepUnit" [class.active]="currentStep() === 4" [class.done]="currentStep() > 4"
+                    (click)="goToStep(4)">
+                    <span class="stepUnit__dot">
+                        @if (currentStep() > 4) { <i class="fa fa-check"></i> } @else { 4 }
+                    </span>
+                    <span class="stepUnit__label">بررسی</span>
+                </div>
+            </div>
+
+            <button type="button" class="wizardTopBar__close" (click)="cancel()" title="انصراف">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- ============ Step Content ============ -->
+    <div class="stepContent">
+
+        @if (currentStep() === 1) {
+        <app-survey-wizard-step1 [surveyData]="surveyData()" (dataChange)="onSurveyDataChange($event)"
+            (fileUploaded)="onFileUploaded($event.type, $event.guid)">
+        </app-survey-wizard-step1>
+        }
+
+        @if (currentStep() === 2) {
+        <app-survey-wizard-step2 [questions]="questions" [criteria]="criteria"
+            [hasCriteria]="surveyData().hasCriteria ?? false" (questionsChange)="onQuestionsChange($event)"
+            (criteriaChange)="onCriteriaChange($event)"
+            (fileUploaded)="onFileUploaded($event.type, $event.guid, $event.relatedId)">
+        </app-survey-wizard-step2>
+        }
+
+        @if (currentStep() === 3) {
+        <app-survey-wizard-step3-access [accessItems]="accessItems" (accessItemsChange)="onAccessItemsChange($event)">
+        </app-survey-wizard-step3-access>
+        }
+
+        @if (currentStep() === 4) {
+        <app-survey-wizard-step3 [surveyData]="surveyData()" [questions]="questions()" [criteria]="criteria()"
+            [hasCriteria]="surveyData().hasCriteria ?? false">
+        </app-survey-wizard-step3>
+        }
+
+    </div>
+
+    <!-- ============ Footer ثابت ============ -->
+    <div class="wizardFooter">
+        <div class="wizardFooter__inner">
+            <button type="button" class="btn ghost lg" (click)="previousStep()" [disabled]="!canGoPrevious()">
+                <i class="fa fa-arrow-right"></i>
+                قبلی
+            </button>
+
+            <div class="wizardFooter__progress">
+                <div class="wizardFooter__progressTrack">
+                    <div class="wizardFooter__progressFill" [style.width.%]="progress()"></div>
+                </div>
+                <span>مرحله {{ currentStep() }} از {{ totalSteps() }}</span>
+            </div>
+
+            @if (currentStep() < totalSteps()) { <button type="button" class="btn primary lg" (click)="nextStep()">
+                بعدی
+                <i class="fa fa-arrow-left"></i>
+                </button>
+                } @else {
+                <button type="button" class="btn success lg" (click)="submitWizard()" [disabled]="isLoading()">
+                    @if (isLoading()) {
+                    <i class="fa fa-spinner fa-spin"></i> در حال ثبت...
+                    } @else {
+                    <i class="fa fa-check"></i> ثبت نظرسنجی
+                    }
+                </button>
+                }
+        </div>
+    </div>
+
+</div>
+
+}

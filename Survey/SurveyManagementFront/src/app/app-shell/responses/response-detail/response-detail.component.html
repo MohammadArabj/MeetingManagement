@@ -1,0 +1,252 @@
+@if (isLoading()) {
+<div class="rd-loading">
+  <div class="rd-spinner"></div>
+  <div class="rd-loading-text">در حال بارگذاری...</div>
+</div>
+} @else if (hasResponse()) {
+<div class="rd-page">
+
+  <!-- ===== Header ===== -->
+  <div class="rd-header">
+    <div class="rd-header__info">
+      <h1 class="rd-header__title">جزئیات پاسخ</h1>
+      <p class="rd-header__subtitle">اطلاعات ناشناس پاسخ‌دهنده، پاسخ‌ها و امکان چاپ یا حذف</p>
+    </div>
+    <div class="rd-header__actions">
+      <button type="button" class="rd-btn rd-btn--ghost" (click)="backToList()">
+        <i class="fa fa-arrow-right"></i>
+        بازگشت
+      </button>
+      <button type="button" class="rd-btn rd-btn--primary" (click)="printResponse()">
+        <i class="fa fa-print"></i>
+        چاپ
+      </button>
+      @if (canDelete()) {
+      <button type="button" class="rd-btn rd-btn--danger" (click)="deleteResponse()">
+        <i class="fa fa-trash"></i>
+        حذف
+      </button>
+      }
+    </div>
+  </div>
+
+  <!-- ===== Summary Strip ===== -->
+  <div class="rd-summaryStrip">
+    <div class="rd-summaryItem">
+      <div class="rd-summaryItem__icon rd-summaryItem__icon--blue">
+        <i class="fa fa-clipboard-list"></i>
+      </div>
+      <div>
+        <div class="rd-summaryItem__value">{{ answeredCount() }} / {{ answers().length }}</div>
+        <div class="rd-summaryItem__label">سوال پاسخ داده شده</div>
+      </div>
+    </div>
+    <div class="rd-summaryItem">
+      <div class="rd-summaryItem__icon rd-summaryItem__icon--purple">
+        <i class="fa fa-play-circle"></i>
+      </div>
+      <div>
+        <div class="rd-summaryItem__value">{{ startedAt() }}</div>
+        <div class="rd-summaryItem__label">تاریخ شروع</div>
+      </div>
+    </div>
+    <div class="rd-summaryItem">
+      <div class="rd-summaryItem__icon rd-summaryItem__icon--green">
+        <i class="fa fa-calendar-check"></i>
+      </div>
+      <div>
+        <div class="rd-summaryItem__value">{{ completedAt() }}</div>
+        <div class="rd-summaryItem__label">تاریخ اتمام</div>
+      </div>
+    </div>
+
+
+
+    @if (responseDetail()?.timeSpentSeconds) {
+    <div class="rd-summaryItem">
+      <div class="rd-summaryItem__icon rd-summaryItem__icon--orange">
+        <i class="fa fa-clock"></i>
+      </div>
+      <div>
+        <div class="rd-summaryItem__value">{{ (responseDetail()!.timeSpentSeconds! / 60).toFixed(1) }} دقیقه</div>
+        <div class="rd-summaryItem__label">زمان صرف شده</div>
+      </div>
+    </div>
+    }
+  </div>
+
+  <!-- ===== Demographics ===== -->
+  <div class="rd-section">
+    <div class="rd-section__header">
+      <i class="fa fa-users"></i>
+      <h2>دموگرافیک پاسخ‌دهنده</h2>
+    </div>
+
+    <div class="rd-demoGrid">
+      <div class="rd-demoTile">
+        <span class="rd-demoTile__label">سن</span>
+        <span class="rd-demoTile__value">{{ responseDetail()?.age ?? '-' }}</span>
+      </div>
+      <div class="rd-demoTile">
+        <span class="rd-demoTile__label">جنسیت</span>
+        <span class="rd-demoTile__value">{{ responseDetail()?.gender || '-' }}</span>
+      </div>
+      <div class="rd-demoTile">
+        <span class="rd-demoTile__label">امور</span>
+        <span class="rd-demoTile__value">{{ responseDetail()?.office || '-' }}</span>
+      </div>
+      <div class="rd-demoTile">
+        <span class="rd-demoTile__label">نوع استخدام</span>
+        <span class="rd-demoTile__value">{{ responseDetail()?.employmentType || '-' }}</span>
+      </div>
+      <div class="rd-demoTile">
+        <span class="rd-demoTile__label">مدرک تحصیلی</span>
+        <span class="rd-demoTile__value">{{ responseDetail()?.education || '-' }}</span>
+      </div>
+      <div class="rd-demoTile">
+        <span class="rd-demoTile__label">نوبت‌کاری</span>
+        <span class="rd-demoTile__value">{{ responseDetail()?.shiftWorker || '-' }}</span>
+      </div>
+      <div class="rd-demoTile">
+        <span class="rd-demoTile__label">سابقه (سال)</span>
+        <span class="rd-demoTile__value">{{ responseDetail()?.experienceYears ?? '-' }}</span>
+      </div>
+      <div class="rd-demoTile">
+        <span class="rd-demoTile__label">گرید سازمانی</span>
+        <span class="rd-demoTile__value">{{ responseDetail()?.organizationalGrade || '-' }}</span>
+      </div>
+      <div class="rd-demoTile">
+        <span class="rd-demoTile__label">گروه سازمانی</span>
+        <span class="rd-demoTile__value">{{ responseDetail()?.organizationalGroup || '-' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Answers ===== -->
+  <div class="rd-section">
+    <div class="rd-section__header">
+      <i class="fa fa-clipboard-list"></i>
+      <h2>پاسخ‌ها</h2>
+      <span class="rd-section__badge">{{ answers().length }} سوال</span>
+    </div>
+
+    <div class="rd-answersList">
+      @for (answer of answers(); track answer.id; let i = $index) {
+      <div class="rd-qCard" [class.rd-qCard--empty]="isAnswerEmpty(answer)">
+        <div class="rd-qCard__head">
+          <div class="rd-qCard__number">{{ i + 1 }}</div>
+          <div class="rd-qCard__headInfo">
+            <h4 class="rd-qCard__title">{{ answer.questionText }}</h4>
+            <span class="rd-qCard__type">
+              <i class="fa" [class]="getQuestionTypeIcon(answer.questionType)"></i>
+              {{ getQuestionTypeLabel(answer.questionType) }}
+            </span>
+          </div>
+          @if (answer.isSkipped) {
+          <span class="rd-badge rd-badge--warn">رد شده</span>
+          }
+        </div>
+
+        <div class="rd-qCard__body">
+          @if (answer.textAnswer || answer.numericAnswer !== undefined || answer.dateAnswer) {
+          <div class="rd-answerText">{{ formatAnswerValue(answer) }}</div>
+          }
+
+          @if (answer.selectedOption && !answer.selectedOptions) {
+          <div class="rd-answerChips">
+            <span class="rd-badge rd-badge--blue">{{ answer.selectedOption }}</span>
+          </div>
+          }
+
+          @if (answer.selectedOptions && answer.selectedOptions.length > 0) {
+          <div class="rd-answerChips">
+            @for (option of answer.selectedOptions; track option) {
+            <span class="rd-badge rd-badge--blue">{{ option }}</span>
+            }
+          </div>
+          }
+
+          @if (answer.otherAnswer) {
+          <div class="rd-answerOther">
+            <span class="rd-answerOther__label">سایر:</span>
+            <span>{{ answer.otherAnswer }}</span>
+          </div>
+          }
+
+          @if (answer.fileUrl && answer.fileName) {
+          <a class="rd-answerFile" [href]="answer.fileUrl" target="_blank">
+            <i class="fa fa-paperclip"></i>
+            {{ answer.fileName }}
+          </a>
+          }
+
+          @if (hasMatrixAnswers(answer)) {
+          <div class="rd-matrixWrap">
+            <table class="rd-matrixTable">
+              <thead>
+                <tr>
+                  <th>ردیف</th>
+                  <th>ستون</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (matrixItem of getMatrixAnswersArray(answer); track $index) {
+                <tr>
+                  <td class="rd-matrixTable__row">{{ matrixItem.row }}</td>
+                  <td>{{ matrixItem.column }}</td>
+                </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          }
+
+          @if (answer.rankingAnswers && answer.rankingAnswers.length > 0) {
+          <ol class="rd-rankingList">
+            @for (rank of answer.rankingAnswers; track $index) {
+            <li>{{ rank }}</li>
+            }
+          </ol>
+          }
+
+          @if (isAnswerEmpty(answer)) {
+          <div class="rd-answerEmpty">
+            <i class="fa fa-minus-circle"></i>
+            پاسخ داده نشده
+          </div>
+          }
+        </div>
+      </div>
+      }
+
+      @if (answers().length === 0) {
+      <div class="rd-emptyAnswers">
+        <i class="fa fa-inbox"></i>
+        <h5>هیچ پاسخی ثبت نشده است</h5>
+      </div>
+      }
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== Floating Scroll Button ===== -->
+@if (showFab()) {
+<button type="button" class="rd-fab" (click)="onFabClick()" [title]="isNearBottom() ? 'برو به بالا' : 'برو به پایین'">
+  <i class="fa" [class.fa-arrow-up]="isNearBottom()" [class.fa-arrow-down]="!isNearBottom()"></i>
+</button>
+}
+
+} @else {
+<div class="rd-errorState">
+  <div class="rd-errorState__icon">
+    <i class="fa fa-exclamation-triangle"></i>
+  </div>
+  <h3 class="rd-errorState__title">پاسخ یافت نشد</h3>
+  <p class="rd-errorState__msg">متأسفانه پاسخ مورد نظر یافت نشد</p>
+  <button type="button" class="rd-btn rd-btn--primary" (click)="backToList()">
+    <i class="fa fa-arrow-right"></i>
+    بازگشت به لیست
+  </button>
+</div>
+}

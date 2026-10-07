@@ -1,0 +1,197 @@
+@if (isLoading()) {
+<div class="pageHead">
+  <div>
+    <h1 class="h1">{{ pageTitle() }}</h1>
+    <p class="sub">ایجاد یا ویرایش نظرسنجی</p>
+  </div>
+</div>
+
+<section class="card pad-lg">
+  <div class="loadingCenter">
+    <div class="loadingSpinner"></div>
+    <p class="muted" style="margin-top:20px">در حال بارگذاری اطلاعات...</p>
+  </div>
+</section>
+} @else {
+
+<div class="pageHead">
+  <div>
+    <h1 class="h1">{{ pageTitle() }}</h1>
+    <p class="sub">ایجاد یا ویرایش نظرسنجی</p>
+  </div>
+
+  <div class="row">
+    <span class="pill">
+      <span class="dot"></span>
+      وضعیت:
+      <b>{{ surveyForm.dirty ? 'در حال ویرایش' : 'آماده' }}</b>
+    </span>
+
+    <button type="button" class="btn ghost" (click)="cancel()">
+      <i class="fa fa-times"></i>
+      انصراف
+    </button>
+
+    <button type="button" class="btn primary" (click)="submitSurvey()" [disabled]="surveyForm.invalid || isLoading()">
+      <i class="fa fa-save"></i>
+      {{ submitButtonText() }}
+    </button>
+  </div>
+</div>
+
+<section class="card pad-lg">
+  <form [formGroup]="surveyForm" id="surveyForm">
+
+    <!-- اطلاعات پایه -->
+    <div class="sectionRow">
+      <div class="sectionTitle">اطلاعات پایه</div>
+      <span class="badge">Base</span>
+    </div>
+    <div class="hr"></div>
+
+    <custom-input label="عنوان نظرسنجی" formControlName="title" type="text" identity="title" styleType="simple"
+      [required]="true" placeholder="عنوان نظرسنجی را وارد کنید">
+    </custom-input>
+
+    <div class="sp-12"></div>
+
+    <custom-input label="توضیحات" formControlName="description" type="textarea" identity="description"
+      styleType="simple" [required]="false" [rows]="'4'" placeholder="توضیحات نظرسنجی را وارد کنید">
+    </custom-input>
+
+    <div class="sp-12"></div>
+
+    <div class="grid grid-2">
+      <custom-input label="تاریخ شروع" formControlName="startDate" type="date" identity="startDate" styleType="simple"
+        [required]="true">
+      </custom-input>
+
+      <custom-input label="تاریخ پایان" formControlName="endDate" type="date" identity="endDate" styleType="simple"
+        [required]="true">
+      </custom-input>
+    </div>
+
+    @if (surveyForm.errors?.['dateRangeInvalid']) {
+    <div class="sp-12"></div>
+    <div class="block danger" style="padding:12px 14px;border:1px solid rgba(255,77,109,.30);border-radius:14px;">
+      <div class="row" style="gap:8px;color:var(--accent)">
+        <i class="fa fa-exclamation-circle"></i>
+        <span>تاریخ شروع نباید بعد از تاریخ پایان باشد</span>
+      </div>
+    </div>
+    }
+
+    <div class="sp-12"></div>
+
+    <div class="grid grid-2">
+      <!-- <custom-select label="نوع دسترسی" formControlName="accessType" [options]="accessTypeOptions" styleType="simple"
+        identity="accessType" [required]="true">
+      </custom-select> -->
+
+      <!-- <custom-input label="حداکثر تعداد پاسخ" formControlName="maxResponses" type="number" identity="maxResponses"
+        styleType="simple" placeholder="در صورت نیاز مشخص کنید">
+      </custom-input> -->
+    </div>
+
+    <div class="sp-16"></div>
+
+    <!-- تنظیمات -->
+    <div class="sectionRow">
+      <div class="sectionTitle">تنظیمات</div>
+      <span class="badge">Options</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="grid grid-2">
+      <label class="choice">
+        <input type="checkbox" formControlName="allowAnonymous" />
+        مجاز به پاسخ‌دهی ناشناس
+      </label>
+
+      <label class="choice">
+        <input type="checkbox" formControlName="requireLogin" />
+        نیاز به ورود به سیستم
+      </label>
+
+      <label class="choice">
+        <input type="checkbox" formControlName="allowSaveDraft" />
+        امکان ذخیره پیش‌نویس
+      </label>
+
+      <label class="choice">
+        <input type="checkbox" formControlName="showProgressBar" />
+        نمایش نوار پیشرفت
+      </label>
+
+      <label class="choice">
+        <input type="checkbox" formControlName="randomizeQuestions" />
+        نمایش تصادفی سوالات
+      </label>
+
+      <label class="choice">
+        <input type="checkbox" formControlName="allowMultipleResponses" />
+        امکان پاسخ‌دهی چندباره
+      </label>
+    </div>
+
+    <div class="sp-16"></div>
+
+    <!-- پیام‌ها -->
+    <div class="sectionRow">
+      <div class="sectionTitle">پیام‌ها</div>
+      <span class="badge">Messages</span>
+    </div>
+    <div class="hr"></div>
+
+    <custom-input label="پیام خوشامدگویی" formControlName="welcomeMessage" type="textarea" identity="welcomeMessage"
+      styleType="simple" [rows]="'3'" placeholder="پیامی که در ابتدای نظرسنجی نمایش داده می‌شود">
+    </custom-input>
+
+    <div class="sp-12"></div>
+
+    <custom-input label="پیام تشکر" formControlName="thankYouMessage" type="textarea" identity="thankYouMessage"
+      styleType="simple" [rows]="'3'" placeholder="پیامی که پس از تکمیل نظرسنجی نمایش داده می‌شود">
+    </custom-input>
+
+    <div class="sp-16"></div>
+
+    <!-- ظاهر -->
+    <div class="sectionRow">
+      <div class="sectionTitle">تنظیمات ظاهری</div>
+      <span class="badge">Theme</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="grid grid-3">
+      <custom-input label="رنگ تم" formControlName="themeColor" type="color" identity="themeColor" styleType="simple">
+      </custom-input>
+
+      <custom-input label="آدرس لوگو" formControlName="logoUrl" type="url" identity="logoUrl" styleType="simple"
+        placeholder="https://example.com/logo.png">
+      </custom-input>
+
+      <custom-input label="آدرس تصویر پس‌زمینه" formControlName="backgroundImageUrl" type="url"
+        identity="backgroundImageUrl" styleType="simple" placeholder="https://example.com/background.jpg">
+      </custom-input>
+    </div>
+
+    <div class="sp-16"></div>
+    <div class="hr"></div>
+    <div class="sp-12"></div>
+
+    <div class="row">
+      <button type="button" class="btn ghost" (click)="cancel()">
+        <i class="fa fa-times"></i>
+        انصراف
+      </button>
+
+      <button type="button" class="btn primary" (click)="submitSurvey()" [disabled]="surveyForm.invalid || isLoading()">
+        <i class="fa fa-save"></i>
+        {{ submitButtonText() }}
+      </button>
+    </div>
+
+  </form>
+</section>
+
+}
