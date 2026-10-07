@@ -18,12 +18,12 @@
     padding: 10px 15px;
     background: linear-gradient(135deg, #e8f4fd 0%, #d1e9fa 100%);
     border-radius: 8px;
-    border-right: 4px solid #2196f3;
+    border-right: 4px solid var(--mm-primary);
 }
 
 .hint-icon {
     font-size: 1.2rem;
-    color: #2196f3;
+    color: var(--mm-primary);
     margin-left: 10px;
 }
 
@@ -37,7 +37,7 @@
 /* ═══════════════════════════════════════════════════════════ */
 
 .modal-header.bg-primary {
-    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+    background: linear-gradient(135deg, var(--mm-primary) 0%, var(--mm-primary) 100%) !important;
 }
 
 .modal-content {
@@ -55,8 +55,8 @@
 /* ═══════════════════════════════════════════════════════════ */
 
 .alert-light.border {
-    background: #f8f9fa;
-    border-color: #e9ecef !important;
+    background: var(--mm-surface-2);
+    border-color: var(--mm-border) !important;
     border-radius: 8px;
 }
 
@@ -70,8 +70,8 @@
 }
 
 .form-switch .form-check-input:checked {
-    background-color: #10b981;
-    border-color: #10b981;
+    background-color: var(--mm-success);
+    border-color: var(--mm-success);
 }
 
 /* ═══════════════════════════════════════════════════════════ */
@@ -95,7 +95,7 @@
 }
 
 .modern-grid .ag-row-selected {
-    background-color: #e3f2fd !important;
+    background-color: var(--mm-primary-50) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════ */
@@ -109,7 +109,7 @@
 }
 
 .btn-outline-primary.edit-btn:hover {
-    background: #4f46e5;
+    background: var(--mm-primary);
     color: white;
 }
 
@@ -128,12 +128,12 @@
 
 .card-header {
     background: linear-gradient(135deg, #f8faff 0%, #e7eeff 100%);
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--mm-border);
     padding: 1rem 1.25rem;
 }
 
 .card-header h5 {
-    color: #1f2937;
+    color: var(--mm-ink);
     font-weight: 600;
 }
 
@@ -142,6 +142,6 @@
 /* ═══════════════════════════════════════════════════════════ */
 
 .form-check-input:checked {
-    background-color: #4f46e5;
-    border-color: #4f46e5;
+    background-color: var(--mm-primary);
+    border-color: var(--mm-primary);
 }

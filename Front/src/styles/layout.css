@@ -1,0 +1,121 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   چیدمان اصلی: قاب برنامه، محتوای صفحه، سرصفحه‌ی صفحات، پاورقی
+   ═══════════════════════════════════════════════════════════════════════ */
+.layout-wrapper, .layout-container { background: transparent !important; }
+
+.layout-page { background: transparent !important; min-width: 0; }
+
+.content-wrapper {
+  padding: 1.1rem 1.4rem 1.6rem !important;
+  scroll-behavior: smooth;
+}
+.content-wrapper > .container-fluid { padding-inline: 0 !important; max-width: 1680px; margin-inline: auto; }
+
+.content-footer.footer, .bg-footer-theme {
+  background: transparent !important;
+  color: var(--mm-subtle) !important;
+  border-top: 1px solid var(--mm-border);
+  font-size: .78rem;
+  padding: .55rem 1rem !important;
+}
+
+/* ── سرصفحه‌ی استاندارد صفحات ────────────────────────────
+   <div class="mm-page-header">
+     <div class="mm-page-title"><span class="mm-page-icon"><i class="fa fa-users"></i></span>
+       <div><h4>عنوان</h4><p>توضیح کوتاه</p></div></div>
+     <div class="mm-page-actions">…دکمه‌ها…</div>
+   </div>                                                     */
+.mm-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.1rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--mm-radius-lg);
+  background:
+    linear-gradient(120deg, rgba(var(--mm-primary-rgb), .09), rgba(var(--mm-accent-rgb), .06) 70%, transparent),
+    var(--mm-surface);
+  border: 1px solid var(--mm-border);
+  box-shadow: var(--mm-shadow-sm);
+}
+.mm-page-title { display: flex; align-items: center; gap: .85rem; min-width: 0; }
+.mm-page-title h4, .mm-page-title h5 { margin: 0; }
+.mm-page-title p { margin: .1rem 0 0; color: var(--mm-muted); font-size: .86rem; }
+.mm-page-icon {
+  width: 46px; height: 46px; flex: 0 0 46px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 14px;
+  color: #fff;
+  font-size: 1.15rem;
+  background: linear-gradient(135deg, var(--mm-primary), var(--mm-primary-2));
+  box-shadow: var(--mm-shadow-primary);
+}
+.mm-page-actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+
+/* ── پنل/بخش عمومی ─────────────────────────────────────── */
+.mm-panel {
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-border);
+  border-radius: var(--mm-radius-lg);
+  box-shadow: var(--mm-shadow-sm);
+  padding: 1.1rem 1.25rem;
+}
+.mm-section-title {
+  display: flex; align-items: center; gap: .5rem;
+  font-weight: 800; color: var(--mm-ink); font-size: 1rem;
+  margin: 0 0 .85rem;
+}
+.mm-section-title::before {
+  content: ""; width: 4px; height: 1.1em; border-radius: 4px;
+  background: linear-gradient(180deg, var(--mm-primary), var(--mm-accent));
+}
+
+/* ── وضعیت خالی ────────────────────────────────────────── */
+.mm-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem;
+  padding: 2.5rem 1rem; color: var(--mm-muted); text-align: center;
+}
+.mm-empty i { font-size: 2.2rem; color: var(--mm-subtle); }
+
+/* ── چیپ وضعیت جلسه (برای همه‌ی فهرست‌ها) ───────────────── */
+.mm-status {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .2rem .65rem; border-radius: var(--mm-radius-pill);
+  font-size: .8rem; font-weight: 700; white-space: nowrap;
+}
+.mm-status::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
+.mm-status-1 { background: var(--mm-surface-3); color: var(--mm-muted); }
+.mm-status-2 { background: var(--mm-primary-50); color: var(--mm-primary); }
+.mm-status-3 { background: var(--mm-secondary-50); color: var(--mm-secondary); }
+.mm-status-4 { background: var(--mm-info-50); color: var(--mm-info); }
+.mm-status-5 { background: var(--mm-danger-50); color: var(--mm-danger); }
+.mm-status-6 { background: var(--mm-success-50); color: var(--mm-success); }
+.mm-status-7 { background: var(--mm-warning-50); color: var(--mm-warning); }
+
+/* ── ورود عناصر ────────────────────────────────────────── */
+@keyframes mm-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+router-outlet + * { animation: mm-fade-up .28s var(--mm-ease) both; }
+
+@media (max-width: 992px) {
+  .content-wrapper { padding: .85rem .75rem 1.25rem !important; }
+  .mm-page-header { padding: .85rem 1rem; }
+}
+
+/* ── مسیر صفحه (breadcrumb) ─────────────────────────────── */
+.page-header-breadcrumb { display: flex !important; margin: 0 0 .85rem; }
+.mm-breadcrumb {
+  display: inline-flex; align-items: center; flex-wrap: wrap; gap: .15rem;
+  list-style: none; margin: 0; padding: .3rem .45rem;
+  border-radius: var(--mm-radius-pill);
+  background: var(--mm-surface);
+  border: 1px solid var(--mm-border);
+  box-shadow: var(--mm-shadow-xs);
+  font-size: .82rem;
+}
+.mm-breadcrumb li { display: inline-flex; align-items: center; gap: .15rem; color: var(--mm-muted); }
+.mm-breadcrumb li + li::before { content: "‹"; font-size: 1rem; line-height: 1; color: var(--mm-subtle); margin: 0 .2rem; }
+.mm-breadcrumb a { color: var(--mm-muted); padding: .1rem .45rem; border-radius: var(--mm-radius-pill); transition: background .12s var(--mm-ease), color .12s var(--mm-ease); }
+.mm-breadcrumb a:hover { background: var(--mm-primary-50); color: var(--mm-primary); }
+.mm-breadcrumb li.active span { color: var(--mm-ink); font-weight: 700; padding: .1rem .45rem; }

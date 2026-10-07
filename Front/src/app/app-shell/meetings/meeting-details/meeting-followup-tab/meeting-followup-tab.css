@@ -17,10 +17,10 @@
     justify-content: space-between;
     align-items: center;
     padding: 15px 20px;
-    background: #f0bd05;
+    background: var(--mm-accent);
     border-radius: 12px;
     margin-bottom: 20px;
-    color: #495461;
+    color: var(--mm-text);
 }
 
 .header-title {
@@ -77,7 +77,7 @@
 }
 
 .stat-card {
-    background: white;
+    background: var(--mm-surface);
     border-radius: 12px;
     padding: 15px;
     display: flex;
@@ -97,27 +97,27 @@
 }
 
 .stat-card.total {
-    border-color: #6366f1;
+    border-color: var(--mm-primary);
 }
 
 .stat-card.total .stat-icon {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    background: linear-gradient(135deg, var(--mm-primary), #8b5cf6);
 }
 
 .stat-card.completed {
-    border-color: #10b981;
+    border-color: var(--mm-success);
 }
 
 .stat-card.completed .stat-icon {
-    background: linear-gradient(135deg, #10b981, #34d399);
+    background: linear-gradient(135deg, var(--mm-success), #34d399);
 }
 
 .stat-card.in-progress {
-    border-color: #f59e0b;
+    border-color: var(--mm-accent);
 }
 
 .stat-card.in-progress .stat-icon {
-    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    background: linear-gradient(135deg, var(--mm-accent), var(--mm-accent));
 }
 
 .stat-card.pending {
@@ -129,11 +129,11 @@
 }
 
 .stat-card.overdue {
-    border-color: #ef4444;
+    border-color: var(--mm-danger);
 }
 
 .stat-card.overdue .stat-icon {
-    background: linear-gradient(135deg, #ef4444, #f87171);
+    background: linear-gradient(135deg, var(--mm-danger), #f87171);
 }
 
 .stat-icon {
@@ -156,12 +156,12 @@
     font-size: 1.8rem;
     font-weight: bold;
     line-height: 1;
-    color: #1f2937;
+    color: var(--mm-ink);
 }
 
 .stat-label {
     font-size: 0.85rem;
-    color: #6b7280;
+    color: var(--mm-muted);
     margin-top: 4px;
 }
 
@@ -171,12 +171,12 @@
     left: 0;
     right: 0;
     height: 4px;
-    background: #e5e7eb;
+    background: var(--mm-surface-3);
 }
 
 .stat-progress .progress-bar {
     height: 100%;
-    background: linear-gradient(90deg, #10b981, #34d399);
+    background: linear-gradient(90deg, var(--mm-success), #34d399);
     transition: width 0.5s ease;
 }
 
@@ -190,7 +190,7 @@
     gap: 15px;
     align-items: flex-end;
     padding: 15px;
-    background: #f8f9fa;
+    background: var(--mm-surface-2);
     border-radius: 10px;
     margin-bottom: 20px;
 }
@@ -203,7 +203,7 @@
 
 .filter-group label {
     font-size: 0.85rem;
-    color: #6b7280;
+    color: var(--mm-muted);
     font-weight: 500;
 }
 
@@ -227,7 +227,7 @@
 .search-input-wrapper i.fa-search {
     position: absolute;
     right: 12px;
-    color: #9ca3af;
+    color: var(--mm-subtle);
 }
 
 .search-input-wrapper input {
@@ -240,13 +240,13 @@
     left: 8px;
     background: none;
     border: none;
-    color: #9ca3af;
+    color: var(--mm-subtle);
     cursor: pointer;
     padding: 5px;
 }
 
 .clear-search:hover {
-    color: #ef4444;
+    color: var(--mm-danger);
 }
 
 .clear-filters-btn {
@@ -279,7 +279,7 @@
 .error-state p,
 .empty-state p {
     margin-top: 15px;
-    color: #6b7280;
+    color: var(--mm-muted);
 }
 
 .error-state i,
@@ -290,11 +290,11 @@
 }
 
 .error-state i {
-    color: #fbbf24;
+    color: var(--mm-accent);
 }
 
 .empty-state h5 {
-    color: #374151;
+    color: var(--mm-text);
     margin-bottom: 10px;
 }
 
@@ -309,11 +309,11 @@
 }
 
 .resolution-card {
-    background: white;
+    background: var(--mm-surface);
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--mm-border);
 }
 
 .resolution-header {
@@ -321,14 +321,14 @@
     justify-content: space-between;
     align-items: center;
     padding: 15px 20px;
-    background: #f0bd05;
-    color: #495461;
+    background: var(--mm-accent);
+    color: var(--mm-text);
     cursor: pointer;
     transition: background 0.3s ease;
 }
 
 .resolution-header:hover {
-    background: #f0bd05;
+    background: var(--mm-accent);
 }
 
 .resolution-info {
@@ -382,7 +382,7 @@
 /* ═══════════════════════════════════════════════════════════ */
 
 .content-section {
-    background: #f9fafb;
+    background: var(--mm-surface-2);
     border-radius: 8px;
     padding: 15px;
     margin-bottom: 15px;
@@ -392,14 +392,14 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #4338ca;
+    color: var(--mm-primary-hover);
     font-weight: 600;
     margin-bottom: 10px;
     font-size: 0.95rem;
 }
 
 .section-body {
-    color: #374151;
+    color: var(--mm-text);
     line-height: 1.8;
     text-align: justify;
 }
@@ -413,8 +413,8 @@
 }
 
 .assignment-card {
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
+    background: var(--mm-surface-2);
+    border: 1px solid var(--mm-border);
     border-radius: 10px;
     margin-bottom: 12px;
     overflow: hidden;
@@ -432,7 +432,7 @@
 
 .assignment-header {
     padding: 12px 15px;
-    background: #f3f4f6;
+    background: var(--mm-surface-2);
     cursor: pointer;
     display: flex;
     justify-content: space-between;
@@ -447,7 +447,7 @@
 }
 
 .assignment-header:hover {
-    background: #e5e7eb;
+    background: var(--mm-surface-3);
 }
 
 .assignment-card.overdue .assignment-header:hover {
@@ -472,25 +472,25 @@
 }
 
 .info-item i {
-    color: #6b7280;
+    color: var(--mm-muted);
     width: 16px;
 }
 
 .info-item .label {
-    color: #6b7280;
+    color: var(--mm-muted);
 }
 
 .info-item .value {
-    color: #1f2937;
+    color: var(--mm-ink);
     font-weight: 500;
 }
 
 .info-item.overdue-date .value {
-    color: #dc2626;
+    color: var(--mm-danger);
 }
 
 .overdue-badge {
-    background: #dc2626;
+    background: var(--mm-danger);
     color: white;
     padding: 2px 8px;
     border-radius: 10px;
@@ -530,12 +530,12 @@
 }
 
 .status-progress {
-    background: #f59e0b;
+    background: var(--mm-accent);
     color: white;
 }
 
 .status-completed {
-    background: #10b981;
+    background: var(--mm-success);
     color: white;
 }
 
@@ -552,18 +552,18 @@
 }
 
 .result-done {
-    background: #059669;
+    background: var(--mm-success);
     color: white;
 }
 
 .result-notdone {
-    background: #dc2626;
+    background: var(--mm-danger);
     color: white;
 }
 
 .actions-count {
     font-size: 0.85rem;
-    color: #6b7280;
+    color: var(--mm-muted);
     display: flex;
     align-items: center;
     gap: 4px;
@@ -575,7 +575,7 @@
 
 .actions-list {
     padding: 15px;
-    background: white;
+    background: var(--mm-surface);
     animation: slideDown 0.3s ease;
 }
 
@@ -586,27 +586,27 @@
 }
 
 .actions-table th {
-    background: #e5e7eb;
+    background: var(--mm-surface-3);
     padding: 10px 12px;
     text-align: center;
     font-weight: 600;
-    color: #374151;
-    border: 1px solid #d1d5db;
+    color: var(--mm-text);
+    border: 1px solid var(--mm-border-strong);
 }
 
 .actions-table td {
     padding: 10px 12px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--mm-border);
     text-align: center;
     vertical-align: middle;
 }
 
 .actions-table tbody tr:nth-child(even) {
-    background: #f9fafb;
+    background: var(--mm-surface-2);
 }
 
 .actions-table tbody tr:hover {
-    background: #f3f4f6;
+    background: var(--mm-surface-2);
 }
 
 .action-text {
@@ -621,7 +621,7 @@
     justify-content: center;
     gap: 10px;
     padding: 25px;
-    color: #6b7280;
+    color: var(--mm-muted);
     font-style: italic;
 }
 

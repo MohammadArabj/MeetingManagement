@@ -6,7 +6,7 @@
     padding: 10px 20px 10px 30px;
     border: 1px solid #4a6bff;
     border-radius: 6px;
-    background-color: white;
+    background-color: var(--mm-surface);
     color: #4a6bff;
     font-weight: 500;
     font-size: 14px;

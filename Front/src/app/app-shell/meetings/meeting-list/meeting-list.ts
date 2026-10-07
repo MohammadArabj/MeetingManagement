@@ -1,3 +1,6 @@
+import { meetingStatusBadge } from '../../../core/meeting-access/meeting-status-badge';
+import { debounceTime } from 'rxjs';
+import { RealtimeService } from '../../../core/realtime/realtime.service';
 import {
   AfterViewInit,
   Component,
@@ -126,6 +129,11 @@ export class MeetingListComponent extends AgGridBaseComponent implements OnInit,
     super();
     this.setupBreadcrumb();
     this.setupRouteEffects();
+
+    // ثبت/تغییر وضعیت جلسه توسط دیگران → فهرست به‌صورت لحظه‌ای تازه می‌شود
+    inject(RealtimeService).meetingChanged$
+      .pipe(debounceTime(800), takeUntilDestroyed())
+      .subscribe(() => { if (this.isPermitted()) this.getRecords(); });
   }
 
   private setupBreadcrumb(): void {
@@ -367,21 +375,7 @@ export class MeetingListComponent extends AgGridBaseComponent implements OnInit,
   }
 
   private statusCellRenderer = (params: any): string => {
-    const statusId = params.data?.statusId;
-    const status = params.data?.status;
-    if (!statusId || !status) return '';
-
-    const colors: { [key: number]: string } = {
-      1: '#5bc0de',
-      2: '#337ab7',
-      3: '#fcb612',
-      4: '#5cb85c',
-      5: 'red',
-    };
-
-    return `<span class="badge-status" style="background-color: ${colors[statusId] || 'gray'};">
-              ${status}
-            </span>`;
+    return meetingStatusBadge(params.data?.statusId, params.data?.status);
   };
 
   private setupGridInteractions(options: any): void {

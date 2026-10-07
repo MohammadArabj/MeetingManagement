@@ -28,6 +28,7 @@ import {
   ApexYAxis,
   ApexStroke,
   ApexTitleSubtitle,
+  ApexGrid,
   NgApexchartsModule
 } from 'ng-apexcharts';
 import { catchError, debounceTime, forkJoin, of } from 'rxjs';
@@ -44,6 +45,8 @@ import {
 import { BreadcrumbService } from '../../services/framework-services/breadcrumb.service';
 import { LocalStorageService } from '../../services/framework-services/local.storage.service';
 import { MeetingService } from '../../services/meeting.service';
+import { AuthService } from '../../core/auth/auth.service';
+import { SessionStore } from '../../core/auth/session.store';
 import { FollowerActorsActionCounts } from '../../core/models/followersActorCounts';
 
 declare var $: any;
@@ -70,6 +73,13 @@ enum AssignmentResultDash {
   NotDone = 2
 }
 
+/** رنگ‌های نمودارها (هم‌راستا با توکن‌های طراحی src/styles/tokens.css) */
+const CHART = {
+  blue: '#1f5fbf', sky: '#0ea5e9', amber: '#f08a24', green: '#16a34a', red: '#dc2626',
+  violet: '#7c3aed', slate: '#64748b', pink: '#db2777', teal: '#0e9f8e', empty: '#e3e8f0',
+};
+const CHART_FONT = '"Vazirmatn FD", Vazirmatn, Sahel, Tahoma, sans-serif';
+
 // ======================================================================
 
 @Component({
@@ -93,6 +103,17 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly assignmentService = inject(AssignmentService);
   private readonly breadcrumbService = inject(BreadcrumbService);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly auth = inject(AuthService);
+  private readonly session = inject(SessionStore);
+
+  /** خوش‌آمد بر اساس ساعت روز */
+  readonly greeting = (() => {
+    const h = new Date().getHours();
+    return h < 5 ? 'شب بخیر' : h < 12 ? 'صبح بخیر' : h < 17 ? 'روز بخیر' : 'عصر بخیر';
+  })();
+  readonly userName = computed(() => String((this.auth.profile() as Record<string, unknown>)['name'] ?? '').trim());
+  readonly positionName = this.session.positionName;
+  readonly todayLabel = new Date().toLocaleDateString('fa-IR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   // اضافه کردن computed جدید
   readonly undeterminedMeetingsCount = computed(() => this._meetingCounts().undeterminedMeetingsCount || 0);
   private readonly _followerActorsActionCounts = signal<FollowerActorsActionCounts | null>(null);
@@ -197,20 +218,27 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   chartSeries: ApexAxisChartSeries = [];
   chartLineOptions: Partial<ApexChartOptions> = {
     chart: {
-      type: 'bar',
-      height: 200,
-      fontFamily: 'Sahel'
-    }
+      type: 'area',
+      height: 260,
+      fontFamily: CHART_FONT,
+      toolbar: { show: false },
+      zoom: { enabled: false },
+      foreColor: '#64748b',
+    },
   };
+  chartColors = [CHART.blue, CHART.amber];
+  chartFill: ApexFill = {
+    type: 'gradient',
+    gradient: { shadeIntensity: 1, opacityFrom: .35, opacityTo: .02, stops: [0, 95, 100] },
+  };
+  chartGrid: ApexGrid = { borderColor: 'rgba(100, 116, 139, .15)', strokeDashArray: 4 };
+  chartLegend: ApexLegend = { position: 'top', horizontalAlign: 'left', fontFamily: CHART_FONT, markers: { size: 6 } };
   xaxis: ApexXAxis = { categories: [] };
   yaxis: ApexYAxis | ApexYAxis[] = {};
-  stroke: ApexStroke = { curve: 'smooth' };
+  stroke: ApexStroke = { curve: 'smooth', width: 3 };
   dataLabels: ApexDataLabels = { enabled: false };
-  title: ApexTitleSubtitle = {
-    text: 'آمار جلسات',
-    align: 'center'
-  };
-  tooltip: ApexTooltip = {};
+  title: ApexTitleSubtitle = {};
+  tooltip: ApexTooltip = { theme: 'light' };
 
   private readonly realtime = inject(RealtimeService);
   private readonly destroyRef = inject(DestroyRef);
@@ -328,7 +356,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
         this.canceledMeetingsCount()
       ],
       ['تعیین تکلیف نشده', 'جهت امضا', 'جهت اعلام حضور', 'پیش نویس', 'آینده', 'لغو شده'],
-      ['#e83e8c', '#03c3ec', '#ffab00', '#696cff', '#435971', '#ff3e1d'],
+      [CHART.pink, CHART.sky, CHART.amber, CHART.violet, CHART.slate, CHART.red],
       'جلسات',
       this.allMeetingsCount()
     ));
@@ -341,7 +369,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
         assignmentCounts.actionCounts.end
       ],
       ['در حال انجام', 'در انتظار اقدام', 'پایان یافته'],
-      ['#03c3ec', '#ffab00', '#198754'],
+      [CHART.sky, CHART.amber, CHART.green],
       'اقدام',
       assignmentCounts.actionCounts.all
     ));
@@ -354,7 +382,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
         assignmentCounts.followCounts.end
       ],
       ['در حال پیگیری', 'در انتظار/پیگیری نشده', 'اتمام یافته'],
-      ['#03c3ec', '#ffab00', '#198754'],
+      [CHART.sky, CHART.amber, CHART.green],
       'پیگیری',
       assignmentCounts.followCounts.all
     ));
@@ -366,7 +394,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
       this._referralChartOptions.set(this.buildDonutChartOptions(
         [referralCounts.total || 0, sentCounts.total || 0],
         ['دریافتی', 'ارسالی'],
-        ['#28a745', '#ffc107'],
+        [CHART.green, CHART.amber],
         'ارجاعات',
         (referralCounts.total || 0) + (sentCounts.total || 0)
       ));
@@ -382,7 +410,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
           pendingCounts.overdue || 0
         ],
         ['در حال انجام', 'انجام نشده', 'گذشته از مهلت'],
-        ['#ffc107', '#dc3545', '#6c757d'],
+        [CHART.amber, CHART.red, CHART.slate],
         'منتظر اقدام',
         pendingCounts.total || 0
       ));
@@ -609,7 +637,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
         type: 'donut',
         height: 160,
         width: 160,
-        fontFamily: 'Sahel',
+        fontFamily: CHART_FONT,
         animations: {
           enabled: true,
           speed: 800,
@@ -624,7 +652,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       },
       labels: hasValidData ? labels : ['بدون داده'],
-      colors: hasValidData ? colors : ['#e0e0e0'],
+      colors: hasValidData ? colors : [CHART.empty],
       legend: { show: false },
       tooltip: {
         enabled: hasValidData,
@@ -642,13 +670,13 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
               name: {
                 show: true,
                 fontSize: '12px',
-                fontFamily: 'Sahel',
+                fontFamily: CHART_FONT,
                 offsetY: -10
               },
               value: {
                 show: true,
                 fontSize: '14px',
-                fontFamily: 'Sahel',
+                fontFamily: CHART_FONT,
                 offsetY: 16,
                 formatter: (val) => String(val)
               },
@@ -657,7 +685,7 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
                 showAlways: true,
                 label: totalLabel,
                 fontSize: '12px',
-                fontFamily: 'Sahel',
+                fontFamily: CHART_FONT,
                 formatter: () => ''
               }
             }

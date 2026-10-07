@@ -1,0 +1,67 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   پایه: فونت، پس‌زمینه، تایپوگرافی، اسکرول‌بار
+   ═══════════════════════════════════════════════════════════════════════ */
+html body,
+.font-sahel,
+button, input, select, textarea, optgroup,
+.tooltip, .popover, .dropdown-menu, .modal, .toast,
+.swal2-popup, #toast-container > div {
+  font-family: var(--mm-font) !important;
+}
+
+html { font-size: 14px; }
+
+body {
+  background: var(--mm-bg-accent), var(--mm-bg) !important;
+  background-attachment: fixed !important;
+  color: var(--mm-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01";
+  line-height: 1.75;
+  letter-spacing: 0;
+}
+
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+  color: var(--mm-ink);
+  font-weight: 800;
+  letter-spacing: -.2px;
+  line-height: 1.5;
+}
+h4, .h4 { font-size: 1.28rem; }
+h5, .h5 { font-size: 1.12rem; }
+h6, .h6 { font-size: 1rem; font-weight: 700; }
+
+a { color: var(--mm-primary); text-decoration: none; transition: color .15s var(--mm-ease); }
+a:hover { color: var(--mm-primary-hover); }
+
+small, .small { font-size: .86em; }
+.text-muted, .text-body-secondary { color: var(--mm-muted) !important; }
+.text-body { color: var(--mm-text) !important; }
+.text-dark { color: var(--mm-ink) !important; }
+.text-primary { color: var(--mm-primary) !important; }
+.text-success { color: var(--mm-success) !important; }
+.text-warning { color: var(--mm-warning) !important; }
+.text-danger { color: var(--mm-danger) !important; }
+.text-info { color: var(--mm-info) !important; }
+
+hr { border-color: var(--mm-border); opacity: 1; }
+code { color: var(--mm-accent-hover); background: var(--mm-accent-50); padding: .05rem .35rem; border-radius: var(--mm-radius-xs); font-family: var(--mm-font-mono); }
+
+::selection { background: rgba(var(--mm-primary-rgb), .18); color: inherit; }
+
+:focus-visible { outline: 2px solid rgba(var(--mm-primary-rgb), .55); outline-offset: 2px; }
+
+/* اسکرول‌بار ظریف */
+* { scrollbar-width: thin; scrollbar-color: var(--mm-border-strong) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--mm-border-strong); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background-color: var(--mm-subtle); }
+
+/* اعداد جدولی در جدول‌ها و آمار */
+.tabular, table, .stat-value, .stats-number { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

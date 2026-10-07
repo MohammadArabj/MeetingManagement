@@ -1,0 +1,164 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   طراحی سامانه مدیریت جلسات — توکن‌ها
+   همه‌ی رنگ‌ها، سایه‌ها و شعاع‌ها فقط از اینجا می‌آیند؛ کامپوننت‌ها با var(--mm-*) کار می‌کنند.
+   پالت از هویت بصری شرکت (آبی سازمانی + نارنجی گرم) گرفته شده است.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  /* برند */
+  --mm-primary: #1f5fbf;
+  --mm-primary-hover: #194fa3;
+  --mm-primary-active: #143f83;
+  --mm-primary-2: #3b82f6;
+  --mm-primary-50: #eef4fd;
+  --mm-primary-100: #dce8fb;
+  --mm-primary-200: #b9d0f6;
+  --mm-primary-rgb: 31, 95, 191;
+  --mm-primary-contrast: #ffffff;
+
+  --mm-accent: #f08a24;
+  --mm-accent-hover: #d97614;
+  --mm-accent-50: #fff4e8;
+  --mm-accent-100: #ffe5c7;
+  --mm-accent-rgb: 240, 138, 36;
+
+  --mm-secondary: #0e9f8e;
+  --mm-secondary-50: #e7f8f5;
+
+  /* وضعیت */
+  --mm-success: #16a34a;
+  --mm-success-50: #e9f9ef;
+  --mm-warning: #d97706;
+  --mm-warning-50: #fff6e0;
+  --mm-danger: #dc2626;
+  --mm-danger-50: #fdecec;
+  --mm-info: #0284c7;
+  --mm-info-50: #e6f4fb;
+
+  /* سطوح و متن */
+  --mm-bg: #f2f5fa;
+  --mm-bg-accent: radial-gradient(1200px 500px at 100% -10%, rgba(var(--mm-primary-rgb), .07), transparent 60%),
+                  radial-gradient(900px 420px at -10% 0%, rgba(var(--mm-accent-rgb), .06), transparent 55%);
+  --mm-surface: #ffffff;
+  --mm-surface-2: #f7f9fc;
+  --mm-surface-3: #eef2f8;
+  --mm-surface-hover: #f3f6fb;
+  --mm-overlay: rgba(15, 27, 45, .45);
+
+  --mm-ink: #0f1b2d;
+  --mm-text: #334155;
+  --mm-muted: #64748b;
+  --mm-subtle: #94a3b8;
+  --mm-border: #e3e8f0;
+  --mm-border-strong: #cfd8e5;
+  --mm-focus: rgba(var(--mm-primary-rgb), .22);
+
+  /* سایدبار */
+  --mm-sidebar-bg: linear-gradient(180deg, #0f2f5f 0%, #0c264d 55%, #0a2042 100%);
+  --mm-sidebar-text: rgba(255, 255, 255, .78);
+  --mm-sidebar-text-strong: #ffffff;
+  --mm-sidebar-hover: rgba(255, 255, 255, .08);
+  --mm-sidebar-active: rgba(255, 255, 255, .14);
+  --mm-sidebar-border: rgba(255, 255, 255, .08);
+
+  /* شکل */
+  --mm-radius-xs: 6px;
+  --mm-radius-sm: 8px;
+  --mm-radius: 12px;
+  --mm-radius-lg: 16px;
+  --mm-radius-xl: 22px;
+  --mm-radius-pill: 999px;
+
+  --mm-shadow-xs: 0 1px 2px rgba(15, 27, 45, .05);
+  --mm-shadow-sm: 0 1px 3px rgba(15, 27, 45, .06), 0 1px 2px rgba(15, 27, 45, .04);
+  --mm-shadow: 0 6px 18px -6px rgba(15, 27, 45, .12), 0 2px 6px rgba(15, 27, 45, .05);
+  --mm-shadow-lg: 0 18px 40px -12px rgba(15, 27, 45, .22);
+  --mm-shadow-primary: 0 8px 20px -8px rgba(var(--mm-primary-rgb), .55);
+
+  --mm-font: 'Vazirmatn FD', 'Vazirmatn', 'Sahel', Tahoma, sans-serif;
+  --mm-font-mono: 'Cascadia Code', Consolas, 'Courier New', monospace;
+  --mm-ease: cubic-bezier(.2, .8, .2, 1);
+  --mm-header-h: 64px;
+  --mm-sidebar-w: 268px;
+  --mm-sidebar-w-collapsed: 78px;
+
+  /* هم‌راستاسازی Bootstrap/Sneat */
+  --bs-primary: var(--mm-primary);
+  --bs-primary-rgb: var(--mm-primary-rgb);
+  --bs-secondary: #64748b;
+  --bs-success: var(--mm-success);
+  --bs-warning: var(--mm-warning);
+  --bs-danger: var(--mm-danger);
+  --bs-info: var(--mm-info);
+  --bs-body-font-family: var(--mm-font);
+  --bs-body-color: var(--mm-text);
+  --bs-body-bg: var(--mm-bg);
+  --bs-border-color: var(--mm-border);
+  --bs-border-radius: var(--mm-radius-sm);
+  --bs-link-color: var(--mm-primary);
+  --bs-link-hover-color: var(--mm-primary-hover);
+  --bs-secondary-color: var(--mm-muted);
+  --bs-tertiary-bg: var(--mm-surface-2);
+  --bs-body-bg-rgb: 242, 245, 250;
+
+  /* ag-grid (Theming API) */
+  --ag-font-family: var(--mm-font);
+  --ag-header-font-family: var(--mm-font);
+  --ag-cell-font-family: var(--mm-font);
+  --ag-header-font-weight: 700;
+
+  color-scheme: light;
+}
+
+/* ── حالت تیره ─────────────────────────────────────────── */
+html[data-mm-theme="dark"] {
+  --mm-primary: #5b9bff;
+  --mm-primary-hover: #7aaeff;
+  --mm-primary-active: #94bfff;
+  --mm-primary-2: #82b4ff;
+  --mm-primary-50: rgba(91, 155, 255, .12);
+  --mm-primary-100: rgba(91, 155, 255, .2);
+  --mm-primary-200: rgba(91, 155, 255, .32);
+  --mm-primary-rgb: 91, 155, 255;
+  --mm-primary-contrast: #06121f;
+
+  --mm-accent: #ffa24a;
+  --mm-accent-hover: #ffb46e;
+  --mm-accent-50: rgba(255, 162, 74, .12);
+  --mm-accent-100: rgba(255, 162, 74, .22);
+  --mm-accent-rgb: 255, 162, 74;
+  --mm-secondary-50: rgba(14, 159, 142, .16);
+
+  --mm-success: #34d399;
+  --mm-success-50: rgba(52, 211, 153, .12);
+  --mm-warning: #fbbf24;
+  --mm-warning-50: rgba(251, 191, 36, .12);
+  --mm-danger: #f87171;
+  --mm-danger-50: rgba(248, 113, 113, .12);
+  --mm-info: #38bdf8;
+  --mm-info-50: rgba(56, 189, 248, .12);
+
+  --mm-bg: #0b1220;
+  --mm-bg-accent: radial-gradient(1200px 500px at 100% -10%, rgba(91, 155, 255, .08), transparent 60%);
+  --mm-surface: #121b2c;
+  --mm-surface-2: #172236;
+  --mm-surface-3: #1d2a41;
+  --mm-surface-hover: #1a2639;
+  --mm-overlay: rgba(0, 0, 0, .6);
+
+  --mm-ink: #eef3fb;
+  --mm-text: #cdd6e4;
+  --mm-muted: #93a1b8;
+  --mm-subtle: #6b7a92;
+  --mm-border: #243249;
+  --mm-border-strong: #31425e;
+
+  --mm-sidebar-bg: linear-gradient(180deg, #0d1626 0%, #0a1220 100%);
+
+  --mm-shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --mm-shadow: 0 8px 22px -8px rgba(0, 0, 0, .6);
+  --mm-shadow-lg: 0 20px 44px -12px rgba(0, 0, 0, .7);
+
+  --bs-body-bg-rgb: 11, 18, 32;
+  --bs-secondary: #93a1b8;
+  color-scheme: dark;
+}

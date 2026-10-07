@@ -1,12 +1,16 @@
+/* طراحی جدید سامانه (توکن‌ها → پایه → کامپوننت‌ها → چیدمان → کتابخانه‌ها) */
+@import "./styles/tokens.css";
+@import "./styles/base.css";
+@import "./styles/components.css";
+@import "./styles/layout.css";
+@import "./styles/vendors.css";
+
 :root {
     /* اگر در پروژه‌تان هدر/سایدبار z-index خیلی بالا دارد، این عدد را بزرگتر کنید */
     --z-ng-select: 3000;
 }
 :root {
-    --ag-font-family: 'Sahel', sans-serif;
-    --ag-header-font-family: 'Sahel', sans-serif;
-    --ag-header-font-weight:700;
-    --ag-cell-font-family:'Sahel', sans-serif;
+    --ag-header-font-weight: 700;
 }
 /* خود dropdown panel */
 .ng-dropdown-panel {
@@ -49,7 +53,7 @@ body>.ng-dropdown-panel {
     overflow: hidden;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.10);
     direction: rtl;
-    font-family: 'Sahel', Tahoma, sans-serif;
+    font-family: var(--mm-font);
     animation: aftIn .15s ease-out;
 }
 
@@ -113,7 +117,7 @@ body>.ng-dropdown-panel {
         0 2px 10px rgba(17, 24, 39, .06);
 
     direction: rtl;
-    font-family: 'Sahel', Tahoma, sans-serif;
+    font-family: var(--mm-font);
     pointer-events: auto;
     backdrop-filter: blur(6px);
 }

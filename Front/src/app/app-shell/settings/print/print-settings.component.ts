@@ -16,7 +16,7 @@ import { PrintTemplateDesignerComponent } from './print-template-designer.compon
   template: `
     <section class="card settings-card">
       <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <h5 class="mb-0"><i class="fas fa-print ms-2 text-primary"></i>چاپ و قالب‌ها</h5>
+        <h5 class="mb-0"><i class="fas fa-print me-2 text-primary"></i>چاپ و قالب‌ها</h5>
         <ul class="nav nav-pills nav-sm">
           <li class="nav-item">
             <button type="button" class="nav-link" [class.active]="tab() === 'branding'" (click)="tab.set('branding')">سربرگ و لوگو</button>

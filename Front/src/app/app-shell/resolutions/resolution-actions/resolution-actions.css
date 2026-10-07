@@ -1,10 +1,10 @@
  body {
-     background-color: #f8fafc;
+     background-color: var(--mm-surface-2);
  }
 
  .info-box {
-     background: #f8f9fa;
-     border: 1px solid #e9ecef;
+     background: var(--mm-surface-2);
+     border: 1px solid var(--mm-border);
      border-radius: 8px;
      padding: 12px;
  }
@@ -32,7 +32,7 @@
      top: 0;
      bottom: 0;
      width: 2px;
-     background: linear-gradient(180deg, #e5e7eb, #f3f4f6);
+     background: linear-gradient(180deg, var(--mm-surface-3), var(--mm-surface-2));
  }
 
  .timeline-marker {
@@ -47,8 +47,8 @@
  }
 
  .timeline-content {
-     background: #fff;
-     border: 1px solid #e9ecef;
+     background: var(--mm-surface);
+     border: 1px solid var(--mm-border);
      border-radius: 12px;
      padding: 16px;
      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -63,17 +63,17 @@
  .form-control,
  .form-select {
      border-radius: 8px;
-     border: 1px solid #d1d5db;
+     border: 1px solid var(--mm-border-strong);
  }
 
  .form-control:focus,
  .form-select:focus {
-     border-color: #3b82f6;
+     border-color: var(--mm-primary-2);
      box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
  }
 
  .bg-primary-subtle {
-     background-color: #eef2ff !important;
+     background-color: var(--mm-primary-50) !important;
  }
 
  .bg-success-subtle {
@@ -89,13 +89,13 @@
  }
 
  .border-success {
-     border-color: #22c55e !important;
+     border-color: var(--mm-success) !important;
  }
 
  .border-warning {
-     border-color: #f59e0b !important;
+     border-color: var(--mm-accent) !important;
  }
 
  .border-info {
-     border-color: #06b6d4 !important;
+     border-color: var(--mm-info) !important;
  }

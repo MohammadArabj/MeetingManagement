@@ -1,11 +1,11 @@
 :host { display: block; }
 .settings-card { border-radius: .75rem; }
-.section-title { margin: 1.25rem 0 .5rem; padding-bottom: .4rem; border-bottom: 1px dashed var(--bs-border-color, #e5e7eb);
-  color: var(--bs-primary, #0d6efd); font-weight: 700; }
+.section-title { margin: 1.25rem 0 .5rem; padding-bottom: .4rem; border-bottom: 1px dashed var(--bs-border-color, var(--mm-border));
+  color: var(--bs-primary, var(--mm-primary)); font-weight: 700; }
 .section-title:first-child { margin-top: 0; }
 .setting-row { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(220px, 360px); gap: 1rem; align-items: center;
   padding: .75rem .5rem; border-radius: .5rem; }
 .setting-row + .setting-row { border-top: 1px solid var(--bs-border-color-translucent, #f1f1f1); }
-.setting-row.dirty { background: color-mix(in srgb, var(--bs-warning, #ffc107) 8%, transparent); }
+.setting-row.dirty { background: color-mix(in srgb, var(--bs-warning, var(--mm-accent)) 8%, transparent); }
 .setting-control { display: flex; flex-direction: column; gap: .25rem; }
 @media (max-width: 768px) { .setting-row { grid-template-columns: 1fr; } }

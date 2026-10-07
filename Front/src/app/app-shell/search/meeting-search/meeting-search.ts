@@ -1,3 +1,4 @@
+import { meetingStatusBadge } from '../../../core/meeting-access/meeting-status-badge';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { SystemUser } from '../../../core/models/User';
@@ -337,21 +338,7 @@ export class MeetingSearchComponent extends AgGridBaseComponent implements OnIni
   }
 
   private statusCellRenderer = (params: any): string => {
-    const statusId = params.data?.statusId;
-    const status = params.data?.status;
-    if (!statusId || !status) return '';
-
-    const colors: { [key: number]: string } = {
-      1: '#5bc0de',
-      2: '#337ab7',
-      3: '#f0ad4e',
-      4: '#5cb85c',
-      5: 'red',
-    };
-
-    return `<span class="badge-status" style="background-color: ${colors[statusId] || 'gray'};">
-              ${status}
-            </span>`;
+    return meetingStatusBadge(params.data?.statusId, params.data?.status);
   };
 
   private setupGridInteractions(options: any): void {

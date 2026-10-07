@@ -60,7 +60,7 @@ nav{
    padding-top: 0;
    height:96%;
    max-height: 90vh;
-   background: #fff;
+   background: var(--mm-surface);
    box-shadow: 5px 0px 15px #bfbfbf;
    border-radius: 20px;
    list-style-type: none;

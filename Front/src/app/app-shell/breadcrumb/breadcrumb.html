@@ -1,18 +1,18 @@
-<div class="page-header-breadcrumb">
-  <ul class="breadcrumb-title breadcrumb-style1">
-    <li class="breadcrumb-item">
-      <a routerLink="/dashboard"> <i class="bx bxs-dashboard"></i> </a>
+@if (breadcrumb().length) {
+<nav class="page-header-breadcrumb" aria-label="مسیر صفحه">
+  <ol class="mm-breadcrumb">
+    <li>
+      <a routerLink="/dashboard" title="داشبورد"><i class="fa fa-home"></i></a>
     </li>
-    @for(item of breadcrumb();track $index; let last=$last){
-    <li class="breadcrumb-item" [ngClass]="{'active': last}">
-      @if(!last){
+    @for (item of breadcrumb(); track $index; let last = $last) {
+    <li [class.active]="last">
+      @if (!last) {
       <a [routerLink]="item.routerLink">{{ item.label }}</a>
-      }
-      @else{
-      <span>{{ item.label }}</span>
+      } @else {
+      <span aria-current="page">{{ item.label }}</span>
       }
     </li>
     }
-
-  </ul>
-</div>
+  </ol>
+</nav>
+}

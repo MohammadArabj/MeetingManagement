@@ -1,6 +1,6 @@
 /* ==================== Statistics Cards ==================== */
 .stat-card {
-    background: white;
+    background: var(--mm-surface);
     border-radius: 12px;
     padding: 20px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -17,23 +17,23 @@
 }
 
 .stat-card-primary {
-    border-left-color: #007bff;
+    border-left-color: var(--mm-primary);
 }
 
 .stat-card-success {
-    border-left-color: #28a745;
+    border-left-color: var(--mm-success);
 }
 
 .stat-card-warning {
-    border-left-color: #ffc107;
+    border-left-color: var(--mm-accent);
 }
 
 .stat-card-info {
-    border-left-color: #17a2b8;
+    border-left-color: var(--mm-info);
 }
 
 .stat-card-danger {
-    border-left-color: #dc3545;
+    border-left-color: var(--mm-danger);
 }
 
 .stat-icon {
@@ -49,37 +49,37 @@
 }
 
 .stat-card-primary .stat-icon {
-    background: linear-gradient(135deg, #007bff, #0056b3);
+    background: linear-gradient(135deg, var(--mm-primary), var(--mm-primary-hover));
 }
 
 .stat-card-success .stat-icon {
-    background: linear-gradient(135deg, #28a745, #1e7e34);
+    background: linear-gradient(135deg, var(--mm-success), #1e7e34);
 }
 
 .stat-card-warning .stat-icon {
-    background: linear-gradient(135deg, #ffc107, #e0a800);
+    background: linear-gradient(135deg, var(--mm-accent), #e0a800);
 }
 
 .stat-card-info .stat-icon {
-    background: linear-gradient(135deg, #17a2b8, #117a8b);
+    background: linear-gradient(135deg, var(--mm-info), #117a8b);
 }
 
 .stat-card-danger .stat-icon {
-    background: linear-gradient(135deg, #dc3545, #c82333);
+    background: linear-gradient(135deg, var(--mm-danger), #c82333);
 }
 
 .stat-content h3 {
     margin: 0;
     font-size: 28px;
     font-weight: bold;
-    color: #333;
+    color: var(--mm-ink);
     font-family: 'Sahel', sans-serif;
 }
 
 .stat-content p {
     margin: 0;
     font-size: 14px;
-    color: #666;
+    color: var(--mm-muted);
     font-family: 'Sahel', sans-serif;
 }
 
@@ -129,7 +129,7 @@
 /* ==================== Form Controls ==================== */
 .form-label {
     font-weight: 600;
-    color: #333;
+    color: var(--mm-ink);
     margin-bottom: 8px;
     font-size: 14px;
     display: flex;
@@ -149,11 +149,11 @@
 .form-select {
     width: 100%;
     padding: 10px 35px 10px 15px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--mm-border);
     border-radius: 8px;
     font-size: 14px;
     transition: all 0.3s ease;
-    background: white;
+    background: var(--mm-surface);
     cursor: pointer;
     font-family: 'Sahel', sans-serif;
     appearance: none;
@@ -161,12 +161,12 @@
 
 .form-select:focus {
     outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    border-color: var(--mm-primary);
+    box-shadow: 0 0 0 3px rgba(var(--mm-primary-rgb), 0.1);
 }
 
 .form-select:hover {
-    border-color: #007bff;
+    border-color: var(--mm-primary);
 }
 
 .select-icon {
@@ -175,7 +175,7 @@
     top: 50%;
     transform: translateY(-50%);
     pointer-events: none;
-    color: #666;
+    color: var(--mm-muted);
     font-size: 12px;
 }
 
@@ -189,7 +189,7 @@
     font-family: 'Sahel', sans-serif;
     cursor: pointer;
     font-size: 14px;
-    color: #333;
+    color: var(--mm-ink);
 }
 
 /* ==================== Buttons ==================== */
@@ -208,19 +208,19 @@
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #007bff, #0056b3);
+    background: linear-gradient(135deg, var(--mm-primary), var(--mm-primary-hover));
     color: white;
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, #0056b3, #003d82);
+    background: linear-gradient(135deg, var(--mm-primary-hover), #003d82);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--mm-primary-rgb), 0.3);
 }
 
 .btn-outline-secondary {
-    background: white;
-    color: #6c757d;
+    background: var(--mm-surface);
+    color: var(--mm-muted);
     border: 2px solid #6c757d;
 }
 
@@ -231,27 +231,27 @@
 }
 
 .btn-outline-primary {
-    background: white;
-    color: #007bff;
-    border: 2px solid #007bff;
+    background: var(--mm-surface);
+    color: var(--mm-primary);
+    border: 2px solid var(--mm-primary);
 }
 
 .btn-outline-primary:hover {
-    background: #007bff;
+    background: var(--mm-primary);
     color: white;
 }
 
 /* ==================== Active Filters ==================== */
 .active-filters {
-    background: #f8f9fa;
+    background: var(--mm-surface-2);
     border-radius: 8px;
     padding: 15px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--mm-border);
 }
 
 .filter-label {
     font-weight: 600;
-    color: #495057;
+    color: var(--mm-text);
     font-size: 14px;
     display: inline-flex;
     align-items: center;
@@ -263,25 +263,25 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: white;
+    background: var(--mm-surface);
     padding: 6px 12px;
     border-radius: 20px;
     font-size: 13px;
-    color: #495057;
-    border: 1px solid #dee2e6;
+    color: var(--mm-text);
+    border: 1px solid var(--mm-border);
     font-family: 'Sahel', sans-serif;
     transition: all 0.2s ease;
 }
 
 .filter-tag:hover {
-    background: #e9ecef;
+    background: var(--mm-surface-3);
     border-color: #adb5bd;
 }
 
 .btn-close-filter {
     background: none;
     border: none;
-    color: #6c757d;
+    color: var(--mm-muted);
     cursor: pointer;
     padding: 0;
     width: 16px;
@@ -294,7 +294,7 @@
 }
 
 .btn-close-filter:hover {
-    background: #dc3545;
+    background: var(--mm-danger);
     color: white;
 }
 
@@ -309,25 +309,25 @@
 }
 
 .modern-grid .ag-header {
-    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-    border-bottom: 2px solid #007bff;
+    background: linear-gradient(135deg, var(--mm-surface-2), var(--mm-surface-3));
+    border-bottom: 2px solid var(--mm-primary);
 }
 
 .modern-grid .ag-header-cell {
     font-weight: bold;
-    color: #495057;
+    color: var(--mm-text);
 }
 
 .modern-grid .ag-row {
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--mm-border);
 }
 
 .modern-grid .ag-row:hover {
-    background: #f8f9fa !important;
+    background: var(--mm-surface-2) !important;
 }
 
 .modern-grid .ag-row-selected {
-    background: #fff3cd !important;
+    background: var(--mm-warning-50) !important;
 }
 
 /* ==================== Badge Status ==================== */
@@ -369,7 +369,7 @@
     width: 50px;
     height: 50px;
     border: 4px solid #f3f3f3;
-    border-top: 4px solid #007bff;
+    border-top: 4px solid var(--mm-primary);
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -385,7 +385,7 @@
 }
 
 .loading-text {
-    color: #6c757d;
+    color: var(--mm-muted);
     font-size: 16px;
     font-weight: 500;
     font-family: 'Sahel', sans-serif;
@@ -409,7 +409,7 @@
 }
 
 .empty-state h3 {
-    color: #495057;
+    color: var(--mm-text);
     font-size: 24px;
     font-weight: 600;
     margin-bottom: 10px;
@@ -417,7 +417,7 @@
 }
 
 .empty-state p {
-    color: #6c757d;
+    color: var(--mm-muted);
     font-size: 16px;
     font-family: 'Sahel', sans-serif;
 }
@@ -444,11 +444,11 @@
 
 /* ==================== Utility Classes ==================== */
 .text-muted {
-    color: #6c757d !important;
+    color: var(--mm-muted) !important;
 }
 
 .text-danger {
-    color: #dc3545 !important;
+    color: var(--mm-danger) !important;
 }
 
 .font-weight-bold {
@@ -473,7 +473,7 @@
 
 /* اکسنته سراسری همین صفحه */
 :host {
-    --accent: #f0bd05;
+    --accent: var(--mm-accent);
     --accent-700: #c99d00;
     --accent-100: #fff3c8;
     --text: #1f2937;
@@ -486,8 +486,8 @@
     gap: 12px;
     padding: 12px 14px;
     border-radius: 14px;
-    background: #fff8e1;
-    border: 1px dashed rgba(240, 189, 5, .65);
+    background: var(--mm-accent-50);
+    border: 1px dashed rgba(var(--mm-accent-rgb), .65);
     color: #3a2a00;
     font-family: 'Sahel', sans-serif;
 }
@@ -501,7 +501,7 @@
     justify-content: center;
     background: linear-gradient(135deg, var(--accent), #ffd86b);
     color: #1a1a1a;
-    box-shadow: 0 6px 16px rgba(240, 189, 5, .25);
+    box-shadow: 0 6px 16px rgba(var(--mm-accent-rgb), .25);
     flex: 0 0 auto;
 }
 
@@ -513,9 +513,9 @@
 
 /* badge اکسنته برای شمارنده */
 .badge-accent {
-    background: rgba(240, 189, 5, .18);
+    background: rgba(var(--mm-accent-rgb), .18);
     color: #3a2a00;
-    border: 1px solid rgba(240, 189, 5, .55);
+    border: 1px solid rgba(var(--mm-accent-rgb), .55);
     font-weight: 900;
 }
 
@@ -528,7 +528,7 @@
 /* هماهنگ‌سازی کنترل‌ها و دکمه‌ها با اکسنته */
 .form-select:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(240, 189, 5, .18);
+    box-shadow: 0 0 0 3px rgba(var(--mm-accent-rgb), .18);
 }
 
 .form-select:hover {
@@ -542,7 +542,7 @@
 
 .btn-primary:hover {
     background: linear-gradient(135deg, #e6b300, #ffc83d);
-    box-shadow: 0 4px 12px rgba(240, 189, 5, .30);
+    box-shadow: 0 4px 12px rgba(var(--mm-accent-rgb), .30);
 }
 
 /* هدر گرید */

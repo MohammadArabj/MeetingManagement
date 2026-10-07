@@ -6,7 +6,7 @@ body {
 .container {
     max-width: 26cm;
     margin: 0 auto;
-    background-color: #fff;
+    background-color: var(--mm-surface);
     padding: 20px;
     border-radius: 15px;
 }
@@ -108,13 +108,13 @@ td:last-child {
 
 .metting-summary {
     margin: 15px 0;
-    border: 2px solid #6e6e6e;
+    border: 2px solid var(--mm-border-strong);
     display: flex;
 }
 
 .metting-summary .right-side {
     border-left: 1px solid black;
-    background: #d9d9d9;
+    background: var(--mm-surface-3);
 }
 
 .label {
@@ -244,7 +244,7 @@ td:last-child {
 }
 
 .metting-description .main .label {
-    background: #d9d9d9;
+    background: var(--mm-surface-3);
 }
 
 .metting-directives {
@@ -258,7 +258,7 @@ td:last-child {
 }
 
 .meeting-signatures .top {
-    background: #d9d9d9;
+    background: var(--mm-surface-3);
     text-align: center;
     padding: 8px;
     border-bottom: 1px solid black;

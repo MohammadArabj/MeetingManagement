@@ -2,10 +2,10 @@
 
 /* ===== Variables ===== */
 :host {
-  --primary-color: #f0bd05;
+  --primary-color: var(--mm-accent);
   --primary-dark: #d4a505;
   --primary-light: #fef3cd;
-  --danger-color: #dc3545;
+  --danger-color: var(--mm-danger);
   --danger-dark: #bb2d3b;
   --text-dark: #1a1a1a;
   --text-muted: #6c757d;
@@ -74,7 +74,7 @@
 
 /* ===== Content Card ===== */
 .calendar-content-card {
-  background: white;
+  background: var(--mm-surface);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   box-shadow: var(--shadow-sm);
@@ -264,7 +264,7 @@
 }
 
 .btn-icon.edit {
-  background: white;
+  background: var(--mm-surface);
   color: var(--primary-dark);
 }
 
@@ -274,7 +274,7 @@
 }
 
 .btn-icon.delete {
-  background: white;
+  background: var(--mm-surface);
   color: var(--danger-color);
 }
 
@@ -375,7 +375,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  background: #fff3cd;
+  background: var(--mm-warning-50);
   border-radius: var(--radius-sm);
   margin-bottom: 1rem;
   font-size: 0.85rem;
@@ -466,7 +466,7 @@
 
 .btn-save:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(240, 189, 5, 0.4);
+  box-shadow: 0 4px 12px rgba(var(--mm-accent-rgb), 0.4);
 }
 
 .btn-save:disabled {
@@ -522,7 +522,7 @@
 
 :host ::ng-deep .fc-button-primary:disabled {
   background: #ccc !important;
-  border-color: #ccc !important;
+  border-color: var(--mm-border-strong) !important;
 }
 
 :host ::ng-deep .fc-day-today {
@@ -530,7 +530,7 @@
 }
 
 :host ::ng-deep .fc-daygrid-day:hover {
-  background: rgba(240, 189, 5, 0.1);
+  background: rgba(var(--mm-accent-rgb), 0.1);
   cursor: pointer;
 }
 

@@ -1,3 +1,6 @@
+import { debounceTime } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { RealtimeService } from '../../../core/realtime/realtime.service';
 import {
   AfterViewInit,
   Component,
@@ -224,6 +227,11 @@ export class ResolutionListComponent extends AgGridBaseComponent implements OnIn
     effect(() => {
       if (this.isPermitted()) this.getRecords();
     });
+
+    // تخصیص/ارجاع جدید یا پایان اقدام → کارتابل لحظه‌ای تازه می‌شود
+    inject(RealtimeService).notifications$
+      .pipe(debounceTime(800), takeUntilDestroyed())
+      .subscribe(() => { if (this.isPermitted()) this.getRecords(); });
   }
 
   override async ngOnInit(): Promise<void> {

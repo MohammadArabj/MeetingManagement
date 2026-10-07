@@ -2,7 +2,7 @@
 .assignment-referral-container {
     font-family: 'Sahel', sans-serif;
     direction: rtl;
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    background: linear-gradient(135deg, var(--mm-surface-2) 0%, #c3cfe2 100%);
     min-height: 100vh;
     padding: 20px;
 }
@@ -18,7 +18,7 @@
 }
 
 .main-card .card-header {
-    background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+    background: linear-gradient(135deg, var(--mm-info) 0%, #20c997 100%);
     border: none;
     padding: 25px;
     position: relative;
@@ -109,7 +109,7 @@
 
 .loading-text {
     margin-top: 20px;
-    color: #6c757d;
+    color: var(--mm-muted);
     font-size: 1.1rem;
     font-weight: 500;
 }
@@ -136,7 +136,7 @@
 }
 
 .referral-form-card .card-header {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    background: linear-gradient(135deg, var(--mm-success) 0%, #20c997 100%);
     border: none;
     padding: 20px 25px;
 }
@@ -154,7 +154,7 @@
     font-size: 1rem;
     font-weight: 600;
     margin-bottom: 10px;
-    color: #2c3e50;
+    color: var(--mm-ink);
 }
 
 .custom-ng-select {
@@ -162,38 +162,38 @@
 }
 
 .custom-ng-select .ng-select-container {
-    border: 2px solid #e9ecef;
+    border: 2px solid var(--mm-border);
     border-radius: 15px;
     min-height: 50px;
-    background: white;
+    background: var(--mm-surface);
     transition: all 0.3s ease;
 }
 
 .custom-ng-select .ng-select-container:hover {
-    border-color: #17a2b8;
+    border-color: var(--mm-info);
     box-shadow: 0 0 0 0.1rem rgba(23, 162, 184, 0.25);
 }
 
 .custom-ng-select.ng-select-focused .ng-select-container {
-    border-color: #17a2b8;
+    border-color: var(--mm-info);
     box-shadow: 0 0 0 0.25rem rgba(23, 162, 184, 0.25);
     transform: translateY(-2px);
 }
 
 .custom-input,
 .custom-textarea {
-    border: 2px solid #e9ecef;
+    border: 2px solid var(--mm-border);
     border-radius: 15px;
     padding: 15px 20px;
     font-size: 1rem;
     font-family: 'Sahel', sans-serif;
-    background: white;
+    background: var(--mm-surface);
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .custom-input:focus,
 .custom-textarea:focus {
-    border-color: #17a2b8;
+    border-color: var(--mm-info);
     box-shadow: 0 0 0 0.25rem rgba(23, 162, 184, 0.25);
     transform: translateY(-2px);
     outline: none;
@@ -238,14 +238,14 @@
 }
 
 .tree-view-card .card-header {
-    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+    background: linear-gradient(135deg, var(--mm-accent) 0%, var(--mm-accent) 100%);
     border: none;
     padding: 20px 25px;
 }
 
 .assignment-tree {
     padding: 20px;
-    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    background: linear-gradient(135deg, var(--mm-surface-2) 0%, var(--mm-surface) 100%);
     border-radius: 15px;
 }
 
@@ -255,7 +255,7 @@
 
 .main-node {
     background: linear-gradient(135deg, rgba(13, 110, 253, 0.1) 0%, rgba(255, 255, 255, 0.9) 100%);
-    border: 2px solid #0d6efd;
+    border: 2px solid var(--mm-primary);
     border-radius: 15px;
     padding: 20px;
     margin-bottom: 20px;
@@ -269,7 +269,7 @@
 
 .node-icon {
     font-size: 2rem;
-    color: #0d6efd;
+    color: var(--mm-primary);
 }
 
 .node-info {
@@ -278,7 +278,7 @@
 
 .node-name {
     font-size: 1.1rem;
-    color: #2c3e50;
+    color: var(--mm-ink);
     display: block;
     margin-bottom: 5px;
 }
@@ -310,14 +310,14 @@
     top: 0;
     width: 30px;
     height: 30px;
-    border-right: 2px solid #28a745;
-    border-bottom: 2px solid #28a745;
+    border-right: 2px solid var(--mm-success);
+    border-bottom: 2px solid var(--mm-success);
     border-bottom-right-radius: 15px;
 }
 
 .child-content {
     background: linear-gradient(135deg, rgba(40, 167, 69, 0.1) 0%, rgba(255, 255, 255, 0.9) 100%);
-    border: 2px solid #28a745;
+    border: 2px solid var(--mm-success);
     border-radius: 12px;
     padding: 15px;
     display: flex;
@@ -332,7 +332,7 @@
 }
 
 .child-icon {
-    color: #28a745;
+    color: var(--mm-success);
     font-size: 1.2rem;
     margin-top: 2px;
 }
@@ -343,7 +343,7 @@
 
 .child-name {
     font-size: 1rem;
-    color: #2c3e50;
+    color: var(--mm-ink);
     display: block;
     margin-bottom: 8px;
 }
@@ -358,7 +358,7 @@
     border-radius: 8px;
     font-size: 0.9rem;
     color: #155724;
-    border-right: 3px solid #28a745;
+    border-right: 3px solid var(--mm-success);
 }
 
 .child-status {
@@ -368,14 +368,14 @@
 
 /* Referrals Table */
 .referrals-table-container {
-    background: white;
+    background: var(--mm-surface);
     border-radius: 20px;
     padding: 25px;
     box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
 }
 
 .table-header h6 {
-    color: #2c3e50;
+    color: var(--mm-ink);
     font-weight: 700;
 }
 
@@ -427,7 +427,7 @@
 .referrer-info {
     display: flex;
     align-items: center;
-    color: #2c3e50;
+    color: var(--mm-ink);
     font-weight: 500;
 }
 
@@ -436,14 +436,14 @@
     padding: 6px 12px;
     border-radius: 15px;
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--mm-muted);
     border: 1px solid rgba(108, 117, 125, 0.2);
 }
 
 .date-badge,
 .due-date-badge {
     background: rgba(23, 162, 184, 0.1);
-    color: #17a2b8;
+    color: var(--mm-info);
     padding: 6px 12px;
     border-radius: 15px;
     font-size: 0.85rem;
@@ -469,7 +469,7 @@
 .note-preview {
     display: block;
     margin-top: 3px;
-    color: #6c757d;
+    color: var(--mm-muted);
     font-size: 0.8rem;
 }
 
@@ -491,14 +491,14 @@
 .empty-referrals-state {
     text-align: center;
     padding: 60px 20px;
-    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    background: linear-gradient(135deg, var(--mm-surface-2) 0%, var(--mm-surface) 100%);
     border-radius: 20px;
-    border: 2px dashed #dee2e6;
+    border: 2px dashed var(--mm-border);
 }
 
 .empty-icon {
     font-size: 4rem;
-    color: #adb5bd;
+    color: var(--mm-subtle);
     margin-bottom: 20px;
     animation: float 3s ease-in-out infinite;
 }
@@ -516,13 +516,13 @@
 }
 
 .empty-title {
-    color: #6c757d;
+    color: var(--mm-muted);
     font-weight: 600;
     margin-bottom: 10px;
 }
 
 .empty-description {
-    color: #adb5bd;
+    color: var(--mm-subtle);
     font-size: 0.95rem;
     max-width: 400px;
     margin: 0 auto;
@@ -531,20 +531,20 @@
 
 /* Status Badge Classes */
 .badge.bg-success {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+    background: linear-gradient(135deg, var(--mm-success) 0%, #20c997 100%) !important;
 }
 
 .badge.bg-danger {
-    background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%) !important;
+    background: linear-gradient(135deg, var(--mm-danger) 0%, #e83e8c 100%) !important;
 }
 
 .badge.bg-warning {
-    background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%) !important;
-    color: #212529 !important;
+    background: linear-gradient(135deg, var(--mm-accent) 0%, var(--mm-accent) 100%) !important;
+    color: var(--mm-ink) !important;
 }
 
 .badge.bg-info {
-    background: linear-gradient(135deg, #17a2b8 0%, #6610f2 100%) !important;
+    background: linear-gradient(135deg, var(--mm-info) 0%, #6610f2 100%) !important;
 }
 
 .badge.bg-secondary {
@@ -552,9 +552,9 @@
 }
 
 .badge.bg-light {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
-    color: #495057 !important;
-    border: 1px solid #dee2e6;
+    background: linear-gradient(135deg, var(--mm-surface-2) 0%, var(--mm-surface-3) 100%) !important;
+    color: var(--mm-text) !important;
+    border: 1px solid var(--mm-border);
 }
 
 /* Responsive Design */

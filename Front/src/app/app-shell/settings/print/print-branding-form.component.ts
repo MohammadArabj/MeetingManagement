@@ -142,7 +142,9 @@ export class PrintBrandingFormComponent {
 
   constructor() {
     effect(() => {
-      const branding = { ...this.settings().branding };
+      const raw = this.settings().branding;
+      // null برای انتخاب گزینه‌ی «پیش‌فرض» در فهرست‌ها
+      const branding: PrintBranding = { ...raw, fontFamily: raw.fontFamily || null, primaryColor: raw.primaryColor || null };
       this.model.set(branding);
       void this.refreshLogo(branding.logoGuid ?? null);
     });

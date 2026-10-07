@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { SessionStore } from '../../../core/auth/session.store';
+import { BreadcrumbService } from '../../../services/framework-services/breadcrumb.service';
 import { SETTINGS_NAV as NAV } from '../settings-nav';
 
 @Component({
@@ -11,7 +12,7 @@ import { SETTINGS_NAV as NAV } from '../settings-nav';
     <div class="settings-page">
       <header class="settings-header">
         <div>
-          <h4 class="mb-1"><i class="fas fa-gear ms-2 text-primary"></i>تنظیمات سامانه</h4>
+          <h4 class="mb-1"><i class="fas fa-gear me-2 text-primary"></i>تنظیمات سامانه</h4>
           <small class="text-muted">پیکربندی جلسات، هیئت مدیره، اطلاع‌رسانی و دسترسی نقش‌ها</small>
         </div>
       </header>
@@ -64,6 +65,10 @@ import { SETTINGS_NAV as NAV } from '../settings-nav';
 })
 export class SettingsShellComponent {
   private readonly session = inject(SessionStore);
+
+  constructor() {
+    inject(BreadcrumbService).setItems([{ label: 'تنظیمات سامانه', routerLink: '/settings' }]);
+  }
 
   readonly groups = computed(() => {
     this.session.permissions(); // وابستگی واکنشی به تغییر سمت

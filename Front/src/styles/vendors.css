@@ -1,0 +1,107 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   کتابخانه‌های جانبی: toastr، SweetAlert2، ng-select، تقویم شمسی، ag-grid
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── toastr ────────────────────────────────────────────── */
+#toast-container > div {
+  border-radius: var(--mm-radius) !important;
+  box-shadow: var(--mm-shadow-lg) !important;
+  opacity: 1 !important;
+  padding: 14px 16px 14px 52px !important;
+  background-position: 16px center !important;
+  font-size: .9rem;
+  backdrop-filter: blur(6px);
+}
+#toast-container > .toast-success { background-color: #12803c !important; }
+#toast-container > .toast-error { background-color: #c42020 !important; }
+#toast-container > .toast-warning { background-color: #c26706 !important; }
+#toast-container > .toast-info { background-color: #1b5ab5 !important; }
+#toast-container .toast-title { font-weight: 800; }
+#toast-container .toast-progress { opacity: .35; }
+
+/* ── SweetAlert2 ───────────────────────────────────────── */
+.swal2-popup {
+  border-radius: var(--mm-radius-xl) !important;
+  background: var(--mm-surface) !important;
+  color: var(--mm-text) !important;
+  box-shadow: var(--mm-shadow-lg) !important;
+  padding: 1.6rem 1.4rem 1.3rem !important;
+}
+.swal2-title { color: var(--mm-ink) !important; font-weight: 800 !important; font-size: 1.25rem !important; }
+.swal2-html-container { color: var(--mm-text) !important; font-size: .95rem !important; line-height: 1.9 !important; }
+.swal2-actions { gap: .5rem; }
+.swal2-styled { border-radius: var(--mm-radius-sm) !important; font-weight: 700 !important; padding: .55rem 1.4rem !important; box-shadow: none !important; }
+.swal2-styled.swal2-confirm { background: linear-gradient(135deg, var(--mm-primary), var(--mm-primary-2)) !important; }
+.swal2-styled.swal2-cancel { background: var(--mm-surface-3) !important; color: var(--mm-text) !important; }
+.swal2-styled.swal2-deny { background: var(--mm-danger) !important; }
+.swal2-container.swal2-backdrop-show { background: var(--mm-overlay) !important; backdrop-filter: blur(2px); }
+.swal2-icon { transform: scale(.85); }
+
+/* ── ng-select ─────────────────────────────────────────── */
+.ng-select .ng-select-container {
+  background: var(--mm-surface) !important;
+  border: 1px solid var(--mm-border-strong) !important;
+  border-radius: var(--mm-radius-sm) !important;
+  min-height: 2.5rem !important;
+  color: var(--mm-ink) !important;
+  transition: border-color .15s var(--mm-ease), box-shadow .15s var(--mm-ease);
+}
+.ng-select:not(.ng-select-disabled) .ng-select-container:hover { border-color: var(--mm-subtle) !important; }
+.ng-select.ng-select-focused:not(.ng-select-opened) > .ng-select-container,
+.ng-select.ng-select-opened > .ng-select-container {
+  border-color: var(--mm-primary) !important;
+  box-shadow: 0 0 0 4px var(--mm-focus) !important;
+}
+.ng-select .ng-select-container .ng-value-container .ng-placeholder { color: var(--mm-subtle) !important; }
+.ng-select.ng-select-disabled > .ng-select-container { background: var(--mm-surface-2) !important; }
+.ng-select.ng-select-multiple .ng-select-container .ng-value-container .ng-value {
+  background: var(--mm-primary-50) !important;
+  border: 1px solid var(--mm-primary-100) !important;
+  color: var(--mm-primary) !important;
+  border-radius: var(--mm-radius-pill) !important;
+  font-weight: 600;
+}
+.ng-select.ng-select-multiple .ng-select-container .ng-value-container .ng-value .ng-value-icon { border: 0 !important; }
+.ng-select.ng-select-multiple .ng-select-container .ng-value-container .ng-value .ng-value-icon:hover { background: var(--mm-primary-100) !important; }
+.ng-dropdown-panel {
+  background: var(--mm-surface) !important;
+  border: 1px solid var(--mm-border) !important;
+  border-radius: var(--mm-radius) !important;
+  box-shadow: var(--mm-shadow-lg) !important;
+  overflow: hidden;
+  margin-top: 4px !important;
+}
+.ng-dropdown-panel .ng-dropdown-panel-items .ng-option { color: var(--mm-text) !important; padding: .5rem .8rem !important; background: transparent !important; }
+.ng-dropdown-panel .ng-dropdown-panel-items .ng-option.ng-option-marked { background: var(--mm-primary-50) !important; color: var(--mm-primary) !important; }
+.ng-dropdown-panel .ng-dropdown-panel-items .ng-option.ng-option-selected { background: var(--mm-primary-100) !important; color: var(--mm-primary) !important; font-weight: 700; }
+
+/* ── تقویم شمسی (jalalidatepicker) ──────────────────────── */
+jdp-container {
+  border-radius: var(--mm-radius) !important;
+  box-shadow: var(--mm-shadow-lg) !important;
+  border: 1px solid var(--mm-border) !important;
+  background: var(--mm-surface) !important;
+  font-family: var(--mm-font) !important;
+  overflow: hidden;
+}
+jdp-container .jdp-day.selected, jdp-container .jdp-btn-today { background: var(--mm-primary) !important; color: #fff !important; border-radius: var(--mm-radius-sm) !important; }
+jdp-container .jdp-day:not(.disabled-day):hover { background: var(--mm-primary-50) !important; color: var(--mm-primary) !important; border-radius: var(--mm-radius-sm) !important; }
+jdp-container .jdp-day.today { box-shadow: inset 0 0 0 1.5px var(--mm-primary) !important; border-radius: var(--mm-radius-sm) !important; }
+jdp-container .jdp-btn-close, jdp-container .jdp-btn-empty { border-radius: var(--mm-radius-sm) !important; }
+
+/* ── ag-grid (Theming API: رنگ‌ها در grid-theme.ts؛ اینجا فقط ظرف) ──── */
+ag-grid-angular {
+  border-radius: var(--mm-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--mm-shadow-sm);
+}
+.ag-root-wrapper { border-radius: var(--mm-radius-lg) !important; }
+.ag-header-cell-text { font-weight: 700; }
+.ag-row .ag-cell { display: flex; align-items: center; }
+.ag-status-bar { font-size: .82rem; }
+
+/* ── تقویم FullCalendar ────────────────────────────────── */
+.fc { --fc-border-color: var(--mm-border); --fc-today-bg-color: var(--mm-primary-50); --fc-button-bg-color: var(--mm-primary); --fc-button-border-color: var(--mm-primary); --fc-button-active-bg-color: var(--mm-primary-active); --fc-event-bg-color: var(--mm-primary); --fc-page-bg-color: var(--mm-surface); }
+.fc .fc-button { border-radius: var(--mm-radius-sm) !important; font-weight: 600; box-shadow: none !important; }
+.ag-cell, .ag-cell-value, .ag-header-cell-text, .ag-group-value, .ag-paging-panel, .ag-status-bar,
+.ag-filter, .ag-menu, .ag-popup, .ag-input-field-input { font-family: var(--mm-font) !important; }

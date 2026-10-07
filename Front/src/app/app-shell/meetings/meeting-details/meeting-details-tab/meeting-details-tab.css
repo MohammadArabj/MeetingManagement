@@ -3,7 +3,7 @@
   top: 3px;
   right: 6px;
   background: linear-gradient(135deg, #ffcc00, #ff9900);
-  color: #000;
+  color: var(--mm-ink);
   font-size: 0.7rem;
   font-weight: bold;
   padding: 0px 8px;
@@ -44,7 +44,7 @@
 }
 
 .presence-toggle .option.red.selected {
-  background-color: #e74c3c;
+  background-color: var(--mm-danger);
 }
 
 .presence-toggle .option.gray.selected {
@@ -65,10 +65,10 @@
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--mm-border);
   -webkit-user-select: none;
   user-select: none;
-  background-color: #e0e0e0;
+  background-color: var(--mm-surface-3);
 }
 
 .avatar-bg {

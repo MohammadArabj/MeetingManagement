@@ -30,12 +30,12 @@
   <div class="top-bar-main">
     <div class="top-bar-center">
       <div class="chip">
-        <i class="fa fa-calendar-alt" style="margin-left: 6px;"></i>
+        <i class="fa fa-calendar-alt"></i>
         <span class="fw-semibold">{{ currentDay() }}</span>
-        <span style="margin: 0 4px;">{{ currentDate() }}</span>
-        <span style="margin: 0 4px;">|</span>
-        <i class="fa fa-clock" style="margin-left: 4px;"></i>
-        <span>{{ currentTime() }}</span>
+        <span>{{ currentDate() }}</span>
+        <span class="chip-sep"></span>
+        <i class="fa fa-clock"></i>
+        <span class="tabular">{{ currentTime() }}</span>
       </div>
     </div>
 
@@ -103,13 +103,21 @@
       </div>
 
       <!-- دکمه‌های اقدام -->
+      <button class="icon-btn" (click)="help.open()" title="راهنمای این صفحه (F1)" aria-label="راهنمای این صفحه">
+        <i class="fa fa-question-circle"></i>
+      </button>
+      <button class="icon-btn" (click)="theme.toggle()"
+        [title]="theme.mode() === 'dark' ? 'حالت روشن' : 'حالت تیره'" aria-label="تغییر حالت روشن/تیره">
+        <i class="fa" [class.fa-moon]="theme.mode() === 'light'" [class.fa-sun]="theme.mode() === 'dark'"></i>
+      </button>
+
       <button class="btn-ghost" (click)="redirectToGrants()" title="بازگشت به سامانه‌ها">
-        <i class="fa fa-th" style="margin-left: 6px;"></i>
+        <i class="fa fa-th"></i>
         <span class="btn-text">سامانه‌ها</span>
       </button>
 
-      <button class="btn-ghost btn-danger" (click)="logout()" title="خروج از سیستم">
-        <i class="fa fa-sign-out-alt" style="margin-left: 6px;"></i>
+      <button class="btn-ghost btn-logout" (click)="logout()" title="خروج از سیستم">
+        <i class="fa fa-sign-out-alt"></i>
         <span class="btn-text">خروج</span>
       </button>
     </div>

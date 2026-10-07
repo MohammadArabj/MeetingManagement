@@ -5,10 +5,10 @@
     align-items: flex-start;
     gap: 12px;
     padding: 16px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(79, 70, 229, 0.05) 100%);
-    border: 1px solid rgba(99, 102, 241, 0.2);
+    background: linear-gradient(135deg, rgba(var(--mm-primary-rgb), 0.1) 0%, rgba(var(--mm-primary-rgb), 0.05) 100%);
+    border: 1px solid rgba(var(--mm-primary-rgb), 0.2);
     border-radius: 8px;
-    color: #4f46e5;
+    color: var(--mm-primary);
 }
 
 .info-card i {
@@ -29,18 +29,18 @@
 }
 
 .user-avatar-cell img {
-    border: 2px solid #e5e7eb;
+    border: 2px solid var(--mm-border);
     transition: all 0.2s ease;
 }
 
 .user-avatar-cell img:hover {
-    border-color: #6366f1;
+    border-color: var(--mm-primary);
     transform: scale(1.1);
 }
 
 /* Grid Enhancements */
 .ag-grid-custom .ag-row.user-row:hover {
-    background-color: rgba(99, 102, 241, 0.05);
+    background-color: rgba(var(--mm-primary-rgb), 0.05);
 }
 
 /* Alert Styling */
@@ -52,5 +52,5 @@
 }
 
 .alert-warning i {
-    color: #d97706;
+    color: var(--mm-accent-hover);
 }

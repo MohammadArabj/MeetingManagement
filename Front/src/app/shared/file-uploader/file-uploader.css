@@ -12,7 +12,7 @@
 
 
 .modal-footer {
-  background-color: #fff;
+  background-color: var(--mm-surface);
   border-top: 1px solid rgba(0, 0, 0, 0.05);
   padding: 0.75rem 1rem;
 }
@@ -68,12 +68,12 @@
 .upload-text .main-text {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #333;
+  color: var(--mm-ink);
   margin-bottom: 0.25rem;
 }
 
 .upload-text .sub-text {
-  color: #6c757d;
+  color: var(--mm-muted);
   font-size: 0.8rem;
 }
 
@@ -104,7 +104,7 @@
 /* کارت فایل */
 .file-card {
   border-radius: var(--border-radius);
-  background-color: white;
+  background-color: var(--mm-surface);
   overflow: hidden;
   position: relative;
   transition: all 0.2s ease;
@@ -123,7 +123,7 @@
 /* پیشنمایش فایل */
 .file-preview {
   height: 100px;
-  background-color: #f8f9fa;
+  background-color: var(--mm-surface-2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -146,7 +146,7 @@
 .file-icon {
   width: 40px;
   height: 40px;
-  color: #6c757d;
+  color: var(--mm-muted);
 }
 
 /* اطلاعات فایل */
@@ -159,7 +159,7 @@
 
 .file-name {
   font-weight: 600;
-  color: #333;
+  color: var(--mm-ink);
   margin-bottom: 0.3rem;
   white-space: nowrap;
   overflow: hidden;
@@ -172,7 +172,7 @@
   align-items: center;
   justify-content: space-between;
   font-size: 0.7rem;
-  color: #6c757d;
+  color: var(--mm-muted);
   margin-top: auto;
 }
 
@@ -258,7 +258,7 @@
 }
 
 .add-text {
-  color: #6c757d;
+  color: var(--mm-muted);
   font-weight: 500;
   font-size: 0.8rem;
 }
@@ -314,7 +314,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f8f9fa;
+  background-color: var(--mm-surface-2);
   border-radius: var(--border-radius);
   overflow: hidden;
 }
@@ -397,7 +397,7 @@
 
 .file-card {
   position: relative;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--mm-border);
   border-radius: 12px;
   overflow: hidden;
   transition: transform 0.3s ease;

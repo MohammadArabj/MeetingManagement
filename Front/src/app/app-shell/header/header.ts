@@ -26,6 +26,8 @@ import {
 } from '../../core/types/configuration';
 import { ImpersonationService } from '../../services/framework-services/impersonation.service';
 import { NotificationBellComponent } from './notification-bell/notification-bell.component';
+import { HelpService } from '../../core/help/help.service';
+import { ThemeService } from '../../core/theme/theme.service';
 
 interface UserInformation {
   fullname: string;
@@ -61,6 +63,8 @@ export class HeaderComponent implements OnInit {
   // Injected Services
   // ═══════════════════════════════════════════════════════════════
   private readonly router = inject(Router);
+  readonly help = inject(HelpService);
+  readonly theme = inject(ThemeService);
   private readonly passwordFlowService = inject(PasswordFlowService);
   private readonly codeFlowService = inject(CodeFlowService);
   private readonly sidebarService = inject(SidebarService);

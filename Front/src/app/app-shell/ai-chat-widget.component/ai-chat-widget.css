@@ -21,10 +21,10 @@
     height: 52px;
     border-radius: 50%;
     border: none;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--mm-primary) 0%, var(--mm-primary-2) 100%);
     color: #fff;
     cursor: pointer;
-    box-shadow: 0 4px 18px rgba(102, 126, 234, 0.45);
+    box-shadow: 0 4px 18px rgba(var(--mm-primary-rgb), 0.45);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -36,11 +36,11 @@
 
 .wcw-fab:hover {
     transform: scale(1.08);
-    box-shadow: 0 6px 24px rgba(102, 126, 234, 0.6);
+    box-shadow: 0 6px 24px rgba(var(--mm-primary-rgb), 0.6);
 }
 
 .wcw-fab--open {
-    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    background: linear-gradient(135deg, var(--mm-primary-2) 0%, var(--mm-primary) 100%);
 }
 
 .wcw-fab-icon {
@@ -58,7 +58,7 @@
 /* ── Chat window ──────────────────────────────────────────────── */
 .wcw-window {
     width: 340px;
-    background: #fff;
+    background: var(--mm-surface);
     border-radius: 16px;
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
     display: flex;
@@ -90,7 +90,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 14px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--mm-primary) 0%, var(--mm-primary-2) 100%);
     color: #fff;
     flex-shrink: 0;
 }
@@ -155,7 +155,7 @@
     height: 100%;
     min-height: 140px;
     text-align: center;
-    color: #999;
+    color: var(--mm-subtle);
     gap: 8px;
 }
 
@@ -193,20 +193,20 @@
 }
 
 .wcw-bubble--user {
-    background: #667eea;
+    background: var(--mm-primary);
     color: #fff;
     border-bottom-right-radius: 4px;
 }
 
 .wcw-bubble--assistant {
     background: #f3f4ff;
-    color: #333;
+    color: var(--mm-ink);
     border-bottom-left-radius: 4px;
 }
 
 /* Dots inside assistant bubble */
 .wcw-dots span {
-    background: #667eea;
+    background: var(--mm-primary);
 }
 
 /* ── Input area ───────────────────────────────────────────────── */
@@ -214,7 +214,7 @@
     display: flex;
     gap: 6px;
     padding: 10px 10px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--mm-border);
     align-items: flex-end;
     flex-shrink: 0;
 }
@@ -249,8 +249,8 @@
 }
 
 .wcw-input:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 0.15rem rgba(102, 126, 234, 0.18);
+    border-color: var(--mm-primary);
+    box-shadow: 0 0 0 0.15rem rgba(var(--mm-primary-rgb), 0.18);
 }
 
 .wcw-input:disabled {
@@ -262,7 +262,7 @@
     height: 36px;
     border-radius: 50%;
     border: none;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--mm-primary) 0%, var(--mm-primary-2) 100%);
     color: #fff;
     font-size: 16px;
     cursor: pointer;
@@ -337,8 +337,8 @@
 }
 
 .wcw-model-select option {
-    background: #fff;
-    color: #333;
+    background: var(--mm-surface);
+    color: var(--mm-ink);
 }
 
 .wcw-model-select:hover {
