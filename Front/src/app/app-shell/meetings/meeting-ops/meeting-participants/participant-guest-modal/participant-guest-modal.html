@@ -1,0 +1,284 @@
+<!-- Modal برای مهمان -->
+<div class="modal fade" id="guestModal" tabindex="-1" aria-labelledby="guestModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="guestModalLabel">
+                    {{ guestForm.get('guid')?.value && guestForm.get('guid')?.value !== '' ? 'ویرایش مهمان' : 'افزودن مهمان' }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form [formGroup]="guestForm" class="row g-3">
+                    <!-- انتخاب نوع مهمان -->
+                    <div class="col-12">
+                        <label class="form-label">نوع مهمان <span class="text-danger">*</span></label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="guestType" id="externalGuest"
+                                    formControlName="guestType" value="external"
+                                    (change)="onGuestTypeChange('external')">
+                                <label class="form-check-label" for="externalGuest">
+                                    مهمان خارج از سازمان
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="guestType" id="internalGuest"
+                                    formControlName="guestType" value="internal"
+                                    (change)="onGuestTypeChange('internal')">
+                                <label class="form-check-label" for="internalGuest">
+                                    عضو سازمان
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- انتخاب عضو داخلی -->
+                    @if (guestForm.get('guestType')?.value === 'internal') {
+                    <div class="col-12">
+                        <label for="internalMember" class="form-label">انتخاب عضو <span
+                                class="text-danger">*</span></label>
+                        <div class="search-container modal-search">
+                            <input type="text" class="form-control search-input" id="internalMember"
+                                formControlName="memberSearch" placeholder="جستجو و انتخاب عضو..."
+                                (input)="onInternalMemberSearch($event)" (focus)="showInternalMemberDropdown()"
+                                (blur)="hideInternalMemberDropdown()"
+                                [class.is-invalid]="isFormFieldInvalid('selectedMember')">
+
+                            <!-- دراپ‌داون اعضای داخلی -->
+                            @if (shouldShowInternalMemberDropdown()) {
+                            <div class="members-dropdown-container modal-dropdown">
+                                <div class="members-dropdown show">
+                                    @for(member of filteredAllUserInternalMembers(); track member.guid) {
+                                    <button type="button" class="member-dropdown-item"
+                                        (mousedown)="selectInternalMember(member)">
+                                        <div class="member-photo-protected" (contextmenu)="$event.preventDefault()">
+                                            <div class="photo-bg"
+                                                [style.background-image]="'url(' + member.image + ')'"></div>
+                                            <div class="photo-shield"></div>
+                                        </div>
+                                        <div class="member-info">
+                                            <span class="member-name">{{member.name}}</span>
+                                            <small class="member-position">{{member.position}}</small>
+                                        </div>
+                                    </button>
+                                    } @empty {
+                                    <div class="no-results">
+                                        <i class="fas fa-search text-muted"></i>
+                                        <span>هیچ عضوی یافت نشد</span>
+                                    </div>
+                                    }
+                                </div>
+                            </div>
+                            }
+                        </div>
+                        @if (isFormFieldInvalid('selectedMember')) {
+                        <div class="invalid-feedback d-block">
+                            {{ getFieldErrorMessage('selectedMember') }}
+                        </div>
+                        }
+                    </div>
+                    }
+
+                    <!-- باقی فیلدهای فرم... -->
+                    @if (guestForm.get('guestType')?.value === 'external') {
+                    <!-- نام و نام خانوادگی -->
+                    <div class="col-md-6">
+                        <label for="guestName" class="form-label">نام و نام خانوادگی <span
+                                class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="guestName" formControlName="name"
+                            [class.is-invalid]="isFormFieldInvalid('name')" placeholder="نام کامل مهمان را وارد کنید">
+                        @if (isFormFieldInvalid('name')) {
+                        <div class="invalid-feedback">
+                            {{ getFieldErrorMessage('name') }}
+                        </div>
+                        }
+                    </div>
+
+                    <!-- شماره موبایل -->
+                    <div class="col-md-6">
+                        <label for="guestMobile" class="form-label">شماره موبایل <span
+                                class="text-danger">*</span></label>
+                        <input type="tel" class="form-control" id="guestMobile" formControlName="mobile"
+                            [class.is-invalid]="isFormFieldInvalid('mobile')" placeholder="09xxxxxxxxx">
+                        @if (isFormFieldInvalid('mobile')) {
+                        <div class="invalid-feedback">
+                            {{ getFieldErrorMessage('mobile') }}
+                        </div>
+                        }
+                    </div>
+
+                    <!-- ایمیل -->
+                    <div class="col-md-6">
+                        <label for="guestEmail" class="form-label">آدرس ایمیل</label>
+                        <input type="email" class="form-control" id="guestEmail" formControlName="email"
+                            [class.is-invalid]="isFormFieldInvalid('email')" placeholder="example@domain.com">
+                        @if (isFormFieldInvalid('email')) {
+                        <div class="invalid-feedback">
+                            {{ getFieldErrorMessage('email') }}
+                        </div>
+                        }
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="guestOrganization" class="form-label">نام سازمان <span
+                                class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="guestOrganization" formControlName="organization"
+                            [class.is-invalid]="isFormFieldInvalid('organization')" placeholder="نام سازمان یا شرکت">
+                        @if (isFormFieldInvalid('organization')) {
+                        <div class="invalid-feedback">
+                            {{ getFieldErrorMessage('organization') }}
+                        </div>
+                        }
+                    </div>
+
+                    <!-- جنسیت - فیلد جدید -->
+                    <div class="col-md-6">
+                        <label class="form-label">جنسیت <span class="text-danger">*</span></label>
+                        <div class="d-flex gap-3 align-items-center" style="height: 38px;">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="gender" id="genderMale"
+                                    formControlName="gender" value="Male">
+                                <label class="form-check-label" for="genderMale">
+                                    <i class="fas fa-male me-1"></i> آقا
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="gender" id="genderFemale"
+                                    formControlName="gender" value="Female">
+                                <label class="form-check-label" for="genderFemale">
+                                    <i class="fas fa-female me-1"></i> خانم
+                                </label>
+                            </div>
+                        </div>
+                        @if (isFormFieldInvalid('gender')) {
+                        <div class="text-danger small mt-1">
+                            {{ getFieldErrorMessage('gender') }}
+                        </div>
+                        }
+                    </div>
+
+                    <!-- تصویر شخصی - با Progress و Preview -->
+                    <div class="col-md-6">
+                        <label for="profileImage" class="form-label">تصویر شخصی</label>
+
+                        @if (!profileFileGuid()) {
+                        <!-- حالت آپلود -->
+                        <div class="upload-zone" [class.uploading]="isProfileUploading()">
+                            <input type="file" class="form-control" id="profile" accept="image/*"
+                                [disabled]="isProfileUploading()" (change)="onFileSelected($event, 'profile')">
+
+                            @if (isProfileUploading()) {
+                            <div class="upload-progress mt-2">
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                        role="progressbar" [style.width.%]="profileUploadProgress()">
+                                    </div>
+                                </div>
+                                <small class="text-muted">{{ profileUploadProgress() }}%</small>
+                            </div>
+                            }
+                        </div>
+                        <div class="form-text">فرمت‌های مجاز: JPG, PNG, GIF (حداکثر 2MB)</div>
+                        } @else {
+                        <!-- حالت نمایش فایل آپلود شده -->
+                        <div class="uploaded-file-preview d-flex align-items-center gap-2 p-2 border rounded">
+                            @if (previewImage()) {
+                            <img [src]="previewImage()" alt="پیش‌نمایش" class="rounded-circle"
+                                style="width: 50px; height: 50px; object-fit: cover;">
+                            }
+                            <div class="flex-grow-1">
+                                <span class="text-success">
+                                    <i class="fas fa-check-circle me-1"></i>
+                                    آپلود شده
+                                </span>
+                            </div>
+                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                (click)="removeUploadedFile('profile')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        }
+                    </div>
+
+                    <!-- تصویر امضا - با Progress -->
+                    <div class="col-md-6">
+                        <label for="signatureImage" class="form-label">تصویر امضا</label>
+
+                        @if (!signatureFileGuid()) {
+                        <!-- حالت آپلود -->
+                        <div class="upload-zone" [class.uploading]="isSignatureUploading()">
+                            <input type="file" class="form-control" id="signature" accept="image/*"
+                                [disabled]="isSignatureUploading()" (change)="onFileSelected($event, 'signature')">
+
+                            @if (isSignatureUploading()) {
+                            <div class="upload-progress mt-2">
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                                        role="progressbar" [style.width.%]="signatureUploadProgress()">
+                                    </div>
+                                </div>
+                                <small class="text-muted">{{ signatureUploadProgress() }}%</small>
+                            </div>
+                            }
+                        </div>
+                        <div class="form-text">فرمت‌های مجاز: JPG, PNG, GIF (حداکثر 2MB)</div>
+                        } @else {
+                        <!-- حالت نمایش فایل آپلود شده -->
+                        <div class="uploaded-file-preview d-flex align-items-center gap-2 p-2 border rounded bg-light">
+                            <i class="fas fa-signature text-info" style="font-size: 24px;"></i>
+                            <div class="flex-grow-1">
+                                <span class="text-success">
+                                    <i class="fas fa-check-circle me-1"></i>
+                                    امضا آپلود شده
+                                </span>
+                            </div>
+                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                (click)="removeUploadedFile('signature')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        }
+                    </div>
+
+                    }
+
+                    <!-- نمایش اطلاعات عضو انتخاب شده -->
+                    @if (guestForm.get('guestType')?.value === 'internal' && selectedInternalMember()) {
+                    <div class="col-12">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">عضو انتخاب شده:</h6>
+                                <div class="d-flex align-items-center">
+                                    <div class="member-photo-protected me-3" (contextmenu)="$event.preventDefault()">
+                                        <div class="photo-bg"
+                                            [style.background-image]="'url(' + selectedInternalMember()?.image + ')'">
+                                        </div>
+                                        <div class="photo-shield"></div>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1">{{selectedInternalMember()!.name}}</h6>
+                                        <small class="text-muted">{{selectedInternalMember()!.position}}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    }
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" (click)="addGuest()"
+                    [disabled]="isProfileUploading() || isSignatureUploading()">
+                    ذخیره
+                </button>
+
+                <!-- ✅ استفاده از cancelGuestForm به جای data-bs-dismiss -->
+                <button type="button" class="btn btn-secondary" (click)="cancelGuestForm()"
+                    [disabled]="isProfileUploading() || isSignatureUploading()">
+                    انصراف
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
