@@ -118,13 +118,16 @@ builder.Services.AddQuartzJobs();
 // App
 // ═══════════════════════════════════════════════════════════
 var app = builder.Build();
-ServiceLocator.SetCurrent(new AutofacServiceLocator(app.Services.GetAutofacRoot()));
+// هندلرهای Bus از Scope همان درخواست ساخته شوند (نه Container ریشه؛ توضیح در RequestScopedServiceLocator)
+ServiceLocator.SetCurrent(new RequestScopedServiceLocator(
+    app.Services.GetAutofacRoot(), app.Services.GetRequiredService<IHttpContextAccessor>()));
 
 CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("fa-IR");
 CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("fa-IR");
 
 // تنظیمات + Seed نقش‌ها/رویدادها (فقط داده؛ بدون تغییر اسکیما)
 using (var scope = app.Services.CreateScope())
+using (RequestScopedServiceLocator.Use(scope.ServiceProvider))
 {
     var settingService = scope.ServiceProvider.GetRequiredService<ISystemSettingInitializationService>();
     await settingService.SeedDefaultSettingsAsync();

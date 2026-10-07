@@ -5,6 +5,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -23,7 +24,9 @@ namespace MeetingManagement.Infrastructure.Configuration.Services;
 ///  • دسترسی‌ها برای همان سمت/تفویض از UserManagement گرفته می‌شود؛ Claimهای توکن فقط مربوط به
 ///    سمتی هستند که با آن وارد شده و در تفویض، کل دسترسی‌های سمت را دارند (نه فقط موارد تفویض‌شده).
 ///  • خطای شبکه «بسته» عمل می‌کند: سمت درخواستی پذیرفته نمی‌شود و فقط هویت خود توکن باقی می‌ماند.
-///  • نتیجه‌ی موفق ۱۰ دقیقه و نتیجه‌ی ناموفق ۳۰ ثانیه کش می‌شود.
+///  • نتیجه‌ی موفق ۱۰ دقیقه و نتیجه‌ی ناموفق ۳۰ ثانیه (خطای زمانی ۱۰ ثانیه) کش می‌شود.
+///  • درخواست‌های همزمان یک کاربر فقط یک بار UserManagement را صدا می‌زنند (single-flight) و این فراخوانی
+///    به لغو درخواست HTTP وابسته نیست؛ قطع شدن یک درخواست، راستی‌آزمایی بقیه را لغو نمی‌کند.
 /// </summary>
 public sealed class ActingIdentityResolver(
     IHttpContextAccessor httpContextAccessor,
@@ -39,6 +42,11 @@ public sealed class ActingIdentityResolver(
 
     private static readonly TimeSpan VerifiedCacheDuration = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan FailedCacheDuration = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan TimeoutCacheDuration = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan VerifyTimeout = TimeSpan.FromSeconds(8);
+
+    /// <summary>راستی‌آزمایی‌های در حال اجرا (مشترک بین درخواست‌های همزمان)</summary>
+    private static readonly ConcurrentDictionary<string, Lazy<Task<(ActingIdentity Identity, TimeSpan CacheFor)>>> InFlight = new();
 
     private ActingIdentity? _resolved; // per-request (scoped)
 
@@ -72,16 +80,37 @@ public sealed class ActingIdentityResolver(
         if (cache.TryGetValue(cacheKey, out ActingIdentity? cached) && cached is not null)
             return _resolved = cached;
 
-        var identity = await VerifyAsync(tokenUser, tokenPosition, actingUser, position.Value, ct);
-        cache.Set(cacheKey, identity, identity.Verified ? VerifiedCacheDuration : FailedCacheDuration);
+        // آدرس و توکن همین‌جا خوانده می‌شوند؛ کار مشترک نباید به HttpContext درخواست دیگری وابسته باشد
+        var client = CreateClient();
+        var tokenPermissions = TokenPermissions();
+        var job = InFlight.GetOrAdd(cacheKey, _ => new Lazy<Task<(ActingIdentity, TimeSpan)>>(
+            () => VerifyAndCacheAsync(cacheKey, client, tokenPermissions, tokenUser, tokenPosition, actingUser, position.Value)));
+
+        var (identity, _) = await job.Value.WaitAsync(ct);
         return _resolved = identity;
     }
 
-    private async Task<ActingIdentity> VerifyAsync(Guid tokenUser, Guid? tokenPosition, Guid actingUser, Guid position, CancellationToken ct)
+    private async Task<(ActingIdentity Identity, TimeSpan CacheFor)> VerifyAndCacheAsync(
+        string cacheKey, HttpClient? client, IReadOnlySet<string> tokenPermissions, Guid tokenUser, Guid? tokenPosition, Guid actingUser, Guid position)
     {
         try
         {
-            var client = CreateClient();
+            using var timeout = new CancellationTokenSource(VerifyTimeout);
+            var result = await VerifyAsync(client, tokenPermissions, tokenUser, tokenPosition, actingUser, position, timeout.Token);
+            cache.Set(cacheKey, result.Identity, result.CacheFor);
+            return result;
+        }
+        finally
+        {
+            InFlight.TryRemove(cacheKey, out _);
+        }
+    }
+
+    private async Task<(ActingIdentity Identity, TimeSpan CacheFor)> VerifyAsync(
+        HttpClient? client, IReadOnlySet<string> tokenPermissions, Guid tokenUser, Guid? tokenPosition, Guid actingUser, Guid position, CancellationToken ct)
+    {
+        try
+        {
             if (client is null) return Fallback();
 
             using var response = await client.PostAsJsonAsync("api/Delegation/GetActiveDelegationsForDelegatee",
@@ -106,26 +135,33 @@ public sealed class ActingIdentityResolver(
 
             if (permissions is null) return Fallback();
 
-            return new ActingIdentity(tokenUser, actingUser, position, match.IsDelegate,
+            return (new ActingIdentity(tokenUser, actingUser, position, match.IsDelegate,
                 // مدیر کل یا سمت دارای «ادمین مدیریت جلسات»؛ هیچ‌کدام در تفویض به تفویض‌گیرنده منتقل نمی‌شود
                 IsSuperAdmin: !match.IsDelegate && (match.IsSuperAdmin || permissions.Contains(Permissions.MeetingAdmin)),
-                Verified: true, permissions);
+                Verified: true, permissions), VerifiedCacheDuration);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            // پاسخ نگرفتن از UserManagement در زمان مجاز (نه لغو درخواست کاربر)
+            logger.LogWarning("Acting identity verification timed out after {Timeout}s for user {User}", VerifyTimeout.TotalSeconds, tokenUser);
+            return Fallback(TimeoutCacheDuration);
+        }
+        catch (Exception ex)
         {
             logger.LogError(ex, "Acting identity verification error");
             return Fallback();
         }
 
         // فقط هویت خود توکن، بدون هیچ ارتقای دسترسی
-        ActingIdentity Fallback() => TokenOnly(tokenUser, tokenPosition,
-            verified: actingUser == tokenUser && tokenPosition == position);
+        (ActingIdentity, TimeSpan) Fallback(TimeSpan? cacheFor = null) => (TokenOnly(tokenUser, tokenPosition,
+            verified: actingUser == tokenUser && tokenPosition == position, tokenPermissions), cacheFor ?? FailedCacheDuration);
     }
 
-    private ActingIdentity TokenOnly(Guid tokenUser, Guid? tokenPosition, bool verified) =>
-        new(tokenUser, tokenUser, tokenPosition, IsDelegate: false, IsSuperAdmin: false, verified,
-            // در توکنِ تفویض، Claimهای permission کل دسترسی‌های سمت است؛ پس قابل اعتماد نیست
-            currentUser.IsDelegate ? EmptySet : currentUser.Permissions);
+    private ActingIdentity TokenOnly(Guid tokenUser, Guid? tokenPosition, bool verified, IReadOnlySet<string>? permissions = null) =>
+        new(tokenUser, tokenUser, tokenPosition, IsDelegate: false, IsSuperAdmin: false, verified, permissions ?? TokenPermissions());
+
+    /// <summary>در توکنِ تفویض، Claimهای permission کل دسترسی‌های سمت است؛ پس قابل اعتماد نیست</summary>
+    private IReadOnlySet<string> TokenPermissions() => currentUser.IsDelegate ? EmptySet : currentUser.Permissions;
 
     private async Task<IReadOnlySet<string>?> GetPermissionsAsync(HttpClient client, string path, object body, CancellationToken ct)
     {
