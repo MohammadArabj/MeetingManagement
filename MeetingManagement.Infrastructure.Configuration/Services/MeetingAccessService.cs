@@ -1,4 +1,5 @@
 using MeetingManagement.Common.Extensions;
+using MeetingManagement.Common.Security;
 using MeetingManagement.Domain.Shared.Access;
 using MeetingManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -11,18 +12,26 @@ using System.Threading.Tasks;
 namespace MeetingManagement.Infrastructure.Configuration.Services;
 
 /// <summary>
-/// محاسبه دسترسی کاربر روی جلسه بر اساس نقش او در جلسه و پیکربندی نقش‌ها (<see cref="MeetingRoles"/>).
+/// محاسبه دسترسی کاربر روی جلسه — تنها منبع حقیقت برای «چه کسی در این جلسه چه کاری می‌تواند بکند».
 /// ─────────────────────────────────────────────────────────────────────────
-/// قوانین تطبیق عضو:
-///   ۱) عضوی که PositionGuid آن برابر سمت فعال است (منطق فعلی سیستم)
-///   ۲) عضوی که UserGuid آن برابر کاربر عامل است و سمت ندارد (اعضای بدون سمت)
-///   ۳) جانشین: عضوی که ReplacementUserGuid آن برابر کاربر عامل است → همان توانایی‌های عضو اصلی
-/// اگر چند عضویت پیدا شود، اجتماع (OR) توانایی‌ها در نظر گرفته می‌شود.
+/// منابع توانایی (اجتماع):
+///   ۱) عضویت: ردیفی با سمت فعال کاربر، یا ردیف بدون سمت با کاربر عامل
+///   ۲) جانشینی: ردیفی که ReplacementUserGuid آن کاربر عامل است → توانایی‌های همان عضو
+///   ۳) ثبت‌کننده‌ی جلسه: مشاهده + ویرایش اطلاعات، اعضا، دستور جلسه و فایل‌ها
+///   ۴) دسترسی سیستمی «مشاهده همه جلسات»: فقط مشاهده، و فقط برای جلسات غیر هیئت مدیره
+///   ۵) دسترسی سیستمی «مشاهده جلسات هیئت مدیره»: فقط مشاهده‌ی جلسات هیئت مدیره
+/// مدیر سامانه همه‌کاره است، مگر در جلسات هیئت مدیره که بدون عضویت یا دسترسی صریح هیچ دسترسی ندارد.
 /// </summary>
 public sealed class MeetingAccessService(
     MeetingManagementQueryContext context,
     IActingIdentityResolver identityResolver) : IMeetingAccessService
 {
+    private const MeetingCapability CreatorCapabilities =
+        MeetingCapability.ViewAll | MeetingCapability.EditMeeting | MeetingCapability.ManageMembers
+        | MeetingCapability.ManageAgenda | MeetingCapability.UploadFiles | MeetingCapability.Print;
+
+    private const MeetingCapability ViewerCapabilities = MeetingCapability.ViewAll | MeetingCapability.Print;
+
     private readonly Dictionary<long, MeetingAccess> _cache = new(); // per-request
 
     public async Task<MeetingAccess> GetAsync(Guid meetingGuid, CancellationToken ct = default)
@@ -58,6 +67,7 @@ public sealed class MeetingAccessService(
                 StatusId = m.StatusId ?? 0,
                 CategoryGuid = (Guid?)m.Category!.Guid,
                 m.CreatedBy,
+                m.CreatorPositionGuid,
                 Members = m.MeetingMembers.Select(mm => new
                 {
                     mm.RoleId,
@@ -74,26 +84,50 @@ public sealed class MeetingAccessService(
         var identity = await identityResolver.ResolveAsync(ct);
         var user = identity.UserGuid;
         var position = identity.PositionGuid;
+        var kind = MeetingKinds.Of(meeting.CategoryGuid);
+        var isBoard = kind == MeetingKind.Board;
 
         var memberships = meeting.Members.Where(mm =>
                 (position != null && mm.PositionGuid == position)
                 || (mm.PositionGuid == null && mm.UserGuid == user))
             .ToList();
-
         var substituteFor = meeting.Members.Where(mm => mm.ReplacementUserGuid == user).ToList();
+        var roles = memberships.Concat(substituteFor).ToList();
 
-        var capabilities = memberships.Concat(substituteFor)
-            .Aggregate(MeetingCapability.None, (acc, mm) => acc | MeetingRoles.CapabilitiesOf(mm.RoleId));
+        var capabilities = roles.Aggregate(MeetingCapability.None, (acc, mm) => acc | MeetingRoles.CapabilitiesOf(mm.RoleId));
 
-        // نقش اصلی برای نمایش: اولویت با عضویت مستقیم، سپس جانشینی؛ و بین چند نقش، نقشی با ترتیب کمتر (مهم‌تر)
-        var primaryRoleId = memberships.Concat(substituteFor)
+        var isCreator = meeting.CreatedBy == user || meeting.CreatedBy == identity.TokenUserGuid
+                        || (position != null && meeting.CreatorPositionGuid == position);
+        if (isCreator)
+            capabilities |= CreatorCapabilities;
+
+        // پیش‌نویس فقط برای ثبت‌کننده قابل مشاهده است
+        var isDraft = meeting.StatusId == MeetingStatusIds.Draft;
+        var isGlobalViewer = false;
+        if (!isDraft && roles.Count == 0 && !isCreator)
+        {
+            var canViewAsGlobal = isBoard
+                ? identity.HasExplicitPermission(Permissions.BoardViewAll)
+                : identity.HasPermission(Permissions.MeetingsViewAll);
+            if (canViewAsGlobal)
+            {
+                capabilities |= ViewerCapabilities;
+                isGlobalViewer = true;
+            }
+        }
+        else if (isDraft && !isCreator)
+        {
+            capabilities = MeetingCapability.None;
+        }
+
+        // مدیر سامانه در جلسات هیئت مدیره فقط با دسترسی صریح همه‌کاره است
+        var effectiveSuperAdmin = identity.IsSuperAdmin
+                                  && (!isBoard || identity.HasExplicitPermission(Permissions.BoardViewAll) || roles.Count > 0);
+
+        var primaryRoleId = roles
             .Select(mm => mm.RoleId)
             .OrderBy(r => MeetingRoles.Get(r)?.Order ?? int.MaxValue)
             .FirstOrDefault();
-
-        var isCreator = meeting.CreatedBy == user || meeting.CreatedBy == identity.TokenUserGuid;
-        if (isCreator)
-            capabilities |= MeetingCapability.ViewAll;
 
         var chairmanId = MeetingRoles.ChairmanId;
         var access = new MeetingAccess
@@ -101,15 +135,15 @@ public sealed class MeetingAccessService(
             MeetingId = meeting.Id,
             MeetingGuid = meeting.Guid,
             StatusId = meeting.StatusId,
-            Kind = MeetingKinds.Of(meeting.CategoryGuid),
+            Kind = kind,
             RoleId = primaryRoleId,
             RoleKey = MeetingRoles.KeyOf(primaryRoleId),
             RoleTitle = null,
             Capabilities = capabilities,
-            IsSuperAdmin = identity.IsSuperAdmin,
+            IsSuperAdmin = effectiveSuperAdmin,
             IsCreator = isCreator,
             IsSubstitute = memberships.Count == 0 && substituteFor.Count > 0,
-            IsGlobalViewer = identity.IsSuperAdmin && memberships.Count == 0,
+            IsGlobalViewer = isGlobalViewer || (effectiveSuperAdmin && roles.Count == 0),
             ChairmanSigned = meeting.Members.Any(mm => mm.RoleId == chairmanId && mm.IsSign == true),
         };
 

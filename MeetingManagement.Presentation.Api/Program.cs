@@ -8,6 +8,8 @@ using MeetingManagement.Infrastructure.Configuration.Job;
 using MeetingManagement.Infrastructure.Configuration.Notifications;
 using MeetingManagement.Infrastructure.Configuration.Service;
 using MeetingManagement.Presentation.Api;
+using MeetingManagement.Presentation.Api.Filters;
+using MeetingManagement.Infrastructure.Configuration.Services;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.IdentityModel.Logging;
@@ -37,6 +39,7 @@ builder.Services.AddResponseCompression(options =>
 // ✅ HttpClient های نام‌دار (به‌جای new HttpClient/RestClient در هر درخواست)
 builder.Services.AddHttpClient(HttpSmsSender.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddHttpClient(nameof(ServiceTokenProvider), c => c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHttpClient(ActingIdentityResolver.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(10));
 
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options => options.AddPolicy("FileManagement", policy => policy
@@ -46,7 +49,8 @@ builder.Services.AddCors(options => options.AddPolicy("FileManagement", policy =
     .AllowCredentials()));
 
 builder.Services.AddSignalR();
-builder.Services.AddControllers().AddNewtonsoftJson();
+// ✅ مقادیر «کاربر/سمت فراخوان» در مدل‌های ورودی همیشه از هویت راستی‌آزمایی‌شده پر می‌شوند
+builder.Services.AddControllers(options => options.Filters.Add<CallerIdentityFilter>()).AddNewtonsoftJson();
 
 // فایل‌ها با tus مستقیماً در سامانه مدیریت فایل آپلود می‌شوند؛ این API فقط درخواست‌های کوچک می‌پذیرد.
 // سقف پیش‌فرض سرور (۳۰ مگابایت) حفظ می‌شود و endpointهای فرم در صورت نیاز با [RequestSizeLimit] مشخص می‌شوند.

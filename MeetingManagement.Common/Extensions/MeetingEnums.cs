@@ -106,6 +106,7 @@ public enum NotificationEventCode : short
     [Description("آماده‌شدن صورتجلسه برای امضا")] MinutesReadyForSignature = 6,
     [Description("نهایی‌شدن جلسه")] MeetingFinalized = 7,
     [Description("تعیین جانشین")] SubstituteAssigned = 8,
+    [Description("امضای صورتجلسه توسط رئیس")] ChairmanSigned = 9,
 
     // مصوبات و پیگیری
     [Description("تخصیص مصوبه")] ResolutionAssigned = 20,

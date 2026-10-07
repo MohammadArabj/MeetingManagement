@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography.Pkcs;
+using System.Security.Cryptography.Pkcs;
 using Epc.Domain;
 using MeetingManagement.Application.Contracts.Member;
 using MeetingManagement.Common.Extensions;
@@ -55,29 +55,37 @@ public class MeetingMember
         Gender=member.Gender;
     }
 
-    public void SetComment(MeetingMemberCommentDto member)
+    /// <summary>ثبت/ویرایش نظر عضو روی صورتجلسه</summary>
+    public void SetComment(string? comment)
     {
-        Comment = member.Comment ?? Comment;
-
-        var prevSign = IsSign;
-        IsSign = member.IsSign ?? IsSign;
-
-        Signer = member.Signer;
-
-        // NEW: ثبت تاریخ امضا
-        if (prevSign != true && IsSign == true)
-            SignedAt = DateTime.Now;
-
-        // اگر امضا برداشته شد
-        if (prevSign == true && IsSign != true)
-            SignedAt = null;
+        Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
     }
 
+    /// <summary>امضای صورتجلسه. <paramref name="signer"/> کاربری است که واقعاً امضا کرده (عضو یا جانشین او).</summary>
+    public void Sign(Guid signer)
+    {
+        if (IsSign == true) return;
+        IsSign = true;
+        Signer = signer;
+        SignedAt = DateTime.Now;
+    }
+
+    /// <summary>برداشتن امضا</summary>
+    public void Unsign()
+    {
+        IsSign = false;
+        Signer = null;
+        SignedAt = null;
+    }
+
+    /// <summary>اعلام حضور/عدم حضور توسط خود عضو (پیش از جلسه)</summary>
     public void SetAttendance(bool isAttendance)
     {
         IsAttendance = isAttendance;
     }
-    public void SetSubstitute( bool isPresent)
+
+    /// <summary>ثبت حضور و غیاب واقعی در جلسه (توسط دبیر)</summary>
+    public void SetPresence(bool isPresent)
     {
         IsPresent = isPresent;
     }

@@ -4,17 +4,36 @@ using MeetingManagement.Domain.SettingAgg;
 namespace MeetingManagement.Domain.Shared.Access;
 
 /// <summary>
-/// شناسه‌های وضعیت جلسه (جدول MeetingStatuses).
-/// قبلاً اعداد 2،3،4،5،6 در ده‌ها جای کد پخش بودند؛ حالا فقط همین‌جا تعریف می‌شوند.
+/// شناسه‌های وضعیت جلسه (جدول MeetingStatuses) — تنها محل تعریف این اعداد.
 /// </summary>
 public static class MeetingStatusIds
 {
-    public const int Draft = 1;        // پیش‌نویس
-    public const int Registered = 2;   // ثبت اولیه
-    public const int Held = 3;         // برگزار شده
-    public const int Finalized = 4;    // ثبت نهایی
-    public const int Signed = 5;       // امضا شده
-    public const int Completed = 6;    // اتمام یافته
+    public const int Draft = 1;          // پیش‌نویس
+    public const int Registered = 2;     // ثبت اولیه
+    public const int Held = 3;           // برگزار شده
+    public const int Finalized = 4;      // ثبت نهایی
+    public const int Cancelled = 5;      // لغو شده
+    public const int Completed = 6;      // اتمام یافته
+    public const int Undetermined = 7;   // تعیین تکلیف نشده
+
+    /// <summary>وضعیت‌هایی که جلسه در آن‌ها «بسته» است و محتوایش دیگر تغییر نمی‌کند</summary>
+    public static readonly int[] Closed = [Cancelled, Completed];
+
+    /// <summary>
+    /// انتقال‌های مجاز وضعیت. هر انتقالی خارج از این جدول در سرور رد می‌شود.
+    /// </summary>
+    public static bool CanTransition(int from, int to) => (from, to) switch
+    {
+        (Draft, Registered) => true,
+        (Draft or Registered or Undetermined, Cancelled) => true,
+        (Registered or Undetermined, Held) => true,
+        (Registered or Held, Undetermined) => true,
+        (Held, Finalized) => true,
+        (Finalized, Held) => true,          // بازگشت برای اصلاح صورتجلسه (پیش از امضای رئیس)
+        (Finalized, Completed) => true,
+        (Registered or Held, Completed) => true, // فقط برای جلسات بدون صورتجلسه (هیئت مدیره) — در Handler کنترل می‌شود
+        _ => false,
+    };
 }
 
 /// <summary>

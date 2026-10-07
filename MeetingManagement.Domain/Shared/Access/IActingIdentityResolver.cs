@@ -12,7 +12,20 @@ public sealed record ActingIdentity(
     Guid? PositionGuid,
     bool IsDelegate,
     bool IsSuperAdmin,
-    bool Verified);
+    bool Verified,
+    IReadOnlySet<string> Permissions)
+{
+    /// <summary>دسترسی سیستمی برای سمت/تفویض فعال (مدیر سامانه همه را دارد)</summary>
+    public bool HasPermission(string permission) => IsSuperAdmin || Permissions.Contains(permission);
+
+    public bool HasAnyPermission(IEnumerable<string> permissions) => permissions.Any(HasPermission);
+
+    /// <summary>
+    /// دسترسی صریح؛ مدیر سامانه را مستثنا نمی‌کند.
+    /// برای منابع حساس (مثل هیئت مدیره) که مدیر سامانه نیز باید صراحتاً مجوز داشته باشد.
+    /// </summary>
+    public bool HasExplicitPermission(string permission) => Permissions.Contains(permission);
+}
 
 public interface IActingIdentityResolver
 {

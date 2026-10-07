@@ -1,10 +1,13 @@
-﻿using System;
+using MeetingManagement.Common.Security;
+using System;
 
 namespace MeetingManagement.Infrastructure.Query.Contracts.Meeting;
 
 public class MeetingSearchRequestDto
 {
+    [CallerPosition]
     public Guid PositionGuid { get; set; }
+    [CallerUser]
     public Guid UserGuid { get; set; }
     public string? Title { get; set; }
     public Guid? RoomGuid { get; set; }

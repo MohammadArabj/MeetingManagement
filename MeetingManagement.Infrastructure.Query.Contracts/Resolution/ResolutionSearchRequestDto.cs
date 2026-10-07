@@ -1,4 +1,5 @@
-﻿using MeetingManagement.Common.Extensions;
+using MeetingManagement.Common.Security;
+using MeetingManagement.Common.Extensions;
 using System;
 
 namespace MeetingManagement.Infrastructure.Query.Contracts.Resolution;
@@ -6,7 +7,10 @@ namespace MeetingManagement.Infrastructure.Query.Contracts.Resolution;
 public class ResolutionSearchRequestDto
 {
 
+    [CallerPosition]
+
     public Guid PositionGuid { get; set; }
+    [CallerUser]
     public Guid UserGuid { get; set; }
     public ActionType? Type { get; set; }
     public ActionFollowStatus? ApprovalStatus { get; set; }

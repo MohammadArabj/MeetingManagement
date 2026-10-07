@@ -32,10 +32,13 @@ public static class NotificationEventCatalog
             "یادآوری: جلسه «{MeetingTitle}» {MeetingDate} ساعت {StartTime} در {Location}"),
         new(NotificationEventCode.AttendanceRequested, NotificationRecipient.AllMembers, false,
             "{ReceiverName} گرامی، لطفاً حضور خود در جلسه «{MeetingTitle}» ({MeetingDate}) را اعلام نمایید. {Link}"),
-        new(NotificationEventCode.MinutesReadyForSignature, NotificationRecipient.AllMembers, false,
-            "صورتجلسه «{MeetingTitle}» آماده امضا است. {Link}"),
+        // امضای رئیس اول است؛ پس از آن سایر اعضا با رویداد ChairmanSigned مطلع می‌شوند
+        new(NotificationEventCode.MinutesReadyForSignature, NotificationRecipient.Chairman, false,
+            "{ReceiverName} گرامی، صورتجلسه «{MeetingTitle}» آماده امضای شما است. {Link}"),
         new(NotificationEventCode.MeetingFinalized, NotificationRecipient.Chairman | NotificationRecipient.Secretary, false,
             "جلسه «{MeetingTitle}» شماره {MeetingNumber} نهایی شد.", SmsByDefault: false),
+        new(NotificationEventCode.ChairmanSigned, NotificationRecipient.AllMembers, false,
+            "{ReceiverName} گرامی، صورتجلسه «{MeetingTitle}» توسط رئیس جلسه امضا شد؛ لطفاً نسبت به امضای آن اقدام فرمایید. {Link}"),
         new(NotificationEventCode.SubstituteAssigned, NotificationRecipient.Substitute, false,
             "{ReceiverName} گرامی، شما به‌عنوان جانشین در جلسه «{MeetingTitle}» ({MeetingDate}) معرفی شدید."),
 

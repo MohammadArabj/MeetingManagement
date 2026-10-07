@@ -26,6 +26,36 @@ public static class MeetingDataSeeder
     {
         await SeedRoleConfigAsync(db, logger, ct);
         await SeedNotificationEventsAsync(db, logger, ct);
+        await RepairOrphanReferralsAsync(db, logger, ct);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // ترمیم داده: ارجاع‌های باز زیر تخصیص پایان‌یافته
+    // ═══════════════════════════════════════════════════════════
+    /// <summary>
+    /// پیش از پیاده‌سازی «بستن آبشاری»، با پایان تخصیص اصلی ارجاع‌های زیرمجموعه باز می‌ماندند و
+    /// در کارتابل ارجاع‌گیرندگان دیده می‌شدند. این متد آن‌ها را (سطح به سطح) با همان قاعده‌ی دامنه می‌بندد.
+    /// Idempotent است و در اجراهای بعدی کاری انجام نمی‌دهد.
+    /// </summary>
+    private static async Task RepairOrphanReferralsAsync(MeetingManagementCommandContext db, ILogger logger, CancellationToken ct)
+    {
+        var total = 0;
+        for (var level = 0; level < 25; level++)
+        {
+            var orphans = await db.Assignments
+                .Where(a => a.IsReferral
+                            && a.ActionStatus != ActionStatus.End
+                            && a.ParentAssignment != null
+                            && a.ParentAssignment.ActionStatus == ActionStatus.End)
+                .ToListAsync(ct);
+            if (orphans.Count == 0) break;
+
+            foreach (var referral in orphans) referral.CloseByParent();
+            await db.SaveChangesAsync(ct);
+            total += orphans.Count;
+        }
+
+        if (total > 0) logger.LogInformation("Closed {Count} open referrals whose parent assignment had already ended", total);
     }
 
     // ═══════════════════════════════════════════════════════════

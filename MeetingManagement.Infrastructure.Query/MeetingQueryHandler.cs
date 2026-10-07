@@ -153,7 +153,7 @@ public class MeetingQueryHandler(MeetingManagementQueryContext context, IUserMan
             ),
             FilterType.Finished => query.Where(m => m.StatusId == MeetingStatusIds.Finalized),
             FilterType.Draft => query.Where(m => m.StatusId == MeetingStatusIds.Draft),
-            FilterType.Canceled => query.Where(m => m.StatusId == MeetingStatusIds.Signed),
+            FilterType.Canceled => query.Where(m => m.StatusId == MeetingStatusIds.Cancelled),
             FilterType.Undetermined => query.Where(m =>
                          (m.StatusId == MeetingStatusIds.Draft || m.StatusId == MeetingStatusIds.Registered || m.StatusId == MeetingStatusIds.Held) &&
                          m.Date.Value.Date < DateTime.Today),
@@ -1353,7 +1353,7 @@ public class MeetingQueryHandler(MeetingManagementQueryContext context, IUserMan
                     ),
                 FinishedMeetingsCount = g.Count(m => m.StatusId == MeetingStatusIds.Finalized),
                 AllMeetingsCount = g.Count(),
-                CanceledMeetingsCount = g.Count(c => c.StatusId == MeetingStatusIds.Signed),
+                CanceledMeetingsCount = g.Count(c => c.StatusId == MeetingStatusIds.Cancelled),
                 AttendanceMeetingsCount = g.Count(c =>
                     c.StatusId == MeetingStatusIds.Registered &&
                     c.MeetingMembers.Any(x => x.PositionGuid == condition.PositionGuid && (x.IsAttendance != true)) &&

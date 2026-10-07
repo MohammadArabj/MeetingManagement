@@ -1,11 +1,14 @@
-﻿using System;
+using MeetingManagement.Common.Security;
+using System;
 using MeetingManagement.Common.Extensions;
 
 namespace MeetingManagement.Infrastructure.Query.Contracts.Assignment;
 
 public class AssignmentSearchDto
 {
+    [CallerUser]
     public Guid UserGuid { get; set; }
+    [CallerPosition]
     public Guid PositionGuid { get; set; }
 
     // نوع نمایش

@@ -1,4 +1,5 @@
-﻿// Assignment Referral DTOs
+using MeetingManagement.Common.Security;
+// Assignment Referral DTOs
 using Epc.Application.Command;
 using System;
 
@@ -11,5 +12,6 @@ public class AssignmentReferralDto:ICommand
     public Guid? ActorPositionGuid { get; set; }
     public string DueDate { get; set; }
     public string ReferralNote { get; set; }
+    [CallerPosition]
     public Guid? ReferrerPositionGuid { get; set; }
 }
