@@ -538,6 +538,81 @@ export class TusUploadService {
       this.patch(id, { status: UploadStatus.InProgress });
     }
   }
+  // ============================================
+  // Detached upload (بدون ورود به state فهرست فایل‌ها؛ برای لوگو، قالب چاپ و ...)
+  // ============================================
+  /** آپلود یک فایل با tus بدون تأثیر بر فهرست فایل‌های در حال نمایش؛ خروجی: شناسه فایل */
+  async uploadDetached(file: File, folderPath: string, description?: string): Promise<string> {
+    const init = await firstValueFrom(
+      this.http.post<BackendResult<InitiateUploadResult>>(
+        `${this.uploadApiUrl}/Initiate`,
+        {
+          fileName: file.name,
+          fileSize: file.size,
+          contentType: file.type || 'application/octet-stream',
+          clientId: getClientSettings()?.client_id ?? '',
+          folderPath,
+          description,
+        },
+        this.authOptions()
+      )
+    );
+    const initData = this.readPayload<InitiateUploadResult>(init);
+    if (!this.readOk(init) || !initData?.sessionGuid) throw new Error(this.readMessage(init) || 'خطا در شروع آپلود');
+
+    const tusFileId = await new Promise<string>((resolve, reject) => {
+      const upload = new tus.Upload(file, {
+        endpoint: this.tusEndpoint,
+        retryDelays: [0, 1000, 3000, 5000],
+        chunkSize: 5 * 1024 * 1024,
+        metadata: {
+          filename: file.name,
+          filetype: file.type || 'application/octet-stream',
+          sessionId: initData.sessionGuid,
+          folderPath,
+        },
+        onBeforeRequest: (req) => {
+          req.setHeader('Authorization', `Bearer ${this.getAccessToken()}`);
+        },
+        onShouldRetry: (err) => {
+          const status = (err as any)?.originalResponse?.getStatus?.() ?? 0;
+          return status === 0 || status === 409 || status === 423 || status >= 500;
+        },
+        removeFingerprintOnSuccess: true,
+        onError: (err) => reject(err),
+        onSuccess: () => resolve(upload.url?.split('/').pop() || ''),
+      });
+      upload.start();
+    });
+
+    const complete = await firstValueFrom(
+      this.http.post<BackendResult<CompleteUploadResult>>(
+        `${this.uploadApiUrl}/Complete`,
+        { sessionGuid: initData.sessionGuid, tusFileId, description },
+        this.authOptions()
+      )
+    );
+    const data = this.readPayload<CompleteUploadResult>(complete);
+    if (!this.readOk(complete) || !data?.fileGuid) throw new Error(this.readMessage(complete) || 'خطا در تکمیل آپلود');
+
+    if (data.path) {
+      this.metaCache.set(data.fileGuid.toLowerCase(), {
+        guid: data.fileGuid,
+        fileName: data.fileName,
+        contentType: data.contentType,
+        fileSize: data.fileSize,
+        path: data.path,
+      });
+    }
+    return data.fileGuid;
+  }
+
+  /** محتوای یک فایل (با احراز هویت)؛ در صورت نبود یا خطا null */
+  async downloadBlob(guid: string): Promise<Blob | null> {
+    const normalized = (guid || '').trim();
+    return normalized ? this.fetchPreviewBlob(normalized) : null;
+  }
+
   // tus-upload.service.ts
 
   // ============================================

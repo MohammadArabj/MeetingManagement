@@ -38,7 +38,7 @@ export const routes: Routes = [
             },
             {
                 path: 'settings',
-                canActivate: [permissionGuard('MT_Settings', 'MT_UserRoles')],
+                canActivate: [permissionGuard('MT_Settings', 'MT_UserRoles', 'MT_PrintTemplates')],
                 loadChildren: () => import('./app-shell/settings/settings.routes').then(m => m.settingsRoutes)
             },
             { path: 'user', component: UserList, canActivate: [permissionGuard('MT_User_ViewAll')] },

@@ -209,121 +209,6 @@
     </div>
 </div>
 
-<!-- ✅ Print Section -->
-<div #printSection class="print-area d-none">
-    <header>
-        <div class="right-side w-100">
-            <div class="name-of-god">به نام خدا</div>
-            <div class="meeting-title text-center">
-                پیش نویس جلسه : {{meeting().title}} </div>
-        </div>
-    </header>
-
-    <section class="main">
-        <div class="metting-information">
-            <table>
-                <thead>
-                    <tr class="text-center">
-                        <th>محل تشکیل جلسه</th>
-                        <th>تاریخ</th>
-                        <th>زمان</th>
-                        <th>شماره صورت جلسه</th>
-                        <th>رئیس جلسه</th>
-                        <th>دبیر جلسه</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    <tr class="meeting-information">
-                        <td>{{meeting().location}}</td>
-                        <td>{{meeting().mtDate}}</td>
-                        <td>{{meeting().startTime}}</td>
-                        <td>{{meeting().number}}</td>
-                        <td>{{meeting().chairman}}</td>
-                        <td>{{meeting().secretary}}</td>
-                    </tr>
-                    <tr>
-                        <td class="type">مهمان‌ها</td>
-                        <td colspan="6">
-                            {{guestTitles()}}
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="type">اعضاء</td>
-                        <td colspan="6">{{internalTitles()}}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        @if(meeting().description){
-        <div class="metting-summary">
-            <div class="right-side">
-                <span>شرح جلسه</span>
-            </div>
-            <div class="main">
-                {{meeting().description}}
-            </div>
-        </div>
-        }
-
-        @if(resolutions().length>0){
-        <div class="metting-directives">
-            <div class="main">
-                <div class="label">مصوبات</div>
-                <table>
-                    <thead>
-                        <tr class="text-center">
-                            <th>ردیف</th>
-                            <th>شرح مصوبه</th>
-                            <th>مسئول اقدام</th>
-                            <th>نوع تخصیص</th>
-                            <th>مسئول پیگیری</th>
-                            <th>مهلت اقدام</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @for (resolution of resolutions(); let i = $index; track $index) {
-                        @let groups = formattedAssignments()[i];
-
-                        @if (groups && groups.length > 0) {
-                        @for (group of groups; let j = $index; track $index) {
-                        <tr>
-                            @if (j === 0) {
-                            <!-- شماره ردیف فقط یک‌بار، با rowspan -->
-                            <td [attr.rowspan]="groups.length">
-                                {{ i + 1 }}
-                            </td>
-
-                            <!-- شرح مصوبه فقط یک‌بار، با rowspan -->
-                            <td class="space-preline" [innerHTML]="resolution.text" [attr.rowspan]="groups.length">
-                            </td>
-                            }
-
-                            <!-- این سطر، فقط یک گروه را نشان می‌دهد -->
-                            <td style="width: 8%;" [innerHTML]="group.actionerNames"></td>
-                            <td [innerHTML]="group.type"></td>
-                            <td style="width: 8%;" [innerHTML]="group.followerName"></td>
-                            <td [innerHTML]="group.dueDate"></td>
-                        </tr>
-                        }
-                        } @else {
-                        <!-- اگر مصوبه‌ای assignment نداشت -->
-                        <tr>
-                            <td>{{ i + 1 }}</td>
-                            <td class="space-preline" [innerHTML]="resolution.text"></td>
-                            <td colspan="4"></td>
-                        </tr>
-                        }
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        }
-
-    </section>
-</div>
-
 <!-- ✅ کامپوننت جدید مدیریت فایل -->
 <app-file-manager-modal #fileManagerModal modalId="meetingFilesModal" title="فایل‌های پیوست جلسه"
     [folderPath]="uploadFolderPath()" [existingFileGuids]="existingFileGuids()" [multiple]="true" [maxFiles]="20"
@@ -342,16 +227,26 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                @if(canSign()) {
+                @if(waitingForChairman()) {
+                <div class="alert alert-warning py-2">
+                    تا زمانی که رئیس جلسه امضا نکرده است، امکان امضا برای سایر اعضا وجود ندارد؛ ثبت نظر امکان‌پذیر است.
+                </div>
+                }
                 <form [formGroup]="signForm()" class="row g-3">
-                    <div class="col-9">
+                    <div [class]="canSignNow() || canUnsign() || signForm().get('sign')?.value ? 'col-9' : 'col-12'">
+                        @if(canComment()) {
                         <custom-input rows="5" type="textarea" label="توضیحات" identity="comment" styleType="simple"
                             formControlName="comment" [required]="false" size="col-12">
                         </custom-input>
+                        } @else {
+                        <div class="text-muted small mt-4">نقش شما امکان ثبت نظر ندارد.</div>
+                        }
                     </div>
+                    @if(canSignNow() || canUnsign() || signForm().get('sign')?.value) {
                     <div class="col-3">
                         <div class="position-relative d-inline-block border border-secondary rounded text-center w-100"
-                            style="padding: 20px;margin-top: 32px; cursor: pointer; min-height: 129px;"
+                            [style.cursor]="canToggleSign() ? 'pointer' : 'not-allowed'"
+                            style="padding: 20px;margin-top: 32px; min-height: 129px;"
                             (click)="toggleSign()">
                             @if(signatureImage() && signForm().get('sign')?.value) {
                             <img [src]="signatureImage()" alt="امضا" class="img-thumbnail w-100">
@@ -359,18 +254,17 @@
                             <div class="text-muted">جهت امضا کلیک کنید</div>
                             }
 
-                            @if(signForm().get('sign')?.value) {
+                            @if(signForm().get('sign')?.value && canToggleSign()) {
                             <i class="fa fa-times-circle text-danger position-absolute top-0 end-0"
                                 style="font-size: 1.2rem; background: white; border-radius: 50%; margin: 2px;"></i>
                             }
                         </div>
+                        @if(isCurrentChairman() && currentMember()?.isSign) {
+                        <div class="small text-muted mt-1">امضای رئیس جلسه قطعی است.</div>
+                        }
                     </div>
+                    }
                 </form>
-                } @else {
-                <div class="alert alert-warning">
-                    تا زمانیکه رئیس جلسه امضا نکرده باشند، امکان امضا برای سایر اعضا وجود ندارد.
-                </div>
-                }
             </div>
             <div class="modal-footer">
                 <button class="btn btn-success me-2" (click)="saveComment()">ذخیره</button>

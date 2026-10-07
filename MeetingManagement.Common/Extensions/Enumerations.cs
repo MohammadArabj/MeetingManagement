@@ -286,6 +286,15 @@ public enum SettingKey : byte
 
     [Description("آخرین زمان اجرای Job یادآوری (داخلی)")]
     NotificationReminderWatermark = 27,
+
+    // ═══════════════════════════════════════════════════════════
+    // چاپ (بدون تغییر اسکیما: محتوای قالب‌ها در سامانه مدیریت فایل و فقط شناسه‌ها اینجا)
+    // ═══════════════════════════════════════════════════════════
+    [Description("اطلاعات سربرگ چاپ (JSON: نام شرکت، لوگو، آدرس، رنگ، ...)")]
+    PrintBranding = 28,
+
+    [Description("قالب‌های سفارشی چاپ (JSON: کلید قالب ← شناسه فایل)")]
+    PrintTemplates = 29,
 }
 
 public enum SettingValueType : byte
@@ -334,4 +343,7 @@ public enum SettingCategory : byte
 
     [Description("مصوبات و پیگیری")]
     Resolution = 7,
+
+    [Description("چاپ و قالب‌ها")]
+    Print = 8,
 }

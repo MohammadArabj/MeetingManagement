@@ -1,4 +1,7 @@
+import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
+import { SessionStore } from '../../core/auth/session.store';
+import { SETTINGS_NAV } from './settings-nav';
 import { permissionGuard } from '../../core/guards/permission.guard';
 import { SettingsShellComponent } from './shell/settings-shell.component';
 
@@ -7,6 +10,7 @@ import { SettingsShellComponent } from './shell/settings-shell.component';
  *   general / meetings / board : تنظیمات کلیدی به‌صورت فرم
  *   notifications              : رویدادها، کانال‌ها و گیرندگان
  *   templates                  : قالب پیام‌ها با پیش‌نمایش
+ *   print                      : سربرگ چاپ (لوگو، نام شرکت) و طراحی قالب‌های چاپ
  *   sms                        : پنل پیامک، ساعات سکوت، یادآوری‌ها، پیامک آزمایشی
  *   roles                      : ماتریس نقش × توانایی
  *   logs                       : گزارش ارسال
@@ -17,7 +21,14 @@ export const settingsRoutes: Routes = [
     path: '',
     component: SettingsShellComponent,
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'general' },
+      {
+        path: '', pathMatch: 'full',
+        // اولین بخشی که کاربر به آن دسترسی دارد (مثلاً کاربری که فقط «قالب‌های چاپ» دارد)
+        redirectTo: () => {
+          const session = inject(SessionStore);
+          return SETTINGS_NAV.find(i => session.hasAnyPermission(i.perms))?.path ?? 'general';
+        },
+      },
       {
         path: 'general', title: 'تنظیمات عمومی', canActivate: [permissionGuard('MT_Settings')],
         loadComponent: () => import('./general/settings-form.component').then(m => m.SettingsFormComponent),
@@ -32,6 +43,10 @@ export const settingsRoutes: Routes = [
         path: 'board', title: 'هیئت مدیره', canActivate: [permissionGuard('MT_Settings')],
         loadComponent: () => import('./general/settings-form.component').then(m => m.SettingsFormComponent),
         data: { categories: [3], title: 'هیئت مدیره و کمیسیون معاملات', icon: 'fa-landmark' },
+      },
+      {
+        path: 'print', title: 'چاپ و قالب‌ها', canActivate: [permissionGuard('MT_PrintTemplates', 'MT_Settings')],
+        loadComponent: () => import('./print/print-settings.component').then(m => m.PrintSettingsComponent),
       },
       {
         path: 'notifications', title: 'رویدادهای اطلاع‌رسانی', canActivate: [permissionGuard('MT_Settings')],

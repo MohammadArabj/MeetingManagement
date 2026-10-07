@@ -31,7 +31,7 @@
     </li>
 
     <li
-      *hasPermission="['MT_Settings','MT_Statuses','MT_UserRoles','MT_ResolutionLabels','MT_Locations','MT_Categories','MT_BoardMembers']"
+      *hasPermission="['MT_Settings','MT_PrintTemplates','MT_Statuses','MT_UserRoles','MT_ResolutionLabels','MT_Locations','MT_Categories','MT_BoardMembers']"
       class="menu-item" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: false }">
       <a href="javascript:void(0);" class="menu-link menu-toggle">
         <i class="menu-icon tf-icons fa fa-cog"></i>
@@ -59,7 +59,7 @@
         <li *hasPermission="['MT_Categories']" class="menu-item" routerLinkActive="active">
           <a routerLink="/meetings/categoryPermission" class="menu-link">دسترسی دسته بندی جلسات</a>
         </li>
-        <li *hasPermission="['MT_Settings','MT_UserRoles']" class="menu-item" routerLinkActive="active">
+        <li *hasPermission="['MT_Settings','MT_UserRoles','MT_PrintTemplates']" class="menu-item" routerLinkActive="active">
           <a routerLink="/settings" class="menu-link">تنظیمات سامانه (اطلاع‌رسانی، نقش‌ها، ...)</a>
         </li>
       </ul>

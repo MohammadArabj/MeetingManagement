@@ -40,6 +40,8 @@ import { TusUploadService } from '../../../../services/framework-services/tus-up
 import { ToastService } from '../../../../services/framework-services/toast.service';
 import { FileManagerModalComponent } from '../../../../shared/file-manager/file-manger-modal.component';
 import { MeetingRoles } from '../../../../core/meeting-access/meeting-roles';
+import { PrintService } from '../../../../core/print/print.service';
+import { escapeHtml } from '../../../../core/print/template-engine';
 
 declare var $: any;
 declare var Swal: any;
@@ -76,7 +78,8 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly passwordFlowService = inject(PasswordFlowService);
   private readonly userService = inject(UserService);
-  private readonly toastService = inject(ToastService);          // ✅ اضافه شد
+  private readonly toastService = inject(ToastService);
+  private readonly printService = inject(PrintService);
 
   // Inputs
   readonly meetingGuid = input<string>('');
@@ -87,11 +90,10 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
   readonly meetingUpdated = output<MeetingDetails>();
   readonly memberUpdated = output<MeetingMember>();
   readonly fileUploaded = output<string[]>();  // ✅ تغییر تایپ به string[] (GUIDs)
-  readonly signatureCompleted = output<{ memberId: number; isSign: boolean; comment: string }>();
+  readonly signatureCompleted = output<{ memberId: number; isSign: boolean; comment: string | null }>();
 
   // ViewChild references
   @ViewChild('signModal') signModal!: ElementRef;
-  @ViewChild('printSection') printSection!: ElementRef;
   @ViewChild('fileManagerModal') fileManagerModal!: FileManagerModalComponent;  // ✅ اضافه شد
 
   // Signals for component state
@@ -189,23 +191,28 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
       .map(m => ({ name: m.name, comment: m.comment || '' }))
   );
 
+  /** امضاهای ثبت‌شده؛ امضای رئیس جلسه همیشه اول (سایرین پس از او امضا می‌کنند) */
   readonly signedMembers = computed(() => {
     const isDelegate = this.localStorageService.getItem(IsDeletage) === 'true';
 
-    return this.members().filter(m => m.isSign).map(m => {
-      let name = m.name;
-      let userName = m.userName;
+    return this.members()
+      .filter(m => m.isSign)
+      .sort((a, b) => Number(MeetingRoles.isChairman(b.roleId)) - Number(MeetingRoles.isChairman(a.roleId)))
+      .map(m => {
+        let name = m.name;
+        let userName = m.userName;
 
-      if (isDelegate && m.signer !== m.userGuid) {
-        name = 'از طرف ' + m.signerName;
-        userName = m.signerUserName ?? '';
-      }
+        if (isDelegate && m.signer && m.signer !== m.userGuid) {
+          name = 'از طرف ' + m.signerName;
+          userName = m.signerUserName ?? '';
+        }
 
-      return {
-        name: name,
-        signature: `${environment.fileManagementEndpoint}/EpcSignature/${userName}.jpg`
-      };
-    });
+        return {
+          name,
+          role: m.role ?? '',
+          signature: `${environment.fileManagementEndpoint}/EpcSignature/${userName}.jpg`,
+        };
+      });
   });
 
   // Permission computed signals
@@ -231,39 +238,57 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
       (MeetingRoles.can(member?.roleId, 'WriteMinutes') || this.isSuperAdmin());
   });
 
-  readonly canSign = computed(() => {
+  /** رئیس جلسه امضا کرده است؟ (امضای معتبر صورتجلسه = امضای رئیس؛ امضای دبیر غیرعضو اهمیتی ندارد) */
+  readonly chairmanSigned = computed(() =>
+    this.members().some(m => MeetingRoles.isChairman(m.roleId) && m.isSign === true)
+  );
+
+  readonly isCurrentChairman = computed(() => MeetingRoles.isChairman(this.currentMember()?.roleId));
+
+  /** نظر/امضا فقط در وضعیت «ثبت نهایی»، برای عضو حاضر و (در حالت تفویض) با مجوز */
+  private readonly minutesOpenForMe = computed(() => {
     const meetingData = this.meeting();
     const member = this.currentMember();
-
-    if (!meetingData || !member) return false;
-
-    const isStatusValid = meetingData.statusId === 4;
-    const isNotDelegate = !member.isDelegate;
-    const isNotSigned = !member.isSign;
-
-    const chairmanMember = this.members().find(m => MeetingRoles.isChairman(m.roleId)&&m.isPresent==true);
-    const hasChairmanSigned = chairmanMember?.isSign ?? false;
-    const isCurrentUserChairman = MeetingRoles.isChairman(member.roleId);
-    const canSignBasedOnChairman = isCurrentUserChairman || hasChairmanSigned;
-
-    if (this.isDelegate()) {
-      return isStatusValid && isNotDelegate &&
-        this.hasPermission('MT_Meetings_CommentAndSign') &&
-        isNotSigned &&
-        canSignBasedOnChairman;
-    }
-
-    return isStatusValid &&
-      isNotSigned &&
-      canSignBasedOnChairman;
+    if (!meetingData || !member || meetingData.statusId !== 4) return false;
+    if (member.isDelegate) return false;
+    if (this.isDelegate() && !this.hasPermission('MT_Meetings_CommentAndSign')) return false;
+    return true;
   });
 
-  readonly canPrintFinal = computed(() => {
-    const meetingData = this.meeting();
-    if (![4, 6].includes(meetingData?.statusId)) return false;
+  readonly canComment = computed(() =>
+    this.minutesOpenForMe() && MeetingRoles.can(this.currentMember()?.roleId, 'CommentOnMinutes')
+  );
 
-    return this.members().some(member => MeetingRoles.isChairman(member.roleId) && member.isSign);
+  /** امضای جدید: رئیس هر زمان؛ سایرین فقط پس از امضای رئیس */
+  readonly canSignNow = computed(() => {
+    const member = this.currentMember();
+    return this.minutesOpenForMe()
+      && !member?.isSign
+      && MeetingRoles.can(member?.roleId, 'SignMinutes')
+      && (this.isCurrentChairman() || this.chairmanSigned());
   });
+
+  /** برداشتن امضا: امضای رئیس قطعی است */
+  readonly canUnsign = computed(() =>
+    this.minutesOpenForMe() && this.currentMember()?.isSign === true && !this.isCurrentChairman()
+  );
+
+  /** دکمه «امضا و ثبت نظر» */
+  readonly canSign = computed(() => this.canComment() || this.canSignNow() || this.canUnsign());
+
+  /** در فرم امضا، کلیک روی کادر امضا مجاز است؟ */
+  canToggleSign(): boolean {
+    return this.signForm().get('sign')?.value ? this.canUnsign() || this.canSignNow() : this.canSignNow();
+  }
+
+  readonly waitingForChairman = computed(() =>
+    this.minutesOpenForMe() && !this.isCurrentChairman() && !this.chairmanSigned()
+    && MeetingRoles.can(this.currentMember()?.roleId, 'SignMinutes')
+  );
+
+  readonly canPrintFinal = computed(() =>
+    [4, 6].includes(this.meeting()?.statusId) && this.chairmanSigned()
+  );
 
   readonly canPrintDraft = computed(() => !this.canPrintFinal());
 
@@ -500,6 +525,7 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
 
   // Form handling methods
   toggleSign(): void {
+    if (!this.canToggleSign()) return;
     const form = this._signForm();
     const currentValue = form.get('sign')?.value;
     form.get('sign')?.setValue(!currentValue);
@@ -514,8 +540,9 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
 
     const payload = {
       memberId: formValue.memberId,
-      isSign: formValue.sign,
-      comment: formValue.comment,
+      isSign: !!formValue.sign,
+      // بدون توانایی «نظر»، متن نظر ارسال نمی‌شود (null = بدون تغییر)
+      comment: this.canComment() ? (formValue.comment ?? '') : null,
       signer: userGuid
     };
 
@@ -537,7 +564,7 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
       updatedMembers[memberIndex] = {
         ...updatedMembers[memberIndex],
         isSign: payload.isSign,
-        comment: payload.comment
+        comment: payload.comment ?? updatedMembers[memberIndex].comment
       };
 
       this.meetingBehaviorService.updateMembers(updatedMembers);
@@ -597,637 +624,82 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Print methods
+  // ═══════════════════════════════════════════════════════════
+  // چاپ صورتجلسه (قالب «minutes» از «تنظیمات › چاپ و قالب‌ها»)
+  // ═══════════════════════════════════════════════════════════
   printMeeting(): void {
-    const printContent = document.getElementById("meeting-Minute")?.innerHTML;
-    if (!printContent) return;
-
-    this.openPrintWindow(printContent, "چاپ صورتجلسه", this.getFinalPrintStyles());
+    this.printMinutes(false);
   }
 
   printDraftMeeting(): void {
-    const printContent = this.printSection?.nativeElement?.innerHTML;
-    if (!printContent) return;
-
-    this.openPrintWindow(printContent, "چاپ پیش نویس صورتجلسه", this.getDraftPrintStyles());
+    this.printMinutes(true);
   }
 
-  private openPrintWindow(content: string, title: string, styles: string): void {
-    const newWin = window.open("", "_blank", "width=900,height=700");
-    if (!newWin) return;
+  private printMinutes(isDraft: boolean): void {
+    const meeting = this.meeting();
+    if (!meeting) return;
 
-    newWin.document.open();
-    newWin.document.write(`
-      <html>
-        <head>
-          <title>${title}</title>
-          <style>${styles}</style>
-          <link rel="stylesheet" href="${this.siteUrl()}/css/custom.css" />
-        </head>
-        <body>
-          ${content}
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(() => window.close(), 100);
-            };
-          </script>
-        </body>
-      </html>
-    `);
-   // newWin.document.close();
+    // پنجره همزمان با کلیک باز می‌شود تا مسدودکننده‌ی پاپ‌آپ جلوی آن را نگیرد
+    const target = this.printService.openWindow();
+    if (!target) {
+      this.toastService.error('پنجره‌ی چاپ باز نشد؛ لطفاً اجازه‌ی باز شدن پنجره‌ی جدید (Pop-up) را بدهید.');
+      return;
+    }
+
+    const title = `${isDraft ? 'پیش‌نویس صورتجلسه' : 'صورتجلسه'} - ${meeting.title ?? ''}`;
+    this.printService
+      .print('minutes', this.buildMinutesData(meeting, isDraft), {
+        title,
+        target,
+        watermark: isDraft ? 'پیش‌نویس' : undefined,
+      })
+      .catch((e: any) => this.toastService.error(e?.message || 'خطا در آماده‌سازی چاپ'));
   }
 
-  private getFinalPrintStyles(): string {
-    return `
-      body {
-    direction: rtl;
-    background-color: #f8f9fa;
-    padding: 0;
-}
+  private buildMinutesData(meeting: any, isDraft: boolean): Record<string, unknown> {
+    const members = this.members();
+    const groups = this.formattedAssignments();
+    const textToHtml = (text?: string) => (text ? escapeHtml(text).replace(/\r?\n/g, '<br>') : '');
 
-.containter {
-    max-width: 26cm;
-    margin: 0 auto;
-    background-color: #fff;
-    padding: 20px;
-    border-radius: 15px;
-}
-
-header {
-    display: flex;
-}
-
-header .right-side {
-    width: 85%;
-    margin-left: 5px;
-}
-
-.name-of-god {
-    text-align: center;
-    margin-right: 25px;
-    font-size: 18px;
-}
-
-.meeting-title {
-    border: 2px solid #6d8dab;
-    padding: 10px;
-    margin-top: 5px;
-    border-radius: 20px;
-    height: 50px;
-    font-weight: 700 !important;
-    font-size: 17px;
-    background: linear-gradient(to left, #e1d4cd, #f7ddd0, #e0e9f3);
-}
-
-.main {
-    margin-top: 10px;
-}
-
-.metting-information table {
-    border-collapse: collapse;
-    min-height: 300px;
-}
-
-table {
-    border-collapse: collapse;
-}
-
-.metting-information th {
-    width: 10%;
-    border: 1px solid black;
-    border-top: 1px solid white;
-    padding: 5px;
-    font-size: 15px;
-    font-weight: 800;
-}
-
-th:first-child {
-    border-right: none !important;
-    border-top: none !important
-}
-
-th:last-child {
-    border-left: none !important;
-    border-top: none !important
-}
-
-td:first-child {
-    border-right: none !important;
-}
-
-td:last-child {
-    border-left: none !important;
-}
-
-.metting-information {
-    border-style: double;
-    border-radius: 15px;
-}
-
-.metting-information td {
-    border: 1px solid black;
-}
-
-.metting-information tbody tr {
-    height: 20%;
-    border-top: 2px solid black;
-    border-bottom: 1px solid black;
-}
-
-
-.metting-information tbody tr:last-child {
-    border-bottom: none !important;
-}
-
-.metting-information tbody tr:last-child td {
-    border-bottom: none !important;
-}
-
-.type {
-    text-align: center;
-    font-weight: 700;
-}
-
-.metting-summary {
-    margin: 15px 0;
-    border: 2px solid #6e6e6e;
-    display: flex;
-}
-
-.metting-summary .right-side {
-    border-left: 1px solid black;
-    background: #d9d9d9;
-}
-
-.label {
-    border-top: 1px solid #0000004f;
-}
-.space-preline{
-   white-space: pre-line;
-}
-.metting-summary .right-side span {
-    transform: rotate(270deg);
-    display: table-caption;
-    padding: 0;
-    width: 74px;
-    font-size: 15px;
-    text-align: center;
-    margin: 31px 0;
-    padding: 12px 0px;
-    font-weight: 700 !important;
-}
-
-.metting-summary .main {
-    width: 90%;
-    margin: 13px;
-    font-size: 13px;
-    text-align:justify;
-    white-space: pre-line;
-}
-
-
-.metting-directives .main {
-    border: 2px solid black;
-    border-bottom: 1px solid black;
-}
-
-
-.metting-directives .main .label {
-    text-align: center;
-    background: #fbe5d5;
-    padding: 8px 0;
-}
-
-.metting-directives table {
-    border: 1px solid black;
-}
-
-.metting-directives table th {
-    width: 7%;
-    border: 1px solid black;
-    padding: 7px;
-    font-size: 14px;
-}
-
-.metting-directives table th:first-child {
-    border-right: 1px solid white;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-
-.metting-directives table th:last-child {
-    border-left: 1px solid white;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-directives table th:nth-child(1) {
-    width: 3%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-directives table th:nth-child(2) {
-    width: 30%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-directives table th:nth-child(3) {
-    width: 4%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-description table th:nth-child(1) {
-    width: 1%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-description table th:nth-child(2) {
-    width: 4%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-description table th:nth-child(3) {
-    width: 27%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-directives table tbody td {
-    border: 1px solid black;
-    text-align: center;
-    padding: 7px 10px;
-    font-size: 13px;
-    overflow-wrap: anywhere;
-}
-
-.metting-directives table tbody td:first-child {
-    border-right: 1px solid white !important;
-}
-
-.metting-directives table tbody td:last-child {
-    border-left: 1px solid white !important;
-}
-
-.metting-directives table tbody tr:last-child td {
-    border-bottom: 1px solid white !important;
-}
-
-.metting-description .main .label {
-    background: #d9d9d9;
-}
-
-.metting-directives {
-    margin-bottom: 20px;
-}
-
-.meeting-signatures {
-    margin: 15px 0;
-    border: 1px solid black;
-    min-height: 85px;
-}
-
-.meeting-signatures .top {
-    background: #d9d9d9;
-    text-align: center;
-    padding: 8px;
-    border-bottom: 1px solid black;
-}
-
-.meeting-signatures {
-    min-height: 130px;
-    page-break-before: auto;
-    page-break-after: auto;
-    page-break-inside: avoid;
-}
-
-.meeting-signatures .top {
-    background: #fbe5d5;
-}
-
-.top,
-.label {
-    font-weight: 700;
-}
-
-td {
-    font-size: 14px;
-    padding-right: 5px;
-}
-
-.meeting-information td {
-    text-align: center;
-}
-
-* {
-    -webkit-print-color-adjust: exact !important;
-    /* Chrome, Safari, Edge */
-    color-adjust: exact !important;
-    /*Firefox*/
-}
-
-.meeting-signatures .main img {
-    margin: 0 5px;
-    width:125px;
-    height:65px
-}
-
-.meeting-signatures .main {
-    display: flex;
-}
-
-.meeting-signatures .main div {
-    display: flex;
-    flex-direction: column;
-}
-
-.meeting-signatures .main div span {
-    font-size: 9px;
-    margin: 0 5px;
-    background: #fbe5d5;
-        width:125px;
-
-}
-    `;
+    return {
+      isDraft,
+      meeting: {
+        title: meeting.title ?? '',
+        number: meeting.number ?? '',
+        date: meeting.mtDate ?? '',
+        startTime: meeting.startTime ?? '',
+        endTime: meeting.endTime ?? '',
+        location: meeting.location ?? '',
+        category: meeting.categoryTitle ?? '',
+        chairman: meeting.chairman ?? '',
+        secretary: meeting.secretary ?? '',
+      },
+      agendas: (meeting.agendas ?? []).map((a: any) => ({ text: a.text ?? a.title ?? '' })),
+      attachmentsCount: this.fileCount(),
+      members: members
+        .filter(m => MeetingRoles.countsAsMember(m.roleId) || MeetingRoles.isNonMemberSecretary(m.roleId))
+        .map(m => ({ name: m.name, role: m.role ?? '', isPresent: m.isPresent === true, substitute: m.substitute ?? '' })),
+      guests: members
+        .filter(m => m.isExternal || MeetingRoles.isGuest(m.roleId))
+        .map(m => ({ name: m.name, organization: m.organization ?? '' })),
+      description: textToHtml(meeting.description),
+      rider: textToHtml(meeting.rider),
+      resolutions: (this.resolutions() ?? []).map((r: Resolution, i: number) => ({
+        number: i + 1,
+        text: r.text || (r as any).description || '',
+        assignments: (groups[i] ?? []).map(g => ({
+          actor: g.actionerNames.split('<br/> ').join('، '),
+          type: g.type,
+          follower: g.followerName,
+          dueDate: g.dueDate,
+        })),
+      })),
+      comments: this.memberDescriptions(),
+      // پیش‌نویس امضا ندارد؛ در نسخه‌ی نهایی فقط امضاهای ثبت‌شده (رئیس اول) چاپ می‌شوند
+      signers: isDraft ? [] : this.signedMembers().map(s => ({ name: s.name, role: s.role, signatureUrl: s.signature })),
+    };
   }
 
-  private getDraftPrintStyles(): string {
-    return `
-      body {
-    direction: rtl;
-    background-color: #f8f9fa;
-    padding: 0;
-}
-
-.containter {
-    max-width: 26cm;
-    margin: 0 auto;
-    background-color: #fff;
-    padding: 20px;
-    border-radius: 15px;
-}
-
-header {
-    display: flex;
-}
-
-header .right-side {
-    width: 100%;
-    margin-left: 5px;
-}
-
-.name-of-god {
-    text-align: center;
-    margin-right: 25px;
-    font-size: 18px;
-}
-
-.meeting-title {
-    border: 2px solid #6d8dab;
-    padding: 10px;
-    margin-top: 5px;
-    border-radius: 20px;
-    height: 50px;
-    font-weight: 700 !important;
-    font-size: 17px;
-    background: linear-gradient(to left, #e1d4cd, #f7ddd0, #e0e9f3);
-}
-
-.main {
-    margin-top: 10px;
-}
-
-.metting-information table {
-    border-collapse: collapse;
-    min-height: 300px;
-}
-
-table {
-    border-collapse: collapse;
-}
-
-.metting-information th {
-    width: 10%;
-    border: 1px solid black;
-    border-top: 1px solid white;
-    padding: 5px;
-    font-size: 15px;
-    font-weight: 800;
-}
-
-th:first-child {
-    border-right: none !important;
-    border-top: none !important
-}
-
-th:last-child {
-    border-left: none !important;
-    border-top: none !important
-}
-
-td:first-child {
-    border-right: none !important;
-}
-
-td:last-child {
-    border-left: none !important;
-}
-
-.metting-information {
-    border-style: double;
-    border-radius: 15px;
-}
-
-.metting-information td {
-    border: 1px solid black;
-}
-
-.metting-information tbody tr {
-    height: 20%;
-    border-top: 2px solid black;
-    border-bottom: 1px solid black;
-}
-
-
-.metting-information tbody tr:last-child {
-    border-bottom: none !important;
-}
-
-.metting-information tbody tr:last-child td {
-    border-bottom: none !important;
-}
-
-.type {
-    text-align: center;
-    font-weight: 700;
-}
-
-.metting-summary {
-    margin: 15px 0;
-    border: 2px solid #6e6e6e;
-    display: flex;
-}
-
-.metting-summary .right-side {
-    border-left: 1px solid black;
-    background: #d9d9d9;
-}
-
-.label {
-    border-top: 1px solid #0000004f;
-}
-
-.metting-summary .right-side span {
-    transform: rotate(270deg);
-    display: table-caption;
-    padding: 0;
-    width: 74px;
-    font-size: 15px;
-    text-align: center;
-    margin: 31px 0;
-    padding: 12px 0px;
-    font-weight: 700 !important;
-}
-
-.metting-summary .main {
-    width: 90%;
-    margin: 13px;
-    font-size: 13px;
-    text-align:justify;
-    white-space: pre-line;
-}
-
-
-.metting-directives .main {
-    border: 2px solid black;
-    border-bottom: 1px solid black;
-}
-
-
-.metting-directives .main .label {
-    text-align: center;
-    background: #fbe5d5;
-    padding: 8px 0;
-}
-
-.metting-directives table {
-    border: 1px solid black;
-}
-
-.metting-directives table th {
-    width: 7%;
-    border: 1px solid black;
-    padding: 7px;
-    font-size: 14px;
-}
-
-.metting-directives table th:first-child {
-    border-right: 1px solid white;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-
-.metting-directives table th:last-child {
-    border-left: 1px solid white;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-directives table th:nth-child(1) {
-    width: 3%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-directives table th:nth-child(2) {
-    width: 30%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-directives table th:nth-child(3) {
-    width: 4%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-description table th:nth-child(1) {
-    width: 1%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-description table th:nth-child(2) {
-    width: 4%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-description table th:nth-child(3) {
-    width: 27%;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.metting-directives table tbody td {
-    border: 1px solid black;
-    text-align: center;
-    padding: 7px 10px;
-    font-size: 13px;
-}
-
-.metting-directives table tbody td:first-child {
-    border-right: 1px solid white !important;
-}
-
-.metting-directives table tbody td:last-child {
-    border-left: 1px solid white !important;
-}
-
-.metting-directives table tbody tr:last-child td {
-    border-bottom: 1px solid white !important;
-}
-
-.metting-description .main .label {
-    background: #d9d9d9;
-}
-
-.metting-directives {
-    margin-bottom: 20px;
-}
-.space-preline{
-   white-space: pre-line;
-}
-.top,
-.label {
-    font-weight: 700;
-}
-
-td {
-    font-size: 14px;
-    padding-right: 5px;
-}
-
-.meeting-information td {
-    text-align: center;
-}
-
-* {
-    -webkit-print-color-adjust: exact !important;
-    /* Chrome, Safari, Edge */
-    color-adjust: exact !important;
-    /*Firefox*/
-}
-    `;
-  }
-  // Signal-based utility methods
   updateSignFormValue(field: string, value: any): void {
     const form = this._signForm();
     form.get(field)?.setValue(value);

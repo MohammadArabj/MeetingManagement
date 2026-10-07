@@ -19,7 +19,6 @@ import { MeetingBehaviorService } from '../meeting-behavior-service';
 import { TusUploadService } from '../../../../services/framework-services/tus-upload.service';
 
 // Environment
-import { environment } from '../../../../../environments/environment';
 
 // Enums
 export enum ActionStatus {
@@ -91,6 +90,7 @@ export interface FollowupReportData {
 // Filter Types
 type StatusFilter = 'all' | 'completed' | 'inProgress' | 'pending' | 'overdue';
 
+import { PrintService } from '../../../../core/print/print.service';
 @Component({
   selector: 'app-meeting-followup-tab',
   standalone: true,
@@ -105,6 +105,7 @@ export class MeetingFollowupTabComponent implements OnInit {
   // Injected Services
   // ═══════════════════════════════════════════════════════════
   private readonly resolutionService = inject(ResolutionService);
+  private readonly printService = inject(PrintService);
   private readonly toastService = inject(ToastService);
   private readonly meetingBehaviorService = inject(MeetingBehaviorService);
   private readonly tusUploadService = inject(TusUploadService);
@@ -523,20 +524,17 @@ export class MeetingFollowupTabComponent implements OnInit {
   // ═══════════════════════════════════════════════════════════
 
   printReport(): void {
-    const printWindow = window.open('', '_blank', 'width=900,height=700');
-    if (!printWindow) {
-      this.toastService.error('امکان باز کردن پنجره چاپ وجود ندارد');
+    const data = this._reportData();
+    if (!data) {
+      this.toastService.warning('داده‌ای برای چاپ وجود ندارد');
       return;
     }
 
-    const printContent = this.generatePrintContent();
-    printWindow.document.open();
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
+    void this.printService
+      .printReport('followup-report', this.generatePrintContent(), {
+        title: `گزارش پیگیری مصوبات - جلسه ${data.meetingNumber ?? ''}`,
+      })
+      .catch((e: any) => this.toastService.error(e?.message || 'خطا در آماده‌سازی چاپ'));
   }
 
   exportToExcel(): void {
@@ -687,66 +685,7 @@ export class MeetingFollowupTabComponent implements OnInit {
     });
 
     return `
-      <!DOCTYPE html>
-      <html lang="fa" dir="rtl">
-      <head>
-        <meta charset="UTF-8">
-        <title>گزارش پیگیری مصوبات - جلسه ${data.meetingNumber}</title>
-        <style>
-          @page { size: A4; margin: 15mm; }
-          @media print {
-            body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-            .resolution-card { page-break-inside: avoid; }
-          }
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body {
-            font-family: 'B Yekan', 'Iranian Sans', Tahoma, sans-serif;
-            direction: rtl;
-            line-height: 1.6;
-            color: #333;
-            background: white;
-            padding: 20px;
-          }
-          .print-header {
-            text-align: center;
-            border-bottom: 3px solid #4f46e5;
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-          }
-          .company-name { font-size: 18px; font-weight: bold; color: #1f2937; }
-          .report-title { font-size: 16px; color: #4f46e5; margin: 10px 0; }
-          .meeting-info { display: flex; justify-content: center; gap: 30px; background: #f3f4f6; padding: 10px; border-radius: 8px; }
-          .stats-bar { display: flex; justify-content: space-around; background: #f8f9fa; padding: 15px; margin-bottom: 20px; border-radius: 8px; }
-          .stat-item { text-align: center; }
-          .stat-value { font-size: 24px; font-weight: bold; }
-          .stat-label { font-size: 12px; color: #6b7280; }
-          .resolution-card { border: 2px solid #e5e7eb; border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
-          .resolution-header { background: linear-gradient(135deg, #4f46e5, #6366f1); color: white; padding: 12px; display: flex; gap: 15px; }
-          .resolution-number { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-weight: bold; }
-          .resolution-text, .resolution-decisions { padding: 12px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
-          .assignment-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; margin: 10px; overflow: hidden; }
-          .assignment-card.overdue { border-color: #f87171; background: #fef2f2; }
-          .assignment-header { padding: 10px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 12px; }
-          .assignment-info { display: flex; gap: 15px; flex-wrap: wrap; }
-          .overdue-badge { color: #dc2626; font-weight: bold; }
-          .actions-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-          .actions-table th { background: #e5e7eb; padding: 8px; border: 1px solid #d1d5db; }
-          .actions-table td { padding: 8px; border: 1px solid #e5e7eb; text-align: center; }
-          .text-right { text-align: right !important; }
-          .badge { padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
-          .status-pending { background: #6b7280; color: white; }
-          .status-progress { background: #f59e0b; color: white; }
-          .status-completed { background: #10b981; color: white; }
-          .result-done { background: #059669; color: white; }
-          .result-notdone { background: #dc2626; color: white; }
-          .no-data, .no-assignments { text-align: center; padding: 15px; color: #6b7280; font-style: italic; }
-          .print-footer { margin-top: 20px; text-align: left; font-size: 10px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 10px; }
-        </style>
-      </head>
-      <body>
         <div class="print-header">
-          <div class="company-name">شرکت پتروشیمی اصفهان</div>
-          <div class="report-title">گزارش پیگیری مصوبات</div>
           <div class="meeting-info">
             <span><strong>شماره جلسه:</strong> ${data.meetingNumber}</span>
             <span><strong>عنوان:</strong> ${data.meetingTitle}</span>
@@ -778,11 +717,7 @@ export class MeetingFollowupTabComponent implements OnInit {
         </div>
 
         ${resolutionsHtml || '<div class="no-data">هیچ مصوبه‌ای یافت نشد</div>'}
-
-        <div class="print-footer">تاریخ چاپ: ${new Date().toLocaleDateString('fa-IR')}</div>
-      </body>
-      </html>
-    `;
+      `;
   }
 
   // ═══════════════════════════════════════════════════════════

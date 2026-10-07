@@ -161,35 +161,6 @@
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <!-- بخش چاپ (مخفی) -->
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<div id="printSection" style="display: none;">
-    <div class="header-container">
-        <img src="{{ siteUrl() }}/img/MainLogo.png" alt="لوگو">
-        <div class="header-content">
-            <p>شماره جلسه: {{ meeting().number }}</p>
-            <h2>دستور جلسه</h2>
-            <p>تاریخ جلسه: {{ meeting().mtDate }}</p>
-        </div>
-    </div>
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th class="text-center">ردیف</th>
-                <th>متن دستور جلسه</th>
-                <th>پیوست</th>
-            </tr>
-        </thead>
-        <tbody>
-            @for (agenda of agendas(); let i = $index; track agenda.id) {
-            <tr>
-                <td class="text-center">{{ i + 1 }}</td>
-                <td>{{ agenda.text }}</td>
-                <td>{{ getFileCount(agenda) > 0 ? 'دارد (' + getFileCount(agenda) + ' فایل)' : 'ندارد' }}</td>
-            </tr>
-            }
-        </tbody>
-    </table>
-</div>
-
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <!-- مدال افزودن/ویرایش دستور جلسه -->
 <!-- ═══════════════════════════════════════════════════════════════════════ -->

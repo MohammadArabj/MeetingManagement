@@ -20,7 +20,6 @@ import { AgGridBaseComponent } from '../../../shared/ag-grid-base/ag-grid-base';
 
 // ✅ اضافه کردن LongTextCellComponent
 import { LongTextCellComponent } from '../../resolutions/resolution-list/longtextCellComponent';
-import { environment } from '../../../../environments/environment';
 import { AssignmentService } from '../../../services/assignment.service';
 
 // Enums
@@ -76,6 +75,7 @@ interface ResolutionSummaryReportDto {
   positionSummaries: PositionResolutionSummary[];
 }
 
+import { PrintService } from '../../../core/print/print.service';
 @Component({
   selector: 'app-resolution-report',
   standalone: true,
@@ -92,7 +92,7 @@ export class ResolutionReportComponent extends AgGridBaseComponent implements On
   private readonly breadcrumbService = inject(BreadcrumbService);
   private readonly passwordFlowService = inject(PasswordFlowService);
   private readonly userService = inject(UserService);
-  readonly siteUrl = computed(() => environment.selfEndpoint);
+  private readonly printService = inject(PrintService);
 
   // Destroy subject
   private destroy$ = new Subject<void>();
@@ -381,92 +381,6 @@ export class ResolutionReportComponent extends AgGridBaseComponent implements On
     return { uniqueMeetings, total, pending, inProgress, endDone, endNotDone, endTotal };
   });
 
-  // // ===== در بخش Print Methods =====
-  // public printStats(): void {
-  //   const stats = this.statsReport();
-  //   if (!stats) {
-  //     this.toastService.warning('ابتدا گزارش را تولید کنید');
-  //     return;
-  //   }
-
-  //   const printWindow = window.open('', '_blank', 'width=700,height=500');
-  //   if (!printWindow) return;
-
-  //   const formValue = this.reportForm.value;
-
-  //   printWindow.document.write(`
-  //   <!DOCTYPE html>
-  //   <html lang="fa" dir="rtl">
-  //   <head>
-  //     <meta charset="UTF-8">
-  //     <title>گزارش آماری مصوبات</title>
-  //     <style>
-  //       @page { size: A4; margin: 15mm; }
-  //       body { font-family: Tahoma, Arial, sans-serif; direction: rtl; color: #333; margin: 0; padding: 20px; }
-  //       .header { text-align: center; border-bottom: 3px solid #f59e0b; padding-bottom: 15px; margin-bottom: 25px; }
-  //       .company { font-size: 20px; font-weight: bold; margin-bottom: 6px; }
-  //       .title   { font-size: 16px; color: #f59e0b; font-weight: 600; }
-  //       .filters { background: #f9f9f9; padding: 8px 14px; border-radius: 6px; margin-bottom: 20px; font-size: 12px; color: #555; }
-  //       .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
-  //       .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; text-align: center; }
-  //       .card .num  { font-size: 36px; font-weight: bold; margin-bottom: 6px; }
-  //       .card .lbl  { font-size: 13px; color: #555; }
-  //       .c-blue   { border-top: 4px solid #3b82f6; } .c-blue .num   { color: #3b82f6; }
-  //       .c-gray   { border-top: 4px solid #6b7280; } .c-gray .num   { color: #6b7280; }
-  //       .c-orange { border-top: 4px solid #f59e0b; } .c-orange .num { color: #f59e0b; }
-  //       .c-purple { border-top: 4px solid #8b5cf6; } .c-purple .num { color: #8b5cf6; }
-  //       .c-green  { border-top: 4px solid #10b981; } .c-green .num  { color: #10b981; }
-  //       .c-red    { border-top: 4px solid #ef4444; } .c-red .num    { color: #ef4444; }
-  //       .c-teal   { border-top: 4px solid #14b8a6; } .c-teal .num   { color: #14b8a6; }
-  //       .footer { text-align: center; margin-top: 30px; font-size: 11px; color: #aaa; border-top: 1px solid #eee; padding-top: 10px; }
-  //     </style>
-  //   </head>
-  //   <body>
-  //     <div class="header">
-  //       <div class="company">شرکت پتروشیمی اصفهان</div>
-  //       <div class="title">گزارش آماری مصوبات</div>
-  //     </div>
-  //     <div class="filters">
-  //       از تاریخ: ${formValue.fromDate || '---'} &nbsp;|&nbsp; تا تاریخ: ${formValue.toDate || '---'}
-  //     </div>
-  //     <div class="grid">
-  //       <div class="card c-blue">
-  //         <div class="num">${stats.uniqueMeetings}</div>
-  //         <div class="lbl">تعداد جلسات</div>
-  //       </div>
-  //       <div class="card c-gray">
-  //         <div class="num">${stats.total}</div>
-  //         <div class="lbl">تعداد کل مصوبات</div>
-  //       </div>
-  //       <div class="card c-orange">
-  //         <div class="num">${stats.pending}</div>
-  //         <div class="lbl">در انتظار اقدام</div>
-  //       </div>
-  //       <div class="card c-purple">
-  //         <div class="num">${stats.inProgress}</div>
-  //         <div class="lbl">در حال انجام</div>
-  //       </div>
-  //       <div class="card c-teal">
-  //         <div class="num">${stats.endTotal}</div>
-  //         <div class="lbl">پایان یافته (کل)</div>
-  //       </div>
-  //       <div class="card c-green">
-  //         <div class="num">${stats.endDone}</div>
-  //         <div class="lbl">پایان یافته — انجام شده</div>
-  //       </div>
-  //       <div class="card c-red">
-  //         <div class="num">${stats.endNotDone}</div>
-  //         <div class="lbl">پایان یافته — انجام نشده</div>
-  //       </div>
-  //     </div>
-  //     <div class="footer">تاریخ تهیه گزارش: ${new Date().toLocaleDateString('fa-IR')}</div>
-  //   </body>
-  //   </html>
-  // `);
-  //   printWindow.document.close();
-  //   setTimeout(() => { printWindow.print(); printWindow.close(); }, 400);
-  // }
-  // تبدیل به درصد
   public pct(part: number, total: number): number {
     if (!total) return 0;
     return Math.round((part / total) * 100);
@@ -502,52 +416,23 @@ export class ResolutionReportComponent extends AgGridBaseComponent implements On
     </tr>
   `).join('');
 
-    const w = window.open('', '_blank', 'width=700,height=550');
-    if (!w) return;
+    const filters: string[] = [];
+    if (formValue.fromDate) filters.push(`از تاریخ: ${formValue.fromDate}`);
+    if (formValue.toDate) filters.push(`تا تاریخ: ${formValue.toDate}`);
+    if (formValue.meetingNumber) filters.push(`شماره جلسه: ${formValue.meetingNumber}`);
 
-    w.document.write(`<!DOCTYPE html><html lang="fa" dir="rtl"><head>
-    <meta charset="UTF-8"><title>گزارش آماری</title>
-    <style>
-      @page { size: A4 portrait; margin: 18mm 15mm; }
-      @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
-      body { font-family: Tahoma, Arial, sans-serif; direction: rtl; color: #1f2937; margin: 0; padding: 20px; }
-      .header { border-bottom: 3px solid #f59e0b; padding-bottom: 14px; margin-bottom: 22px; display: flex; justify-content: space-between; align-items: flex-end; }
-      .company { font-size: 18px; font-weight: bold; }
-      .subtitle { font-size: 13px; color: #6b7280; margin-top: 4px; }
-      .report-title { font-size: 14px; color: #f59e0b; font-weight: 600; text-align: left; }
-      table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      th { background: #f9fafb; padding: 10px 12px; border: 1px solid #e5e7eb; font-weight: 600; color: #374151; }
-      td { padding: 9px 12px; border: 1px solid #e5e7eb; vertical-align: middle; }
-      tr:nth-child(even) td { background: #fafafa; }
-      .footer { margin-top: 20px; font-size: 11px; color: #9ca3af; text-align: center; border-top: 1px solid #e5e7eb; padding-top: 10px; }
-    </style>
-                                <link rel="stylesheet" href="${this.siteUrl()}/css/custom.css" />
-
-    </head><body>
-    <div class="header">
-      <div>
-      <div class="company">شرکت پتروشیمی اصفهان</div>
-      ${(() => {
-        const filters = [];
-        if (formValue.fromDate) filters.push(`از تاریخ: ${formValue.fromDate}`);
-        if (formValue.toDate) filters.push(`تا تاریخ: ${formValue.toDate}`);
-        if (formValue.meetingNumber) filters.push(`شماره جلسه: ${formValue.meetingNumber}`);
-        return filters.length > 0 ? `<div class="subtitle">${filters.join(' &nbsp;|&nbsp; ')}</div>` : '';
-      })()}
-      </div>
-      <div class="report-title">گزارش آماری مصوبات</div>
-    </div>
-    <table>
+    const content = `
+    ${filters.length ? `<div class="filters-applied">${filters.map(f => `<span class="filter-item">${f}</span>`).join('')}</div>` : ''}
+    <table class="stats-table">
       <thead>
       <tr><th style="width:38%">شاخص</th><th style="width:14%">تعداد</th><th style="width:14%">درصد</th><th>نسبت</th></tr>
       </thead>
       <tbody>${tableRows}</tbody>
-    </table>
-    <div class="footer">تاریخ تهیه: ${new Date().toLocaleDateString('fa-IR')}</div>
-    </body></html>`);
+    </table>`;
 
-    w.document.close();
-    // setTimeout(() => { w.print(); w.close(); }, 400);
+    void this.printService
+      .printReport('resolution-report', content, { title: 'گزارش آماری مصوبات' })
+      .catch((e: any) => this.toastService.error(e?.message || 'خطا در آماده‌سازی چاپ'));
   }
   private copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text).then(() => {
@@ -735,87 +620,16 @@ export class ResolutionReportComponent extends AgGridBaseComponent implements On
   }
 
   private openPrintWindow(withDecisions: boolean = false): void {
-    const printWindow = window.open('', '_blank', 'width=900,height=700');
-    if (!printWindow) {
-      this.toastService.error('امکان باز کردن پنجره چاپ وجود ندارد');
-      return;
-    }
-
-    const printContent = this.generatePrintContent(withDecisions);
-    printWindow.document.open();
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-
-    // setTimeout(() => {
-    //   printWindow.print();
-    //   printWindow.close();
-    // }, 500);
-  }
-
-  private generatePrintContent(withDecisions: boolean = false): string {
     const reportTitle = this.activeTab() === 'detail'
       ? (withDecisions ? 'گزارش تفصیلی با تصمیمات متخذه' : 'گزارش تفصیلی')
       : 'گزارش خلاصه';
-    return `
-      <!DOCTYPE html>
-      <html lang="fa" dir="rtl">
-      <head>
-          <meta charset="UTF-8">
-          <title>${reportTitle} مصوبات هیئت مدیره</title>
-          <style>
-              @page {
-                  size: A4 landscape;
-                  margin: 10mm 10mm 18mm 10mm; /* margin پایین بیشتر برای فوتر */
-                  @bottom-center {
-                      content: "صفحه " counter(page) " از " counter(pages);
-                      font-size: 10px;
-                      font-family: Tahoma, Arial, sans-serif;
-                      color: #555;
-                      border-top: 1px solid #ccc;
-                      padding-top: 4px;
-                  }
-              }
-              @media print {
-                  body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-                  table { font-size: 14px !important; width: 100% !important; }
-                  th, td { padding: 5px 4px !important; font-size: 12px !important; }
-              }
-              body {
-                  margin: 0; padding: 15px; direction: rtl; line-height: 1.4;
-                  color: #333; font-family: 'B Yekan', 'Iranian Sans', Tahoma, Arial, sans-serif;
-              }
-              .print-header { text-align: center; border-bottom: 3px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px; }
-              .company-name { font-size: 20px; font-weight: bold; color: #1f2937; margin-bottom: 8px; }
-              .report-title { font-size: 16px; font-weight: 600; color: #4f46e5; margin: 8px 0; }
-              table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 11px; }
-              th, td { border: 1px solid #e5e7eb; padding: 6px; text-align: center; vertical-align: middle; }
-              th { background: linear-gradient(135deg, #f8faff 0%, #e7eeff 100%); font-weight: 600; color: #374151; }
-              tbody tr:nth-child(even) { background-color: #f9fafb; }
-              .badge { padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; }
-              .bg-success { background: #10b981; color: white; }
-              .bg-warning { background: #f59e0b; color: white; }
-              .bg-danger { background: #ef4444; color: white; }
-              .bg-secondary { background: #6b7280; color: white; }
-              .filters-applied { background: #f3f4f6; padding: 10px; border-radius: 6px; margin: 10px 0; border-right: 4px solid #4f46e5; }
-              .filter-item { display: inline-block; margin: 2px 4px; padding: 2px 6px; background: #e5e7eb; border-radius: 3px; font-size: 10px; }
-              tr, td, th { page-break-inside: avoid !important; }
-          </style>
-             <link rel="stylesheet" href="${this.siteUrl()}/css/custom.css" />
+    const content = this.getAppliedFiltersHtml()
+      + (this.activeTab() === 'detail' ? this.getDetailTableHtml(withDecisions) : this.getSummaryTableHtml());
 
-      </head>
-      <body>
-          <div class="print-header">
-              <div class="company-name">شرکت پتروشیمی اصفهان</div>
-              <div class="report-title">${reportTitle} مصوبات هیئت مدیره</div>
-              ${this.getAppliedFiltersHtml()}
-          </div>
-          ${this.activeTab() === 'detail' ? this.getDetailTableHtml(withDecisions) : this.getSummaryTableHtml()}
-      </body>
-      </html>
-    `;
+    void this.printService
+      .printReport('resolution-report', content, { title: `${reportTitle} مصوبات` })
+      .catch((e: any) => this.toastService.error(e?.message || 'خطا در آماده‌سازی چاپ'));
   }
-
-
 
   private getAppliedFiltersHtml(): string {
     const formValue = this.reportForm.value;

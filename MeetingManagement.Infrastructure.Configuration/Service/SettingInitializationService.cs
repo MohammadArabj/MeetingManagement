@@ -171,6 +171,13 @@ public class SettingInitializationService(
             new(systemGuid, SettingKey.ReferralAllowLaterDueDate, "false",
                 SettingValueType.Boolean, SettingCategory.Resolution, "اجازه مهلت ارجاع دیرتر از مهلت والد"),
 
+            // چاپ
+            new(systemGuid, SettingKey.PrintBranding, "{\"companyName\":\"شرکت پتروشیمی اصفهان\",\"showPrintDate\":true}",
+                SettingValueType.Json, SettingCategory.Print, "سربرگ چاپ", "از صفحه «تنظیمات › چاپ و قالب‌ها» مدیریت می‌شود."),
+
+            new(systemGuid, SettingKey.PrintTemplates, "{}",
+                SettingValueType.Json, SettingCategory.Print, "قالب‌های سفارشی چاپ", "داخلی - از صفحه «تنظیمات › چاپ و قالب‌ها» مدیریت می‌شود."),
+
             new(systemGuid, SettingKey.AllowedFileExtensions,
                 ".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar",
                 SettingValueType.String, SettingCategory.FileManagement,

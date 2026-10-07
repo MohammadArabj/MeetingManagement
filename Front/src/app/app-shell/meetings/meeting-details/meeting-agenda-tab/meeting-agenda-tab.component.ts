@@ -10,7 +10,6 @@ import { CdkDrag, CdkDragDrop, CdkDropList, moveItemInArray } from '@angular/cdk
 import { Resolution } from '../../../../core/models/Resolution';
 import { Modal } from 'bootstrap';
 import { AgendaItem, MeetingMember } from '../../../../core/models/Meeting';
-import { environment } from '../../../../../environments/environment';
 import { IsDeletage, ISSP } from '../../../../core/types/configuration';
 import { PasswordFlowService } from '../../../../services/framework-services/password-flow.service';
 import { MeetingBehaviorService } from '../meeting-behavior-service';
@@ -39,6 +38,8 @@ interface AgendaDto {
 }
 
 
+import { PrintService } from '../../../../core/print/print.service';
+import { ToastService } from '../../../../services/framework-services/toast.service';
 @Component({
   selector: 'app-meeting-agenda-tab',
   imports: [
@@ -72,6 +73,8 @@ export class MeetingAgendaTabComponent {
   private readonly passwordFlowService = inject(PasswordFlowService);
   private readonly meetingBehaviorService = inject(MeetingBehaviorService);
   private readonly tus = inject(TusUploadService);
+  private readonly printService = inject(PrintService);
+  private readonly toast = inject(ToastService);
   // ═══════════════════════════════════════════════════════════
   // Signals - State Management
   // ═══════════════════════════════════════════════════════════
@@ -83,7 +86,6 @@ export class MeetingAgendaTabComponent {
   readonly currentMember = signal<MeetingMember | null>(null);
   readonly agendas = signal<AgendaItem[]>([]);
   readonly meetingGuid = signal<string>('');
-  readonly siteUrl = signal<string>(environment.selfEndpoint);
   readonly isEditingAgenda = signal<boolean>(false);
   readonly isSaving = signal<boolean>(false);
 
@@ -562,103 +564,25 @@ export class MeetingAgendaTabComponent {
   // ═══════════════════════════════════════════════════════════
 
   print(): void {
-    const printContent = document.getElementById("printSection")?.innerHTML;
-    if (!printContent) return;
+    const meeting = this.meeting();
+    if (!meeting) return;
 
-    const newWin = window.open("", "_blank", "width=900,height=700");
-    if (!newWin) return;
-
-    const styles = Array.from(document.styleSheets)
-      .map((styleSheet) => {
-        try {
-          return Array.from(styleSheet.cssRules)
-            .map((rule) => rule.cssText)
-            .join("\n");
-        } catch (e) {
-          return "";
-        }
-      })
-      .join("\n");
-
-    newWin.document.open();
-    newWin.document.write(`
-      <html>
-        <head>
-          <title>چاپ دستورهای جلسه</title>
-         <style>
-          ${styles}
-          body {
-            direction: rtl;
-            text-align: right;
-            margin: 20px;
-            background-color: #f8f9fa;
-          }
-          .header-container {
-            border: 2px solid #007bff;
-            border-radius: 12px;
-            padding: 15px;
-            background-color: #e9f2ff;
-            margin-bottom: 20px;
-            text-align: center;
-            position: relative;
-          }
-          .header-container img {
-            width: 60px;
-            height: 60px;
-            display: block;
-            margin: 0 auto 10px;
-          }
-          .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
-          .header-content h2 {
-            font-size: 20px;
-            color: #007bff;
-            margin: 0;
-          }
-          .header-content p {
-            margin: 0;
-            font-size: 16px;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-          }
-          table, th, td {
-            border: 1px solid #000;
-          }
-          th, td {
-            padding: 10px;
-            font-size: 14px;
-            border-top:1px solid black !important;
-            border-bottom:1px solid black !important;
-          }
-          th {
-            background: #007bff;
-            color: black;
-            font-weight:800;
-          }
-          tr:nth-child(even) {
-            background: #f2f2f2;
-          }
-        </style>
-        </head>
-        <body>
-          ${printContent}
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(() => window.close(), 100);
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    newWin.document.close();
+    void this.printService
+      .print('agenda', {
+        meeting: {
+          title: meeting.title ?? '',
+          number: meeting.number ?? '',
+          date: meeting.mtDate ?? '',
+          startTime: meeting.startTime ?? '',
+          location: meeting.location ?? '',
+          chairman: meeting.chairman ?? '',
+          secretary: meeting.secretary ?? '',
+        },
+        agendas: this.agendas().map(a => ({ text: a.text ?? '', files: this.getFileCount(a) })),
+      }, { title: 'دستور جلسه' })
+      .catch((e: any) => this.toast.error(e?.message || 'خطا در آماده‌سازی چاپ'));
   }
+
   private hasPermission(permission: string): boolean {
     return this.permissions().has(permission);
   }
