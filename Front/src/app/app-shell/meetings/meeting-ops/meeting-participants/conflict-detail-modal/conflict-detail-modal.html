@@ -1,0 +1,46 @@
+<!-- Modal: جزئیات تداخل شخص -->
+<div class="modal fade" id="conflictDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h6 class="modal-title">
+                    <i class="fas fa-calendar-times me-2"></i>جلسه تداخل‌دار
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            @if (conflict()) {
+            <div class="modal-body p-2">
+                <table class="table table-sm table-borderless mb-0">
+                    <tr>
+                        <td class="text-muted" style="width:75px"><small>عنوان</small></td>
+                        <td><strong>{{ conflict()?.conflictMeetingTitle }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted"><small>شماره</small></td>
+                        <td>{{ conflict()?.conflictMeetingNumber || '—' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted"><small>ساعت</small></td>
+                        <td>
+                            {{ conflict()?.conflictMeetingStartTime }}
+                            –
+                            {{ conflict()?.conflictMeetingEndTime }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted"><small>ثبت‌کننده</small></td>
+                        <td>{{ conflict()?.conflictMeetingCreatorName || '—' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted"><small>تاریخ ثبت</small></td>
+                        <td>{{ conflict()?.conflictMeetingCreatedDate || '—' }}</td>
+                    </tr>
+                </table>
+            </div>
+            }
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">بستن</button>
+            </div>
+        </div>
+    </div>
+</div>
