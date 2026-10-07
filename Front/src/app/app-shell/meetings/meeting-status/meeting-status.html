@@ -10,7 +10,7 @@
           </div>
           }
           <app-label-button identifier="addBtn" label="افزودن" variant="success" (clicked)="openOpsModal()"
-            permission="MT_MeetingStatus_Add">
+            permission="MT_Statuses_Add">
           </app-label-button>
         </div>
       </div>
@@ -29,7 +29,7 @@
           <h5 class="text-muted">هیچ وضعیتی یافت نشد</h5>
           <p class="text-muted">برای شروع، یک وضعیت جدید اضافه کنید.</p>
           <app-label-button identifier="addFirstBtn" label="افزودن اولین وضعیت" variant="primary"
-            (clicked)="openOpsModal()" permission="MT_MeetingStatus_Add">
+            (clicked)="openOpsModal()" permission="MT_Statuses_Add">
           </app-label-button>
         </div>
         } @else {
@@ -76,7 +76,7 @@
                   <div class="btn-group btn-group-sm" role="group">
                     @if (item.isActive === 1) {
                     <app-icon-button identifier="editBtn{{ $index }}" label="ویرایش" icon="fa fa-edit"
-                      variant="primary" (clicked)="openOpsModal(item.guid)" permission="MT_MeetingStatus_Edit">
+                      variant="primary" (clicked)="openOpsModal(item.guid)" permission="MT_Statuses_Edit">
                     </app-icon-button>
 
                     }

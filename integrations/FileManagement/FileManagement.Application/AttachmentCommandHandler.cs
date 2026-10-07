@@ -27,7 +27,8 @@ public class AttachmentCommandHandler(
     IUserManagementAclService userManagementAclService,
     IClassificationService classificationService,
     FileStorageLocations storageLocations,
-    Microsoft.AspNetCore.Http.IHttpContextAccessor httpContextAccessor)
+    Microsoft.AspNetCore.Http.IHttpContextAccessor httpContextAccessor,
+    FileManagement.Domain.UploadSessionAgg.IUploadSessionRepository uploadSessionRepository)
     :
         ICommandHandlerAsync<CreateAttachment, Guid>,
         ICommandHandlerAsync<EditAttachment>,
@@ -147,16 +148,29 @@ public class AttachmentCommandHandler(
     private sealed record Actor(Guid UserGuid, Guid? SystemGuid, bool IsSuperAdmin);
 
     /// <summary>
-    /// حذف مجاز است برای: ایجادکننده‌ی فایل، سامانه‌ی صاحب فایل (همان client_id که پوشه‌اش را ساخته؛
-    /// کنترل دسترسی کسب‌وکاری با خود آن سامانه است) و مدیر کل. سامانه‌ها نمی‌توانند فایل یکدیگر را حذف کنند.
+    /// حذف مجاز است برای: ایجادکننده‌ی فایل، سامانه‌ی صاحب فایل (همان client_id که فایل را بارگذاری کرده؛
+    /// کنترل دسترسی کسب‌وکاری با خود آن سامانه است، مثلاً در جلسات رئیس و دبیرها فایل‌های یکدیگر را مدیریت می‌کنند)
+    /// و مدیر کل. سامانه‌ها نمی‌توانند فایل یکدیگر را حذف کنند.
+    /// سامانه‌ی صاحب فایل از پوشه (Classification) و برای فایل‌های بدون پوشه از جلسه‌ی آپلود (UploadSession) تعیین می‌شود.
     /// </summary>
     private async Task<bool> CanDeleteAsync(Domain.AttachmentAgg.Attachment entity, Actor actor)
     {
         if (actor.IsSuperAdmin || entity.CreatedBy == actor.UserGuid) return true;
-        if (actor.SystemGuid == null || entity.ClassificationId <= 0) return false;
+        if (actor.SystemGuid == null) return false;
 
-        var classification = await classificationRepository.LoadAsync(entity.ClassificationId);
-        return classification != null && classification.SystemGuid == actor.SystemGuid;
+        if (entity.ClassificationId > 0)
+        {
+            var classification = await classificationRepository.LoadAsync(entity.ClassificationId);
+            if (classification != null) return classification.SystemGuid == actor.SystemGuid;
+        }
+
+        if (!string.IsNullOrWhiteSpace(entity.TusFileId))
+        {
+            var session = await uploadSessionRepository.GetByTusFileIdAsync(entity.TusFileId);
+            if (session != null) return session.SystemGuid == actor.SystemGuid;
+        }
+
+        return false;
     }
 
     private async Task<Actor> GetActorAsync()

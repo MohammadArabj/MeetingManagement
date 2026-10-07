@@ -11,8 +11,10 @@ using Microsoft.Extensions.Configuration;
 namespace MeetingManagement.Application;
 
 /// <summary>
-/// حذف فایل پیوست. حذف فقط برای کسی مجاز است که در جلسه‌ی صاحب فایل اجازه‌ی تغییر آن بخش را دارد
-/// (پیوست جلسه: بارگذاری فایل، پیوست مصوبه: مدیریت مصوبات + دسترسی حذف فایل، دستور جلسه: مدیریت دستور جلسه).
+/// حذف فایل پیوست. حذف برای کسی مجاز است که در جلسه‌ی صاحب فایل اجازه‌ی تغییر آن بخش را دارد
+/// (پیوست جلسه: بارگذاری فایل، پیوست مصوبه: مدیریت مصوبات، دستور جلسه: مدیریت دستور جلسه).
+/// بارگذاری‌کننده مهم نیست: رئیس، دبیر و دبیر غیرعضو فایل‌های یکدیگر را مدیریت می‌کنند
+/// (مثلاً دبیر فایل می‌گذارد و رئیس آن را حذف می‌کند). در جلسات بسته‌شده فقط ادمین.
 /// </summary>
 public class FileCommandHandler(
     IFileRepository repository,
@@ -31,8 +33,7 @@ public class FileCommandHandler(
         var allowed = file.Type switch
         {
             FileType.Meeting => access.Can(MeetingCapability.UploadFiles),
-            FileType.Resolution => access.Can(MeetingCapability.ManageResolutions)
-                                   && identity.HasPermission(Permissions.ResolutionsDeleteFiles),
+            FileType.Resolution => access.Can(MeetingCapability.ManageResolutions),
             FileType.Agenda => access.Can(MeetingCapability.ManageAgenda),
             _ => false,
         };
