@@ -11,6 +11,7 @@ import { MeetingMemberService } from './meeting-member.service';
 import { LocalStorageService } from './framework-services/local.storage.service';
 import { ToastService } from './framework-services/toast.service';
 import { signatureImageUrl } from '../core/media/media-token';
+import { toRichHtml } from '../core/rich-text/rich-text';
 
 type PrintSingleArgs = {
   resolution: Resolution;
@@ -137,7 +138,7 @@ export class MeetingPrintService {
     return {
       number,
       title: x.title ?? '',
-      text: x.description || x.text || '',
+      text: toRichHtml(x.description || x.text || ''),
       assignments: ((x.assignments ?? []) as any[]).map(a => ({
         actor: a.actorName ?? '',
         type: a.type ?? '',
@@ -152,9 +153,9 @@ export class MeetingPrintService {
     return {
       number,
       title: x.title ?? '',
-      documentation: x.documentation ?? '',
-      description: x.description || x.text || '',
-      decisionsMade: x.decisionsMade ?? '',
+      documentation: toRichHtml(x.documentation),
+      description: toRichHtml(x.description || x.text || ''),
+      decisionsMade: toRichHtml(x.decisionsMade),
     };
   }
 

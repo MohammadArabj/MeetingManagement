@@ -276,7 +276,7 @@
                                     <i class="fas fa-folder-open"></i>
                                     <span>مستندات</span>
                                 </div>
-                                <div class="content-text" [innerHTML]="resolution.documentation"></div>
+                                <app-rich-text-view class="content-text d-block" [value]="resolution.documentation" />
                             </div>
                             }
                             @if(resolution.description) {
@@ -285,7 +285,7 @@
                                     <i class="fas fa-align-left"></i>
                                     <span>توضیحات</span>
                                 </div>
-                                <div class="content-text" [innerHTML]="resolution.description"></div>
+                                <app-rich-text-view class="content-text d-block" [value]="resolution.description" />
                             </div>
                             }
                             @if(resolution.decisionsMade) {
@@ -294,7 +294,7 @@
                                     <i class="fas fa-align-left"></i>
                                     <span>تصمیمات متخذه</span>
                                 </div>
-                                <div class="content-text" [innerHTML]="resolution.decisionsMade"></div>
+                                <app-rich-text-view class="content-text d-block" [value]="resolution.decisionsMade" />
                             </div>
                             }
                         </div>
@@ -509,7 +509,7 @@
         <button type="button" class="btn-close" (click)="modal.dismiss()"></button>
     </div>
     <div class="modal-body">
-        <div [innerHTML]="modalContent"></div>
+        <app-rich-text-view [value]="modalContent" />
     </div>
     <div class="modal-footer">
         <button type="button" class="btn btn-secondary" (click)="modal.close()">انصراف</button>
@@ -522,7 +522,7 @@
         <button type="button" class="btn-close" (click)="modal.dismiss()"></button>
     </div>
     <div class="modal-body">
-        <div [innerHTML]="modalContent"></div>
+        <app-rich-text-view [value]="modalContent" />
     </div>
     <div class="modal-footer">
         <button type="button" class="btn btn-secondary" (click)="modal.close()">انصراف</button>

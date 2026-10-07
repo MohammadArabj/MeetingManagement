@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { MeetingMember } from '../../../../../core/models/Meeting';
 import { ToastService } from '../../../../../services/framework-services/toast.service';
 import { MeetingRoles } from '../../../../../core/meeting-access/meeting-roles';
+import { RichTextEditorComponent } from '../../../../../shared/rich-text-editor/rich-text-editor.component';
+import { RichTextViewComponent } from '../../../../../shared/rich-text-editor/rich-text-view.component';
 
 interface DescriptionValidation {
   isValid: boolean;
@@ -13,7 +15,7 @@ interface DescriptionValidation {
 @Component({
   selector: 'app-meeting-description',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, RichTextEditorComponent, RichTextViewComponent],
   templateUrl: './meeting-description.html',
   styleUrl: './meeting-description.css',
 })
@@ -82,7 +84,7 @@ export class MeetingDescriptionComponent implements OnInit {
     if (description.length > 2000) {
       return {
         isValid: false,
-        errorMessage: 'حداکثر تعداد مجاز ۲۰۰۰ کاراکتر است.'
+        errorMessage: 'شرح جلسه (همراه قالب‌بندی) از ۲۰۰۰ کاراکتر بیشتر است؛ آن را کوتاه‌تر کنید.'
       };
     }
 
@@ -140,10 +142,10 @@ export class MeetingDescriptionComponent implements OnInit {
   saveMeetingDescription(): void {
     const validation = this.descriptionValidation();
 
-    // if (!validation.isValid) {
-    //   this.toastService.error(validation.errorMessage!);
-    //   return;
-    // }
+    if (!validation.isValid) {
+      this.toastService.error(validation.errorMessage!);
+      return;
+    }
 
     if (!this.hasChanges()) {
       this.toastService.warning('تغییری در شرح جلسه ایجاد نشده است.');

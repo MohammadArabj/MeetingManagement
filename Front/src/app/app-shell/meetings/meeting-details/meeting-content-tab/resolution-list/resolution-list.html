@@ -120,8 +120,7 @@
         </div>
         <div class="card-body">
           <div class="mt-3">
-            <p class="text-justify mb-3 space-preline" [innerHTML]="resolution.text" style="text-align: justify">
-            </p>
+            <app-rich-text-view class="d-block mb-3" [value]="resolution.text" />
           </div>
         </div>
         @if(resolution.assignments.length > 0) {
@@ -227,8 +226,7 @@
         </div>
         <div class="card-body">
           <div class="mt-3">
-            <p class="text-justify mb-3 space-preline" style="text-align: justify" [innerHTML]="resolution.text">
-            </p>
+            <app-rich-text-view class="d-block mb-3" [value]="resolution.text" />
           </div>
         </div>
         @if(resolution.assignments.length > 0) {

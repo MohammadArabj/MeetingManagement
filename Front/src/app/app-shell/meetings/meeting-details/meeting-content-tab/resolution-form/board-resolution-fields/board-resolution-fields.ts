@@ -4,6 +4,7 @@ import { ControlContainer, ReactiveFormsModule } from '@angular/forms';
 import { CustomInputComponent } from '../../../../../../shared/custom-controls/custom-input';
 import { CustomSelectComponent } from '../../../../../../shared/custom-controls/custom-select';
 import { ComboBase } from '../../../../../../shared/combo-base';
+import { RichTextEditorComponent } from '../../../../../../shared/rich-text-editor/rich-text-editor.component';
 
 /**
  * فیلدهای اصلی مصوبه هیئت مدیره (موضوع، مستندات، جلسه/مصوبه پیرو، کمیسیون معاملات و ...).
@@ -13,7 +14,7 @@ import { ComboBase } from '../../../../../../shared/combo-base';
 @Component({
   selector: 'app-board-resolution-fields',
   standalone: true,
-  imports: [ReactiveFormsModule, CustomInputComponent, CustomSelectComponent],
+  imports: [ReactiveFormsModule, CustomInputComponent, CustomSelectComponent, RichTextEditorComponent],
   viewProviders: [
     { provide: ControlContainer, useFactory: () => inject(ControlContainer, { skipSelf: true }) },
   ],

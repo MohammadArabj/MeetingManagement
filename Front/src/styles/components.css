@@ -323,3 +323,18 @@ textarea.form-control { min-height: 5rem; line-height: 1.8; }
 .rounded-3 { border-radius: var(--mm-radius) !important; }
 .border { border-color: var(--mm-border) !important; }
 .border-top, .border-bottom, .border-start, .border-end { border-color: var(--mm-border) !important; }
+
+/* ── متن قالب‌بندی‌شده (ویرایشگر و نمایش) ─────────────────── */
+.mm-rich { color: var(--mm-text); line-height: 2; font-size: .93rem; overflow-wrap: anywhere; text-align: justify; }
+.mm-rich > :first-child { margin-top: 0; }
+.mm-rich > :last-child { margin-bottom: 0; }
+.mm-rich p { margin: 0 0 .6rem; }
+.mm-rich h3 { font-size: 1.08rem; font-weight: 800; color: var(--mm-ink); margin: 1rem 0 .5rem; }
+.mm-rich h4 { font-size: .98rem; font-weight: 700; color: var(--mm-ink); margin: .8rem 0 .4rem; }
+.mm-rich ul, .mm-rich ol { margin: 0 0 .6rem; padding-inline-start: 1.5rem; }
+.mm-rich li { margin: .15rem 0; }
+.mm-rich li > p { margin: 0; }
+.mm-rich blockquote { margin: .6rem 0; padding: .45rem .9rem; border-inline-start: 4px solid var(--mm-primary-200, #b9cdf0); background: var(--mm-surface-2); border-radius: var(--mm-radius-sm, 6px); color: var(--mm-muted); }
+.mm-rich mark { background: rgba(var(--mm-accent-rgb), .22); color: inherit; padding: 0 .15rem; border-radius: 3px; }
+.mm-rich a { color: var(--mm-primary); text-decoration: underline; text-underline-offset: 3px; }
+.mm-rich hr { border: 0; border-top: 1px dashed var(--mm-border-strong); margin: .9rem 0; opacity: 1; }

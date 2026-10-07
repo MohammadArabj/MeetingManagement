@@ -25,6 +25,7 @@ import { AppSettings } from '../../../services/system-setting.service';
 import { HasPermissionDirective } from '../../../core/directives/has-permission.directive';
 import { MeetingPrintService } from '../../../services/meeting-print.service';
 import { Resolution } from '../../../core/models/Resolution';
+import { plainTextCell, richTextToPlain } from '../../../core/rich-text/rich-text';
 
 @Component({
   selector: 'app-resolution-search',
@@ -270,12 +271,7 @@ export class ResolutionSearchComponent extends AgGridBaseComponent implements On
         maxWidth: 350,
         minWidth: 250,
         cellStyle: { 'font-family': 'Sahel', fontWeight: '500' },
-        cellRenderer: (params: any) => {
-          if (params.value && params.value.length > 50) {
-            return `<span title="${params.value}">${params.value.substring(0, 50)}...</span>`;
-          }
-          return params.value;
-        }
+        cellRenderer: plainTextCell(50)
       },
       {
         field: 'decisions',
@@ -285,12 +281,7 @@ export class ResolutionSearchComponent extends AgGridBaseComponent implements On
         maxWidth: 300,
         minWidth: 200,
         cellStyle: { 'font-family': 'Sahel' },
-        cellRenderer: (params: any) => {
-          if (params.value && params.value.length > 40) {
-            return `<span title="${params.value}">${params.value.substring(0, 40)}...</span>`;
-          }
-          return params.value;
-        }
+        cellRenderer: plainTextCell(40)
       },
       {
         field: 'description',

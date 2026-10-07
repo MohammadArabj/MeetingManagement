@@ -60,11 +60,13 @@ import { ResolutionFilesPanelComponent } from './resolution-files-panel/resoluti
 import { BoardResolutionFieldsComponent } from './board-resolution-fields/board-resolution-fields';
 import { BoardAssignmentsEditorComponent } from './board-assignments-editor/board-assignments-editor';
 import { RegularAssignmentsEditorComponent } from './regular-assignments-editor/regular-assignments-editor';
+import { RichTextEditorComponent } from '../../../../../shared/rich-text-editor/rich-text-editor.component';
 
 @Component({
   selector: 'app-resolution-form',
   standalone: true,
   imports: [
+    RichTextEditorComponent,
     ReactiveFormsModule,
     FormsModule,
     CustomInputComponent,

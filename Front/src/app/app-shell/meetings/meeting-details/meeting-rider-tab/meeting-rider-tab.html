@@ -9,11 +9,11 @@
                 }
                 }
             </div>
-            <div class="card-body" style="height: 400px; overflow-y: auto;">
+            <div class="card-body" style="max-height: 640px; overflow-y: auto;">
                 <!-- نمایش متن فقط اگر در حالت ویرایش نباشیم و مقدار داشته باشد -->
                 @if (!isEditingRider() && rider()) {
                 <div class="mt-3">
-                    <p class="text-justify mb-3" style="text-align: justify">{{ rider() }}</p>
+                    <app-rich-text-view class="d-block mb-3" [value]="rider()" />
                     @if (file()) {
                     <div class="d-flex align-items-center">
                         <i class="fa fa-paperclip text-secondary me-2"></i>
@@ -42,22 +42,16 @@
                 @if (meetingRoles.isManager(roleId()) && !currentMember().isDelegate && (isEditingRider() || !rider())) {
                 <div class="mt-3">
                     <div class="row">
-                        <div class="col-md-7">
+                        <div class="col-lg-7">
                             <div class="form-group">
-                                <label for="" class="form-label">متن</label>
-                                <textarea rows="10" class="form-control" [(ngModel)]="editableRider"></textarea>
-                                <small class="text-muted d-block mt-1">
-                                    {{ editableRider.length || 0 }}/1000 کاراکتر
-                                </small>
-                                @if ((editableRider.length) > 1000) {
-                                <div class="text-danger mt-1">
-                                    حداکثر تعداد مجاز ۱۰۰۰ کاراکتر است.
-                                </div>
-                                }
+                                <label class="form-label fw-semibold" for="rider-text">متن الحاقیه</label>
+                                <app-rich-text-editor id="rider-text" [ngModel]="editableRider()"
+                                    (ngModelChange)="updateEditableRider($event)" [maxLength]="1000"
+                                    [minHeight]="180" [maxHeight]="300" placeholder="متن الحاقیه…" />
                             </div>
                         </div>
-                        <div class="col-md-5">
-                            <label for="" class="form-label">فایل</label>
+                        <div class="col-lg-5">
+                            <label for="file" class="form-label fw-semibold">فایل</label>
                             <input type="file" id="file" class="form-control" (change)="onFileChange($event)"
                                 autocomplete="off" />
                         </div>

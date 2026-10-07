@@ -11,6 +11,7 @@ import { ToastService } from '../../../../../services/framework-services/toast.s
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ReportMode } from '../../../../../core/types/configuration';
 import { AgendaService } from '../../../../../services/agenda.service';
+import { RichTextViewComponent } from '../../../../../shared/rich-text-editor/rich-text-view.component';
 
 declare var Swal: any;
 interface FileItem {
@@ -39,7 +40,8 @@ interface FileItem {
 @Component({
   selector: 'app-board-resolution-list',
   templateUrl: './board-resolution-list.html',
-  styleUrl: './board-resolution-list.css'
+  styleUrl: './board-resolution-list.css',
+  imports: [RichTextViewComponent],
 })
 export class BoardResolutionList {
   private destroyRef = inject(DestroyRef);

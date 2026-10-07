@@ -7,11 +7,12 @@ import { MeetingDetails } from '../../../../../core/models/Meeting';
 import { Resolution } from '../../../../../core/models/Resolution';
 import { NgClass } from '@angular/common';
 import { ReportMode } from '../../../../../core/types/configuration';
+import { RichTextViewComponent } from '../../../../../shared/rich-text-editor/rich-text-view.component';
 
 @Component({
   selector: 'app-resolution-list',
   standalone: true,
-  imports: [CdkDropList, CdkDrag, NgbDropdownModule, NgClass],
+  imports: [CdkDropList, CdkDrag, NgbDropdownModule, NgClass, RichTextViewComponent],
   templateUrl: './resolution-list.html',
   styleUrl: './resolution-list.css',
 })

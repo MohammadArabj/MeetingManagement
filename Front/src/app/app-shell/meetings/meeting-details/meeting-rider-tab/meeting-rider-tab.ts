@@ -11,12 +11,15 @@ import { Modal } from 'bootstrap';
 import { MeetingBehaviorService } from '../meeting-behavior-service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MeetingRoles } from '../../../../core/meeting-access/meeting-roles';
+import { RichTextEditorComponent } from '../../../../shared/rich-text-editor/rich-text-editor.component';
+import { RichTextViewComponent } from '../../../../shared/rich-text-editor/rich-text-view.component';
+import { ToastService } from '../../../../services/framework-services/toast.service';
 
 declare var Swal: any;
 
 @Component({
   selector: 'app-meeting-rider-tab',
-  imports: [FormsModule],
+  imports: [FormsModule, RichTextEditorComponent, RichTextViewComponent],
   templateUrl: './meeting-rider-tab.html',
   styleUrl: './meeting-rider-tab.css'
 })
@@ -79,6 +82,7 @@ export class MeetingRiderTabComponent implements OnInit {
     private readonly zone: NgZone,
     private readonly meetingBehaviorService: MeetingBehaviorService,
     private readonly fileService: FileService,
+    private readonly toastService: ToastService,
   ) {
     // Effect to handle meeting GUID from input or route
     effect(() => {
@@ -161,7 +165,8 @@ export class MeetingRiderTabComponent implements OnInit {
     const selectedFile = this.selectedFile();
 
     if (editableText.length > 1000) {
-      return; // اگر طول متن بیشتر از 1000 کاراکتر باشد، ویرایش انجام نشود
+      this.toastService.error('متن الحاقیه (همراه قالب‌بندی) از ۱۰۰۰ کاراکتر بیشتر است؛ آن را کوتاه‌تر کنید.');
+      return;
     }
 
     this._isEditingRider.set(false);

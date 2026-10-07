@@ -64,8 +64,14 @@
             اطلاعات اصلی مصوبه
           </h6>
           <div class="row">
-            <custom-input [type]="'textarea'" label="توضیحات" formControlName="description" identity="description"
-              size="col-12" styleType="simple" rows="8" [required]="true"></custom-input>
+            <div class="col-12 mb-2">
+              <label class="form-label fw-semibold" for="resolution-description">متن مصوبه <span class="text-danger">*</span></label>
+              <app-rich-text-editor id="resolution-description" formControlName="description" [maxLength]="2000"
+                [minHeight]="200" [maxHeight]="420" placeholder="متن مصوبه را بنویسید…" />
+              @if (regularResolutionForm.get('description')?.touched && regularResolutionForm.get('description')?.hasError('required')) {
+                <div class="text-danger small mt-1">متن مصوبه الزامی است.</div>
+              }
+            </div>
           </div>
         </div>
 

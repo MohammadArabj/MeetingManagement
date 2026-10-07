@@ -76,6 +76,7 @@ interface ResolutionSummaryReportDto {
 }
 
 import { PrintService } from '../../../core/print/print.service';
+import { richTextToPlain, toRichHtml } from '../../../core/rich-text/rich-text';
 @Component({
   selector: 'app-resolution-report',
   standalone: true,
@@ -325,6 +326,7 @@ export class ResolutionReportComponent extends AgGridBaseComponent implements On
         minWidth: 180,
         flex: 1,
         filter: 'agTextColumnFilter',
+        valueGetter: (p: any) => richTextToPlain(p.data?.decisionsMade),
         cellRenderer: 'longTextCell',
         cellRendererParams: { max: 40 }
       },
@@ -334,6 +336,7 @@ export class ResolutionReportComponent extends AgGridBaseComponent implements On
         minWidth: 150,
         flex: 1,
         filter: 'agTextColumnFilter',
+        valueGetter: (p: any) => richTextToPlain(p.data?.description),
         cellRenderer: 'longTextCell',
         cellRendererParams: { max: 35 }
       }
@@ -670,7 +673,7 @@ export class ResolutionReportComponent extends AgGridBaseComponent implements On
           <td>${this.getActionStatusText(item.actionStatus)}</td>
           <td>${item.actionStatus === ActionStatus.End ? this.getResultText(item.result) : '-'}</td>
           <td>${item.description || '-'}</td>
-          ${withDecisions ? `<td>${item.meetingCategory === 'هیئت مدیره' ? (item.decisionsMade || '-') : (item.resolutionText || '-')}</td>` : ''}
+          ${withDecisions ? `<td>${(item.meetingCategory === 'هیئت مدیره' ? toRichHtml(item.decisionsMade) : toRichHtml(item.resolutionText)) || '-'}</td>` : ''}
       </tr>
     `).join('');
 

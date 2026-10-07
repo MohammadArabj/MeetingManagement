@@ -11,12 +11,21 @@
     }
     <custom-input label="موضوع مصوبه" formControlName="title" identity="title" size="col-12" [required]="true"
       styleType="simple"></custom-input>
-    <custom-input label="مستندات" formControlName="documentation" identity="documentation" size="col-12"
-      styleType="simple" type="textarea"></custom-input>
-    <custom-input [type]="'textarea'" label="توضیحات" formControlName="description" identity="description"
-      size="col-12" styleType="simple"></custom-input>
-    <custom-input [type]="'textarea'" label="تصمیمات متخذه" formControlName="decisionsMade"
-      identity="decisionsMade" size="col-12" styleType="simple"></custom-input>
+    <div class="col-12 mb-3">
+      <label class="form-label fw-semibold" for="board-documentation">سوابق و مستندات</label>
+      <app-rich-text-editor id="board-documentation" formControlName="documentation" [minHeight]="120" [maxHeight]="320"
+        placeholder="سوابق، نامه‌ها و مستندات مرتبط…" />
+    </div>
+    <div class="col-12 mb-3">
+      <label class="form-label fw-semibold" for="board-description">توضیحات</label>
+      <app-rich-text-editor id="board-description" formControlName="description" [maxLength]="2000" [minHeight]="140"
+        [maxHeight]="360" placeholder="توضیحات مصوبه…" />
+    </div>
+    <div class="col-12 mb-3">
+      <label class="form-label fw-semibold" for="board-decisions">تصمیمات متخذه</label>
+      <app-rich-text-editor id="board-decisions" formControlName="decisionsMade" [minHeight]="140" [maxHeight]="360"
+        placeholder="تصمیمات هیئت مدیره…" />
+    </div>
     <custom-select label="جلسه پیرو" formControlName="parentMeetingGuid" identity="parentMeetingGuid"
       (changed)="parentMeetingChange.emit($event)" size="col-6" styleType="simple"
       [options]="previousMeetings()"></custom-select>

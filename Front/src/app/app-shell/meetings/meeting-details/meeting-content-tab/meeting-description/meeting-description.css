@@ -1,0 +1,2 @@
+.desc-body { max-height: 640px; overflow-y: auto; }
+@media (max-width: 1199.98px) { .desc-body { max-height: none; } }

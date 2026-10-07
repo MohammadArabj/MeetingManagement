@@ -70,7 +70,7 @@
         @if (meeting()?.description) {
         <section class="mn-block">
             <h6>شرح جلسه</h6>
-            <div class="mn-text space-preline">{{ meeting()?.description }}</div>
+            <app-rich-text-view class="mn-text d-block" [value]="meeting()?.description" />
         </section>
         }
 

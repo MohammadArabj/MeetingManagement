@@ -91,6 +91,7 @@ export interface FollowupReportData {
 type StatusFilter = 'all' | 'completed' | 'inProgress' | 'pending' | 'overdue';
 
 import { PrintService } from '../../../../core/print/print.service';
+import { toRichHtml } from '../../../../core/rich-text/rich-text';
 @Component({
   selector: 'app-meeting-followup-tab',
   standalone: true,
@@ -677,7 +678,7 @@ export class MeetingFollowupTabComponent implements OnInit {
             <span class="resolution-number">مصوبه ${resolution.resolutionNumber || (rIndex + 1)}</span>
             <span class="resolution-title">${resolution.resolutionTitle || ''}</span>
           </div>
-          ${resolution.resolutionText ? `<div class="resolution-text">${resolution.resolutionText}</div>` : ''}
+          ${resolution.resolutionText ? `<div class="resolution-text">${toRichHtml(resolution.resolutionText)}</div>` : ''}
           ${resolution.decisionsMade ? `<div class="resolution-decisions"><strong>تصمیمات:</strong> ${resolution.decisionsMade}</div>` : ''}
           <div class="assignments-section">${assignmentsHtml}</div>
         </div>

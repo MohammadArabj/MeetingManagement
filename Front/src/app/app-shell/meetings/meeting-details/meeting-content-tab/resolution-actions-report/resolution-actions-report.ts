@@ -83,6 +83,7 @@ export interface MeetingActionsReportDto {
 
 
 import { PrintService } from '../../../../../core/print/print.service';
+import { toRichHtml } from '../../../../../core/rich-text/rich-text';
 @Component({
   selector: 'app-resolution-actions-report',
   standalone: true,
@@ -420,7 +421,7 @@ export class ResolutionActionsReportComponent {
           ${resolution.resolutionText ? `
             <div class="resolution-text">
               <div class="section-title">متن مصوبه:</div>
-              <div class="content">${resolution.resolutionText}</div>
+              <div class="content">${toRichHtml(resolution.resolutionText)}</div>
             </div>
           ` : ''}
           ${resolution.decisionsMade ? `

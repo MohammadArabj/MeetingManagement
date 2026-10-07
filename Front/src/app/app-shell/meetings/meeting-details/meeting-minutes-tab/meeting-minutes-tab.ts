@@ -43,8 +43,9 @@ import { ToastService } from '../../../../services/framework-services/toast.serv
 import { FileManagerModalComponent } from '../../../../shared/file-manager/file-manger-modal.component';
 import { MeetingRoles } from '../../../../core/meeting-access/meeting-roles';
 import { PrintService } from '../../../../core/print/print.service';
-import { escapeHtml } from '../../../../core/print/template-engine';
 import { signatureImageUrl } from '../../../../core/media/media-token';
+import { toRichHtml } from '../../../../core/rich-text/rich-text';
+import { RichTextViewComponent } from '../../../../shared/rich-text-editor/rich-text-view.component';
 
 declare var $: any;
 declare var Swal: any;
@@ -59,7 +60,7 @@ interface FormattedAssignment {
 @Component({
   selector: 'app-meeting-minutes-tab',
   standalone: true,
-  imports: [HelpButtonComponent, 
+  imports: [RichTextViewComponent, HelpButtonComponent, 
     CommonModule,
     CustomInputComponent,
     ReactiveFormsModule,
@@ -656,7 +657,6 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
   private buildMinutesData(meeting: any, isDraft: boolean): Record<string, unknown> {
     const members = this.members();
     const groups = this.formattedAssignments();
-    const textToHtml = (text?: string) => (text ? escapeHtml(text).replace(/\r?\n/g, '<br>') : '');
 
     return {
       isDraft,
@@ -679,11 +679,11 @@ export class MeetingMinutesTabComponent implements OnInit, OnDestroy {
       guests: members
         .filter(m => m.isExternal || MeetingRoles.isGuest(m.roleId))
         .map(m => ({ name: m.name, organization: m.organization ?? '' })),
-      description: textToHtml(meeting.description),
-      rider: textToHtml(meeting.rider),
+      description: toRichHtml(meeting.description),
+      rider: toRichHtml(meeting.rider),
       resolutions: (this.resolutions() ?? []).map((r: Resolution, i: number) => ({
         number: i + 1,
-        text: r.text || (r as any).description || '',
+        text: toRichHtml(r.text || (r as any).description || ''),
         assignments: (groups[i] ?? []).map(g => ({
           actor: g.actionerNames.split('<br/> ').join('، '),
           type: g.type,
