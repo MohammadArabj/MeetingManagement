@@ -23,7 +23,8 @@ public static class ExceptionMiddlewareExtension
                     if (error is BusinessException)
                     {
                         context.Response.StatusCode = UserControlledErrorCode;
-                        await context.Response.WriteAsync(error.ToString());
+                        // فقط پیام (قبلاً ToString کامل با Stack Trace به کاربر برمی‌گشت)
+                        await context.Response.WriteAsync(error.Message);
                     }
                     else
                     {
@@ -34,10 +35,10 @@ public static class ExceptionMiddlewareExtension
                                 context.Response.StatusCode = UserControlledErrorCode;
                                 await context.Response.WriteAsync("ردیف مورد نظر در سایر قسمت ها استفاده شده است.");
                             }
-                            else if (error.Message.Contains("could not execute query"))
+                            else
                             {
-                                context.Response.StatusCode = UserControlledErrorCode;
-                                await context.Response.WriteAsync(error.InnerException.Message);
+                                // پیام خام SQL (نام جدول/ستون) به کاربر نشان داده نمی‌شود
+                                await context.Response.WriteAsync("خطایی رخ داده است.");
                             }
                         }
                         else

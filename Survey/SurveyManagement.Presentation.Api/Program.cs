@@ -58,9 +58,11 @@ builder.Services.AddScoped<IResponseExcelExportService, ResponseExcelExportServi
 builder.Services.AddScoped<ILegacyResponseDemographicMigrationService, LegacyResponseDemographicMigrationService>();
 builder.Services.AddScoped<IParticipantExcelExportService, ParticipantExcelExportService>();
 builder.Services.AddControllers().AddNewtonsoftJson();
+// فایل‌ها با tus مستقیماً در سامانه مدیریت فایل آپلود می‌شوند؛ این API فقط درخواست‌های کوچک می‌پذیرد
+// (قبلاً ۵۰۰ مگابایت؛ همراه با بافر کامل AntiXss هر درخواست می‌توانست حافظه را پر کند).
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Limits.MaxRequestBodySize = 524288000;
+    options.Limits.MaxRequestBodySize = 30 * 1024 * 1024;
 });
 var authorities = builder.Configuration.GetSection("IdentityAuthorities");
 builder.Services.AddAuthentication("Bearer")
