@@ -19,7 +19,6 @@ builder.Services.AddRazorPages();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddLogging();
-builder.Services.AddRazorPages();
 builder.Services.Configure<GzipCompressionProviderOptions>
     (options => options.Level = CompressionLevel.Fastest);
 
@@ -56,7 +55,7 @@ var authorities = builder.Configuration.GetSection("IdentityAuthorities");
 builder.Services.AddAuthentication("Bearer")
     .AddJwtBearer("Bearer", options =>
     {
-        options.RequireHttpsMetadata = false;
+        options.RequireHttpsMetadata = builder.Configuration.GetValue("Auth:RequireHttpsMetadata", false);
         options.Authority = authorities["0"];
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -85,14 +84,29 @@ builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
 });
 
 var app = builder.Build();
-var autofacContainer = app.Services.GetAutofacRoot();
-ServiceLocator.SetCurrent(new AutofacServiceLocator(autofacContainer));
+// هندلرهای Bus از Scope همان درخواست ساخته شوند (نه Container ریشه؛ توضیح در RequestScopedServiceLocator)
+ServiceLocator.SetCurrent(new RequestScopedServiceLocator(
+    app.Services.GetAutofacRoot(), app.Services.GetRequiredService<IHttpContextAccessor>()));
+
+CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("fa-IR");
+CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("fa-IR");
+
+app.UseRequestLocalization(new RequestLocalizationOptions
+{
+    DefaultRequestCulture = new RequestCulture("fa-IR"),
+    SupportedCultures = new List<CultureInfo> { new("fa-IR") },
+    SupportedUICultures = new List<CultureInfo> { new("fa-IR") },
+});
 
 app.UseResponseCompression();
 
 app.UseStaticFiles();
-app.UseDeveloperExceptionPage();
-IdentityModelEventSource.ShowPII = true;
+if (app.Environment.IsDevelopment())
+{
+    // ⚠️ فقط در محیط توسعه (قبلاً در Production هم جزئیات خطا و اطلاعات توکن نمایش داده می‌شد)
+    app.UseDeveloperExceptionPage();
+    IdentityModelEventSource.ShowPII = true;
+}
 
 app.UseHttpsRedirection();
 
@@ -114,14 +128,4 @@ app.MapControllers().RequireAuthorization("SurveyManagementApi");
 app.MapRazorPages();
 app.MapDefaultControllerRoute();
 
-CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("fa-IR");
-CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("fa-IR");
-
-app.UseRequestLocalization(new RequestLocalizationOptions
-{
-    DefaultRequestCulture = new RequestCulture("fa-IR"),
-    SupportedCultures = new List<CultureInfo> { new("fa-IR") },
-    SupportedUICultures = new List<CultureInfo> { new("fa-IR") },
-
-});
 app.Run();
