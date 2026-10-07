@@ -94,6 +94,7 @@ public class MeetingQueryHandler(
             FilterType.Finished => query.Where(m => m.StatusId == MeetingStatusIds.Finalized),
             FilterType.Draft => query.Where(m => m.StatusId == MeetingStatusIds.Draft),
             FilterType.Canceled => query.Where(m => m.StatusId == MeetingStatusIds.Cancelled),
+            FilterType.Archived => query.Where(m => m.StatusId == MeetingStatusIds.Completed),
             FilterType.Undetermined => query.Where(m =>
                 m.StatusId == MeetingStatusIds.Undetermined
                 || ((m.StatusId == MeetingStatusIds.Draft || m.StatusId == MeetingStatusIds.Registered || m.StatusId == MeetingStatusIds.Held)

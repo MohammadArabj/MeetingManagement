@@ -1,14 +1,9 @@
 import { Routes } from '@angular/router';
 import { AppShellComponent } from './app-shell/app-shell';
-import { BoardMemberComponent } from './app-shell/board-member/board-member';
-import { DashboardComponent } from './app-shell/dashboard/dashboard';
-import { SearchComponent } from './app-shell/search/search';
 import { ChallengeComponent } from './authentication/challenge/challange';
 import { authGuard } from './core/guards/auth.guard.service';
 import { clientAccessGuard } from './core/guards/client.access.guard.service';
 import { sessionGuard } from './core/guards/session.guard.service';
-import { CalendarComponent } from './app-shell/calendar/calendar';
-import { UserList } from './app-shell/user/user';
 import { permissionGuard } from './core/guards/permission.guard';
 
 export const routes: Routes = [
@@ -20,7 +15,7 @@ export const routes: Routes = [
         canActivateChild: [sessionGuard],
         children: [
             { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
-            { path: 'dashboard', component: DashboardComponent },
+            { path: 'dashboard', loadComponent: () => import('./app-shell/dashboard/dashboard').then(m => m.DashboardComponent) },
             {
                 path: 'meetings',
                 loadChildren: () =>
@@ -41,10 +36,10 @@ export const routes: Routes = [
                 canActivate: [permissionGuard('MT_Settings', 'MT_UserRoles', 'MT_PrintTemplates')],
                 loadChildren: () => import('./app-shell/settings/settings.routes').then(m => m.settingsRoutes)
             },
-            { path: 'user', component: UserList, canActivate: [permissionGuard('MT_User_ViewAll')] },
-            { path: 'boardMember', component: BoardMemberComponent, canActivate: [permissionGuard('MT_BoardMembers')] },
-            { path: 'calendar', component: CalendarComponent },
-            { path: 'search', component: SearchComponent },
+            { path: 'user', canActivate: [permissionGuard('MT_User_ViewAll')], loadComponent: () => import('./app-shell/user/user').then(m => m.UserList) },
+            { path: 'boardMember', canActivate: [permissionGuard('MT_BoardMembers')], loadComponent: () => import('./app-shell/board-member/board-member').then(m => m.BoardMemberComponent) },
+            { path: 'calendar', loadComponent: () => import('./app-shell/calendar/calendar').then(m => m.CalendarComponent) },
+            { path: 'search', loadComponent: () => import('./app-shell/search/search').then(m => m.SearchComponent) },
         ]
     },
     {

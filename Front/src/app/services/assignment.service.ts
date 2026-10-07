@@ -91,9 +91,6 @@ export interface AssignmentActorDto {
 })
 export class AssignmentService extends ServiceBase {
 
-
-
-
   constructor() {
     super("Assignment");
   }
@@ -107,11 +104,6 @@ export class AssignmentService extends ServiceBase {
     const path = `${this.baseUrl}/GetBy`
     return this.httpService.post<T>(path, model, new RequestConfig({ submitted: false }), false);
   }
-
-  getCompleteAssignmentInfo(assignmentId: number): Observable<CompleteAssignmentInfo> {
-    return this.httpService.get<any>(`${this.baseUrl}/GetCompleteAssignmentInfo/${assignmentId}`);
-  }
-
 
   getBoardActors(): Observable< AssignmentActorDto[] > {
     return this.httpService.get<any>(`${this.baseUrl}/GetBoardActors`);
@@ -203,234 +195,6 @@ export class AssignmentService extends ServiceBase {
     return this.httpService.get<PendingActionCounts>(`${this.baseUrl}/GetPendingActionCounts/${positionGuid}`);
   }
 
-  /**
-   * Get detailed list of assignments by view type
-   */
-  getAssignmentsByViewType(request: {
-    userGuid: string;
-    positionGuid: string;
-    viewType: number; // 1: Original, 2: Received Referrals, 3: Given Referrals
-    filter?: string;
-    actionStatus?: string;
-    followStatus?: string;
-  }): Observable<any[]> {
-    return this.httpService.post(`${this.baseUrl}/GetAssignmentsByViewType`, request, new RequestConfig({ noValidate: true }));
-  }
-
-  /**
-   * Get assignments that are pending action for follow-up purposes
-   */
-  getPendingActionsForFollowUp(request: {
-    userGuid: string;
-    positionGuid: string;
-    statusFilter?: string;
-  }): Observable<any[]> {
-    return this.httpService.post(`${this.baseUrl}/GetPendingActionsForFollowUp`, request, new RequestConfig({ noValidate: true }));
-  }
-
-  /**
-   * Get summary statistics for dashboard
-   */
-  getDashboardSummary(positionGuid: string): Observable<{
-    totalAssignments: number;
-    activeAssignments: number;
-    overdueAssignments: number;
-    completedThisMonth: number;
-    avgCompletionTime: number;
-    topActors: { name: string; count: number }[];
-    urgentActions: number;
-  }> {
-    return this.httpService.get(`${this.baseUrl}/GetDashboardSummary/${positionGuid}`);
-  }
-
-  /**
-   * Get referral chain for a specific assignment
-   */
-  getReferralChain(assignmentId: number): Observable<{
-    originalAssignment: any;
-    referralChain: any[];
-    totalLevels: number;
-    currentLevel: number;
-  }> {
-    return this.httpService.get(`${this.baseUrl}/GetReferralChain/${assignmentId}`);
-  }
-
-  /**
-   * Bulk operations for assignments
-   */
-  bulkUpdateAssignmentStatus(request: {
-    assignmentIds: number[];
-    newStatus: string;
-    note?: string;
-  }): Observable<any> {
-    return this.httpService.post(`${this.baseUrl}/BulkUpdateAssignmentStatus`, request, new RequestConfig({ noValidate: true }));
-  }
-
-  /**
-   * Get assignments that need attention (overdue, pending, etc.)
-   */
-  getAssignmentsNeedingAttention(positionGuid: string): Observable<{
-    overdue: any[];
-    dueSoon: any[];
-    pendingAction: any[];
-    pendingFollowUp: any[];
-  }> {
-    return this.httpService.get(`${this.baseUrl}/GetAssignmentsNeedingAttention/${positionGuid}`);
-  }
-
-  /**
-   * Search assignments with advanced filters
-   */
-  searchAssignments(request: {
-    userGuid: string;
-    positionGuid: string;
-    searchTerm?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    meetingNumber?: string;
-    category?: string;
-    actor?: string;
-    follower?: string;
-    status?: string;
-    priority?: string;
-    pageNumber?: number;
-    pageSize?: number;
-  }): Observable<{
-    items: any[];
-    totalCount: number;
-    pageNumber: number;
-    pageSize: number;
-    totalPages: number;
-  }> {
-    return this.httpService.post(`${this.baseUrl}/SearchAssignments`, request, new RequestConfig({ noValidate: true }));
-  }
-
-  /**
-   * Export assignments to Excel with filters
-   */
-  exportAssignments(request: {
-    userGuid: string;
-    positionGuid: string;
-    viewType?: number;
-    filters?: any;
-    exportFormat: 'excel' | 'pdf' | 'csv';
-  }): Observable<Blob> {
-    return this.httpService.post(`${this.baseUrl}/ExportAssignments`, request,
-      new RequestConfig({
-
-        submitted: true
-      }), false);
-  }
-
-  /**
-   * Get assignment statistics for reporting
-   */
-  getAssignmentStatistics(request: {
-    positionGuid: string;
-    dateFrom: string;
-    dateTo: string;
-    groupBy: 'month' | 'week' | 'day';
-    includeReferrals: boolean;
-  }): Observable<{
-    statistics: any[];
-    summary: {
-      totalAssignments: number;
-      completedAssignments: number;
-      pendingAssignments: number;
-      overdueAssignments: number;
-      averageCompletionDays: number;
-    };
-  }> {
-    return this.httpService.post(`${this.baseUrl}/GetAssignmentStatistics`, request, new RequestConfig({ noValidate: true }));
-  }
-
-  /**
-   * Get user activity timeline
-   */
-  getUserActivityTimeline(request: {
-    userGuid: string;
-    positionGuid: string;
-    dateFrom: string;
-    dateTo: string;
-    pageNumber?: number;
-    pageSize?: number;
-  }): Observable<{
-    activities: {
-      id: number;
-      timestamp: string;
-      actionType: string;
-      description: string;
-      assignmentId: number;
-      assignmentTitle: string;
-      meetingNumber: string;
-    }[];
-    totalCount: number;
-  }> {
-    return this.httpService.post(`${this.baseUrl}/GetUserActivityTimeline`, request, new RequestConfig({ noValidate: true }));
-  }
-
-  /**
-   * Mark assignment as read/viewed
-   */
-  markAsViewed(assignmentId: number): Observable<any> {
-    return this.httpService.post(`${this.baseUrl}/MarkAsViewed/${assignmentId}`, {}, new RequestConfig({ noValidate: true }));
-  }
-
-  /**
-   * Get unread assignment count
-   */
-  getUnreadCount(positionGuid: string): Observable<{ count: number }> {
-    return this.httpService.get(`${this.baseUrl}/GetUnreadCount/${positionGuid}`);
-  }
-
-  /**
-   * Set assignment priority
-   */
-  setAssignmentPriority(assignmentId: number, priority: 'High' | 'Medium' | 'Low'): Observable<any> {
-    return this.httpService.post(`${this.baseUrl}/SetAssignmentPriority`, {
-      assignmentId,
-      priority
-    }, new RequestConfig({ noValidate: true }));
-  }
-
-  /**
-   * Add private note to assignment
-   */
-  addPrivateNote(assignmentId: number, note: string): Observable<any> {
-    return this.httpService.post(`${this.baseUrl}/AddPrivateNote`, {
-      assignmentId,
-      note
-    }, new RequestConfig({ noValidate: true }));
-  }
-
-  /**
-   * Get assignment notifications settings
-   */
-  getNotificationSettings(userGuid: string): Observable<{
-    emailNotifications: boolean;
-    smsNotifications: boolean;
-    overdueReminders: boolean;
-    dailyDigest: boolean;
-    weeklyReport: boolean;
-  }> {
-    return this.httpService.get(`${this.baseUrl}/GetNotificationSettings/${userGuid}`);
-  }
-
-  /**
-   * Update notification settings
-   */
-  updateNotificationSettings(userGuid: string, settings: {
-    emailNotifications: boolean;
-    smsNotifications: boolean;
-    overdueReminders: boolean;
-    dailyDigest: boolean;
-    weeklyReport: boolean;
-  }): Observable<any> {
-    return this.httpService.post(`${this.baseUrl}/UpdateNotificationSettings`, {
-      userGuid,
-      ...settings
-    }, new RequestConfig({ noValidate: true }));
-  }
   createActionResult(actionData: any): Observable<unknown> {
     const path = `${this.baseUrl}/CreateActionResult`;
     return this.httpService.post(path, actionData, new RequestConfig({ noValidate: true }));
@@ -442,7 +206,6 @@ export class AssignmentService extends ServiceBase {
     );
   }
 }
-
 
 export interface AssignmentTreeNode {
   id: number;

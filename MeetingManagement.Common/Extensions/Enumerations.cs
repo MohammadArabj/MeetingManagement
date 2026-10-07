@@ -175,7 +175,9 @@ public enum FilterType : byte
     Draft,
     Canceled,
     Attendance,
-    Undetermined
+    Undetermined,
+    /// <summary>بایگانی: جلسات اتمام‌یافته</summary>
+    Archived
 }
 
 public enum NotificationChannel

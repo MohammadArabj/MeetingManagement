@@ -104,8 +104,8 @@
         <div class="text-truncate"><b> مدیریت کاربران</b></div>
       </a>
     </li>
-    <li *hasPermission="['MT_Archive']" class="menu-item" routerLinkActive="active">
-      <a class="menu-link" routerLink="/archive">
+    <li *hasPermission="['MT_Archive']" class="menu-item">
+      <a class="menu-link" routerLink="/meetings/list" [queryParams]="{ filter: 'Archived' }">
         <i class="menu-icon tf-icons fa fa-archive"></i>
         <div class="text-truncate"><b>بایگانی</b></div>
       </a>
