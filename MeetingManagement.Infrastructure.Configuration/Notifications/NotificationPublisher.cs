@@ -30,6 +30,7 @@ namespace MeetingManagement.Infrastructure.Configuration.Notifications;
 public sealed class NotificationPublisher(
     MeetingManagementCommandContext db,
     IUserManagementAclService aclService,
+    IRealtimeNotifier realtime,
     ILogger<NotificationPublisher> logger) : INotificationPublisher
 {
     public const string StatusPending = "pending";
@@ -129,6 +130,16 @@ public sealed class NotificationPublisher(
                 };
                 alarm.Receivers.Add(new AlarmReceiver { PositionGuid = position, IsRead = false });
                 db.Alarms.Add(alarm);
+
+                // ✅ اعلان لحظه‌ای (SignalR سامانه + پرتال SSO) — پس از Commit عملیات ارسال می‌شود
+                realtime.Enqueue(new RealtimeMessage(
+                    Type: code.ToString(),
+                    Title: definition.Title,
+                    Message: message,
+                    Link: values.GetValueOrDefault("Link"),
+                    MeetingGuid: Guid.TryParse(values.GetValueOrDefault("MeetingGuid"), out var mg) ? mg : null,
+                    UserGuids: r.UserGuid is { } ug ? [ug] : [],
+                    PositionGuids: [position]));
             }
         }
     }
@@ -166,6 +177,7 @@ public sealed class NotificationPublisher(
         values.TryAdd("Location", meeting.RoomLink ?? meeting.RoomName ?? meeting.RoomTitle);
         values.TryAdd("CategoryTitle", meeting.CategoryTitle);
         values.TryAdd("Link", BuildLink($"/#/meetings/details/{meeting.Guid}"));
+        values.TryAdd("MeetingGuid", meeting.Guid?.ToString());
 
         foreach (var m in meeting.Members)
         {

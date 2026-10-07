@@ -55,8 +55,14 @@ public sealed class ActingIdentityResolver(
         var tokenPosition = currentUser.PositionGuid;
         var headers = httpContextAccessor.HttpContext?.Request.Headers;
 
-        var actingUser = Guid.TryParse(headers?[ActingUserHeader].FirstOrDefault(), out var au) && au != Guid.Empty ? au : tokenUser;
-        var position = Guid.TryParse(headers?[PositionHeader].FirstOrDefault(), out var p) && p != Guid.Empty ? p : tokenPosition;
+        // اتصال WebSocket (Hub) هدر سفارشی ندارد؛ همان مقادیر از Query String خوانده می‌شوند و مثل هدر راستی‌آزمایی می‌شوند
+        var request = httpContextAccessor.HttpContext?.Request;
+        var isHub = request?.Path.StartsWithSegments("/hubs") == true;
+        var actingRaw = headers?[ActingUserHeader].FirstOrDefault() ?? (isHub ? request!.Query["actingUser"].FirstOrDefault() : null);
+        var positionRaw = headers?[PositionHeader].FirstOrDefault() ?? (isHub ? request!.Query["positionGuid"].FirstOrDefault() : null);
+
+        var actingUser = Guid.TryParse(actingRaw, out var au) && au != Guid.Empty ? au : tokenUser;
+        var position = Guid.TryParse(positionRaw, out var p) && p != Guid.Empty ? p : tokenPosition;
 
         if (position is null)
             return _resolved = TokenOnly(tokenUser, tokenPosition, verified: actingUser == tokenUser);
@@ -137,7 +143,10 @@ public sealed class ActingIdentityResolver(
     private HttpClient? CreateClient()
     {
         var baseUrl = configuration["UserManagementUrl"]?.TrimEnd('/');
-        var token = httpContextAccessor.HttpContext?.Request.Headers.Authorization.FirstOrDefault();
+        var request = httpContextAccessor.HttpContext?.Request;
+        var token = request?.Headers.Authorization.FirstOrDefault();
+        if (string.IsNullOrEmpty(token) && request?.Query["access_token"].FirstOrDefault() is { Length: > 0 } queryToken)
+            token = "Bearer " + queryToken;
         if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(token)) return null;
 
         var client = httpClientFactory.CreateClient(HttpClientName);

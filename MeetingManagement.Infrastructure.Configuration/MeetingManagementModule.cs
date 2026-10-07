@@ -41,6 +41,7 @@ public class MeetingManagementModule(string connectionString) : Module
         builder.RegisterType<MeetingRoleConfigService>().AsSelf().As<IMeetingRoleConfigService>().InstancePerLifetimeScope();
         builder.RegisterType<NotificationPublisher>().As<INotificationPublisher>().InstancePerLifetimeScope();
         builder.RegisterType<AssignmentPublication>().AsSelf().InstancePerLifetimeScope();
+        builder.RegisterType<RealtimeNotifier>().As<IRealtimeNotifier>().InstancePerLifetimeScope();
         builder.RegisterType<NotificationAdminService>().AsSelf().InstancePerLifetimeScope();
         builder.RegisterType<HttpSmsSender>().As<ISmsSender>().InstancePerLifetimeScope();
         builder.RegisterType<ServiceTokenProvider>().As<IServiceTokenProvider>().SingleInstance();

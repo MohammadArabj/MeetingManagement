@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, inject, Renderer2 } from '@angular/core';
+import { AfterViewInit, Component, DestroyRef, inject, Renderer2 } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { SwalService } from '../services/framework-services/swal.service';
 import { BreadcrumbComponent } from './breadcrumb/breadcrumb';
@@ -6,6 +6,7 @@ import { HeaderComponent } from './header/header';
 import { SidebarComponent } from './sidebar/sidebar';
 import { SidebarService } from '../services/framework-services/sidebar.service';
 import { SystemSettingService } from '../services/system-setting.service';
+import { RealtimeService } from '../core/realtime/realtime.service';
 
 @Component({
   selector: 'app-app-shell',
@@ -16,26 +17,18 @@ import { SystemSettingService } from '../services/system-setting.service';
 })
 export class AppShellComponent implements AfterViewInit {
   readonly sidebar = inject(SidebarService);
-systemSettingService = inject(SystemSettingService);
-  
+  readonly systemSettingService = inject(SystemSettingService);
+  private readonly realtime = inject(RealtimeService);
 
-  // @HostListener('window:beforeunload', ['$event'])
-  // handleBeforeUnload(event: BeforeUnloadEvent) {
-  //   // مثلا خروج از سیستم یا پاک کردن session
-  //   console.log('در حال خروج از برنامه');
-
-  //   // اگر می‌خواهی از کاربر تایید بگیری:
-  //   event.preventDefault();
-  //   event.returnValue = ''; // برای نمایش دیالوگ پیش‌فرض مرورگر
-  // }
-  constructor(
-    private renderer: Renderer2) { }
+  constructor(private renderer: Renderer2) {
+    // اعلان لحظه‌ای فقط داخل پوسته‌ی برنامه (پس از ورود)
+    this.realtime.bindTo(inject(DestroyRef));
+    void this.realtime.start();
+  }
   ngAfterViewInit() {
     this.loadScripts([
       'js/main.js'
     ]);
-  //  this.systemSettingService.initializePublicSettings();
-
   }
 
   private loadScripts(scripts: string[]): void {

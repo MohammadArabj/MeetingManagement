@@ -28,6 +28,7 @@ namespace MeetingManagement.Infrastructure.Configuration.Job;
 public sealed class NotificationReminderJob(
     MeetingManagementCommandContext db,
     INotificationPublisher publisher,
+    IRealtimeNotifier realtime,
     ILogger<NotificationReminderJob> logger) : IJob
 {
     private static readonly TimeSpan DailyReminderTime = TimeSpan.FromHours(8);
@@ -58,6 +59,7 @@ public sealed class NotificationReminderJob(
 
         watermarkRow.UpdateValue(SettingValues.SystemGuid, now.ToString("O", CultureInfo.InvariantCulture));
         await db.SaveChangesAsync(ct);
+        await realtime.FlushAsync(ct);
 
         if (published > 0)
             logger.LogInformation("NotificationReminderJob published {Count} events in window {From}..{To}", published, from, now);

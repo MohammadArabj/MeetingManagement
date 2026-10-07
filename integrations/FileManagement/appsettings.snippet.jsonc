@@ -1,0 +1,16 @@
+// افزودنی/تغییر در appsettings.json (یا appsettings.Production.json) سامانه مدیریت فایل
+{
+  "TusSettings": {
+    // ⚠️ نباید زیر wwwroot باشد (فایل‌های نیمه‌کاره بدون احراز هویت قابل دانلود می‌شدند)
+    "StoragePath": "App_Data/tus-uploads",
+    "MaxFileSizeBytes": 5368709120
+  },
+  "FileSettings": {
+    // کلید امضای آدرس فایل‌ها (یک رشته‌ی تصادفی طولانی؛ در همه‌ی سرورهای این سامانه یکسان)
+    "UrlSigningKey": "",
+    // مدت اعتبار هر آدرس امضاشده (دقیقه)
+    "UrlLifetimeMinutes": 120,
+    // فقط برای دوره‌ی گذار می‌توان false گذاشت (نامن)
+    "RequireSignedUrls": true
+  }
+}

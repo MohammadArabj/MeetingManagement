@@ -1,0 +1,215 @@
+@model EPC.SSO.Quickstart.Grants.GrantsViewModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "داشبورد | پورتال یکپارچه سازمانی";
+    var canViewProfiles = (bool)(ViewData["CanViewUserProfiles"] ?? false);
+    string[] palette = ["#f97316", "#0ea5e9", "#10b981", "#8b5cf6", "#ef4444", "#14b8a6", "#f59e0b", "#6366f1", "#ec4899", "#22c55e"];
+    var grants = Model.Grants.ToList();
+}
+@section style {
+    <link href="~/css/announcement-modal.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/css/jalali-calendar.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/css/page-tour.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+}
+
+<main class="p-container db" data-personnel-code="@Model.PersonnelCode">
+    <div class="db-grid">
+        @* ═══════════ ستون اصلی ═══════════ *@
+        <div class="db-col">
+            <section class="p-card" id="systemsCard">
+                <div class="p-card__head">
+                    <h2 class="p-card__title"><span class="p-card__icon"><i class="fa fa-rocket"></i></span> سامانه‌های در دسترس</h2>
+                    <div class="db-actions">
+                        <a class="db-act" asp-controller="PhoneDirectory" asp-action="Index" target="_blank" rel="noopener" title="دفترچه تلفن"><i class="fa fa-address-book"></i><span>دفترچه تلفن</span></a>
+                        <button type="button" class="db-act login-history-btn" id="btnSessions" title="سوابق ورود"><i class="fa fa-clock-rotate-left"></i><span>سوابق ورود</span></button>
+                        @if (canViewProfiles)
+                        {
+                            <button type="button" class="db-act user-profile-btn" id="btnProfiles" title="ورود به پروفایل کاربران"><i class="fa fa-id-badge"></i><span>پروفایل کاربران</span></button>
+                        }
+                    </div>
+                </div>
+
+                <div class="db-toolbar">
+                    <div class="db-tabs" role="tablist">
+                        <button class="db-tab is-active" role="tab" data-tab="web"><i class="fa fa-globe"></i> تحت وب <span class="db-tab__n">@grants.Count</span></button>
+                        <button class="db-tab" role="tab" data-tab="win" id="tabWin" hidden><i class="fa fa-desktop"></i> ویندوزی <span class="db-tab__n" id="countWin">0</span></button>
+                        <button class="db-tab" role="tab" data-tab="other" id="tabOther" hidden><i class="fa fa-layer-group"></i> سایر <span class="db-tab__n" id="countOther">0</span></button>
+                    </div>
+                    <label class="db-search">
+                        <i class="fa fa-magnifying-glass"></i>
+                        <input type="search" id="appSearch" placeholder="جستجوی سامانه..." autocomplete="off" aria-label="جستجوی سامانه" />
+                        <kbd>/</kbd>
+                    </label>
+                </div>
+
+                <div class="db-pane" data-pane="web">
+                    <div class="db-apps" id="systemsGrid">
+                        @for (var i = 0; i < grants.Count; i++)
+                        {
+                            var g = grants[i];
+                            var hasUrl = !string.IsNullOrWhiteSpace(g.ClientUrl);
+                            var logo = g.ClientLogoUrl ?? "";
+                            var isImg = logo.StartsWith("/") || logo.StartsWith("http", StringComparison.OrdinalIgnoreCase) || logo.StartsWith("data:");
+                            <div class="db-app" tabindex="0" role="link" style="--_c:@palette[i % palette.Length];animation-delay:@(Math.Min(i, 24) * 15)ms"
+                                 data-id="web:@g.ClientId" data-url="@g.ClientUrl" data-name="@g.ClientName" data-desc="@g.Description" title="@(string.IsNullOrWhiteSpace(g.Description) ? g.ClientName : g.Description)">
+                                @if (!hasUrl) { <span class="db-app__soon">به‌زودی</span> }
+                                <button type="button" class="db-app__pin" aria-label="سنجاق" title="سنجاق به ابتدای لیست"><i class="fa fa-star"></i></button>
+                                <span class="db-app__icon">
+                                    @if (isImg) { <img src="@logo" alt="" loading="lazy" /> }
+                                    else if (!string.IsNullOrWhiteSpace(logo)) { <span>@logo</span> }
+                                    else { <i class="fa fa-globe"></i> }
+                                </span>
+                                <span class="db-app__name">@g.ClientName</span>
+                            </div>
+                        }
+                    </div>
+                    @if (grants.Count == 0)
+                    {
+                        <div class="p-empty"><i class="fa fa-box-open"></i>سامانه‌ای برای سمت فعلی شما تعریف نشده است</div>
+                    }
+                </div>
+                <div class="db-pane" data-pane="win" hidden><div class="db-apps" id="windowsAppsGrid"></div></div>
+                <div class="db-pane" data-pane="other" hidden><div class="db-apps" id="otherProgramsGrid"></div></div>
+                <div class="p-empty" id="appsNoResult" hidden><i class="fa fa-magnifying-glass"></i>موردی با این عبارت پیدا نشد</div>
+            </section>
+
+            <section class="p-card" id="surveysCard">
+                <div class="p-card__head">
+                    <h2 class="p-card__title">
+                        <span class="p-card__icon p-card__icon--green">
+                        <i class="fa fa-poll"></i>
+                        </span> نظرسنجی‌های فعال</h2>
+                    <span class="p-card__count" id="countSurveys">…</span>
+                </div>
+                <div class="db-list db-list--survey p-scroll db-surveys-grid" id="surveyContainer">
+                    <div class="p-skel" style="height:66px"></div><div class="p-skel" style="height:66px"></div>
+                </div>
+            </section>
+        </div>
+
+        @* ═══════════ ستون کناری ═══════════ *@
+        <aside class="db-col db-side">
+            <section class="p-card">
+                <div class="p-card__head">
+                    <h2 class="p-card__title"><span class="p-card__icon p-card__icon--blue"><i class="fa fa-calendar"></i></span> جلسات ۴ روز آینده</h2>
+                    <span class="p-card__count" id="countMeetings">…</span>
+                </div>
+                <div class="db-list db-list--meet p-scroll" id="meetingContainer">
+                    <div class="p-skel" style="height:60px"></div><div class="p-skel" style="height:60px"></div>
+                </div>
+            </section>
+
+            <section class="p-card">
+                <div class="p-card__head">
+                    <h2 class="p-card__title"><span class="p-card__icon"><i class="fa fa-bullhorn"></i></span> اطلاعیه‌ها <span class="p-card__count" id="countUnread" title="خوانده‌نشده" hidden></span></h2>
+                    <a class="p-card__link see-all" asp-controller="Grants" asp-action="AnnouncementArchive">آرشیو <i class="fa fa-arrow-left"></i></a>
+                </div>
+                <div class="db-list db-list--ann p-scroll" id="announceContainer">
+                    <div class="p-skel" style="height:48px"></div><div class="p-skel" style="height:48px"></div><div class="p-skel" style="height:48px"></div>
+                </div>
+            </section>
+
+            <section class="p-card">
+                <div class="p-card__head">
+                    <h2 class="p-card__title"><span class="p-card__icon p-card__icon--violet"><i class="fa fa-trophy"></i></span> پیشنهاد دهندگان برتر سال</h2>
+                </div>
+                <div class="db-sugg" id="suggestionList"><div class="p-skel" style="position:absolute;inset:0;opacity:.2"></div></div>
+            </section>
+        </aside>
+    </div>
+</main>
+
+@section modals {
+    @Html.AntiForgeryToken()
+
+    @* جزئیات اطلاعیه — شناسه‌ها توسط announcement-common.js استفاده می‌شوند *@
+    <div class="modal fade" id="annDetailModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header text-white" id="annDetailHeader" style="background:var(--navy)">
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="annDetailIcon" style="font-size:1.2rem"></span>
+                        <h5 class="modal-title mb-0" id="annDetailTitle">در حال بارگذاری...</h5>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="بستن"></button>
+                </div>
+                <div class="modal-body" id="annDetailBody"></div>
+                <div class="modal-footer" id="annDetailFooter" style="display:none">
+                    <div class="ann-confirmed d-none" id="annConfirmedMark"><i class="fa fa-circle-check" style="color:var(--green)"></i> خواندن این اطلاعیه تأیید شد</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="db-modal-head">
+                        <h5><i class="fa fa-clock-rotate-left" style="color:var(--orange)"></i> سوابق ورود</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="بستن"></button>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div class="sess-filter-bar">
+                        <div class="sess-date-field"><label>از تاریخ</label><button type="button" class="sess-date-btn" id="sessFromBtn"><i class="fa fa-calendar-days"></i><span id="sessFromLabel">—</span></button></div>
+                        <div class="sess-date-field"><label>تا تاریخ</label><button type="button" class="sess-date-btn" id="sessToBtn"><i class="fa fa-calendar-days"></i><span id="sessToLabel">—</span></button></div>
+                        <div class="sess-presets">
+                            <button type="button" class="sess-preset-chip" data-days="7">۷ روز</button>
+                            <button type="button" class="sess-preset-chip sess-preset-chip--active" data-days="30">۱ ماه</button>
+                            <button type="button" class="sess-preset-chip" data-days="90">۳ ماه</button>
+                        </div>
+                        <div class="sess-calendar-popup" id="sessCalendarPopup"></div>
+                    </div>
+                    <div class="sess-table-wrap">
+                        <table class="table table-sm sess-table mb-0">
+                            <thead><tr><th>زمان</th><th>وضعیت</th><th>IP</th></tr></thead>
+                            <tbody id="sessionTableBody"><tr><td colspan="3" class="sess-empty-row">در حال بارگذاری...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (canViewProfiles)
+    {
+        <div class="modal fade" id="userProfileModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header flex-column align-items-stretch gap-2">
+                        <div class="db-modal-head">
+                            <h5><i class="fa fa-id-badge" style="color:var(--orange)"></i> ورود به پروفایل کاربران</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="بستن"></button>
+                        </div>
+                        <label class="db-search"><i class="fa fa-magnifying-glass"></i><input type="search" id="upSearchInput" placeholder="نام یا کد پرسنلی..." autocomplete="off" /></label>
+                    </div>
+                    <div class="db-up-list" id="upBody"></div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="db-force" id="forceReadOverlay" role="dialog" aria-modal="true" aria-labelledby="forceTitle">
+        <div class="db-force__card">
+            <div class="db-force__head"><small id="forceStep"></small><h3 id="forceTitle"></h3></div>
+            <div class="db-force__body" id="forceBody"></div>
+            <div class="db-force__foot">
+                <div class="db-force__steps" id="forceSteps"></div>
+                <button type="button" class="p-btn p-btn--primary" id="forceConfirm"><i class="fa fa-circle-check"></i> مطالعه کردم</button>
+            </div>
+        </div>
+    </div>
+
+    <button type="button" class="db-fab" id="pageTourFab"><i class="fa fa-circle-question"></i><span>راهنمای صفحه</span></button>
+}
+
+@section scripts {
+    <script src="~/js/jalali-picker.js" asp-append-version="true"></script>
+    <script src="~/js/page-tour.js" asp-append-version="true"></script>
+    <script src="~/js/announcement-common.js" asp-append-version="true"></script>
+    <script src="~/js/signalr.min.js" asp-append-version="true"></script>
+    <script src="~/js/dashboard.js" asp-append-version="true"></script>
+    <script src="~/js/portal-realtime.js" asp-append-version="true"></script>
+}

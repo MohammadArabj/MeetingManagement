@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Quartz;
 
 namespace MeetingManagement.Infrastructure.Configuration.Job;
@@ -19,15 +19,16 @@ public static class QuartzConfiguration
 
             q.AddJob<MeetingAutoCloseJob>(opts => opts
                 .WithIdentity(meetingAutoCloseJobKey)
-                .WithDescription("اتمام خودکار جلسات پس از امضای رئیس و دبیر")
+                .WithDescription("اتمام خودکار جلسات پس از امضای رئیس")
                 .StoreDurably());
 
-            // ✅ Trigger: هر شب ساعت 2:00
+            // ✅ Trigger: هر ۳۰ دقیقه (مدت انتظار پس از امضای رئیس در تنظیمات به دقیقه است)
             q.AddTrigger(opts => opts
                 .ForJob(meetingAutoCloseJobKey)
                 .WithIdentity("MeetingAutoCloseJob-Trigger")
-                .WithCronSchedule("0 0 2 * * ?") // ✅ ساعت 2:00 شب هر روز
-                .WithDescription("اجرای روزانه ساعت 2 شب"));
+                .StartAt(DateBuilder.FutureDate(2, IntervalUnit.Minute))
+                .WithSimpleSchedule(s => s.WithIntervalInMinutes(30).RepeatForever())
+                .WithDescription("اجرای هر ۳۰ دقیقه"));
 
             // ═══════════════════════════════════════════════════════════
             // Job: ارسال صف پیامک (Outbox) — هر دقیقه

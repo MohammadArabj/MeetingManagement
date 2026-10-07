@@ -1,3 +1,5 @@
+import { RealtimeService } from '../../core/realtime/realtime.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Component,
   OnInit,
@@ -28,7 +30,7 @@ import {
   ApexTitleSubtitle,
   NgApexchartsModule
 } from 'ng-apexcharts';
-import { catchError, forkJoin, of } from 'rxjs';
+import { catchError, debounceTime, forkJoin, of } from 'rxjs';
 import { ChartAutoResizeDirective } from '../../core/directives/chart-autoresize.directive';
 import { AssignmentCount } from '../../core/models/assignment-count';
 import { MeetingCount } from '../../core/models/meeting-count';
@@ -210,9 +212,17 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   };
   tooltip: ApexTooltip = {};
 
+  private readonly realtime = inject(RealtimeService);
+  private readonly destroyRef = inject(DestroyRef);
+
   constructor() {
     this.breadcrumbService.setItems([]);
     this.setupEffects();
+
+    // ثبت/تغییر جلسه یا تخصیص جدید → شمارنده‌های کارتابل فوراً به‌روز می‌شوند (با کمی تأخیر برای تجمیع چند رویداد)
+    this.realtime.notifications$
+      .pipe(debounceTime(800), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.loadDashboardData());
   }
 
   private setupEffects(): void {

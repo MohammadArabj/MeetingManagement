@@ -3,12 +3,15 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom, interval, startWith, switchMap, catchError, of, filter } from 'rxjs';
 import { SessionStore } from '../../../core/auth/session.store';
 import { AlarmItem, AlarmList, NotificationCenterService } from '../../../services/notification-center.service';
+import { RealtimeService } from '../../../core/realtime/realtime.service';
 
-const POLL_MS = 60_000;
+/** پشتیبان در صورت قطع اتصال لحظه‌ای */
+const POLL_MS = 5 * 60_000;
 
 /**
  * زنگوله اعلان‌های داخل سامانه (برای سمت فعال).
- * هر ۶۰ ثانیه (فقط وقتی تب فعال است) تعداد خوانده‌نشده‌ها را می‌گیرد و با تغییر سمت دوباره بارگذاری می‌کند.
+ * با هر اعلان لحظه‌ای (SignalR) فوراً به‌روز می‌شود؛ هر ۵ دقیقه (فقط وقتی تب فعال است) هم برای اطمینان
+ * دوباره خوانده می‌شود و با تغییر سمت دوباره بارگذاری می‌شود.
  */
 @Component({
   selector: 'app-notification-bell',
@@ -67,6 +70,7 @@ export class NotificationBellComponent {
   private readonly session = inject(SessionStore);
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly realtime = inject(RealtimeService);
 
   readonly open = signal(false);
   readonly unread = signal(0);
@@ -79,6 +83,10 @@ export class NotificationBellComponent {
       switchMap(() => this.api.myAlarms(false, 20).pipe(catchError(() => of<AlarmList>({ items: [], unread: 0 })))),
       takeUntilDestroyed(this.destroyRef),
     ).subscribe(list => this.apply(list));
+
+    this.realtime.notifications$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => void this.refresh());
 
     // با تغییر سمت فعال، اعلان‌های همان سمت نمایش داده شود
     effect(() => {

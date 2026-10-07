@@ -1,0 +1,477 @@
+diff --git a/EPC.SSO/Quickstart/Grants/GrantsController.cs b/EPC.SSO/Quickstart/Grants/GrantsController.cs
+index fb94d73..5f18441 100644
+--- a/EPC.SSO/Quickstart/Grants/GrantsController.cs
++++ b/EPC.SSO/Quickstart/Grants/GrantsController.cs
+@@ -49,6 +49,7 @@ public class GrantsController(
+     IAppCache cache,
+     IIpAccessRestrictionService ipAccessRestrictionService,
+     ExternalApiClientService externalApiClient,
++    EPC.SSO.Realtime.PortalCacheVersions cacheVersions,
+     ILogger<GrantsController> logger)
+     : Controller
+ {
+@@ -135,7 +136,7 @@ public class GrantsController(
+         var userGuid = CurrentUserGuid;
+         var positionGuid = await GetSelectedPositionGuidAsync();
+         var meetings = await cache.GetOrCreateAsync(
+-            $"meetings:{userGuid:N}:{positionGuid:N}",
++            $"meetings:{userGuid:N}:{positionGuid:N}:{cacheVersions.Of(userGuid)}",
+             ct => meetingApiService.GetMyMeetingsAsync(userGuid, positionGuid, ct),
+             TimeSpan.FromMinutes(3), StaleWindow, HttpContext.RequestAborted);
+         return Json(meetings ?? []);
+@@ -172,7 +173,7 @@ public class GrantsController(
+         var announcementsTask = Safe(() => GetDashboardAnnouncementsAsync(userGuid));
+         var surveysTask = Safe(() => cache.GetOrCreateAsync($"surveys:{userGuid:N}",
+             c => surveyApiService.GetMySurveysAsync(userGuid, c), TimeSpan.FromMinutes(3), StaleWindow, ct));
+-        var meetingsTask = Safe(() => cache.GetOrCreateAsync($"meetings:{userGuid:N}:{positionGuid:N}",
++        var meetingsTask = Safe(() => cache.GetOrCreateAsync($"meetings:{userGuid:N}:{positionGuid:N}:{cacheVersions.Of(userGuid)}",
+             c => meetingApiService.GetMyMeetingsAsync(userGuid, positionGuid, c), TimeSpan.FromMinutes(3), StaleWindow, ct));
+         var winAppsTask = Safe(async () => string.IsNullOrWhiteSpace(personnelCode)
+             ? []
+diff --git a/EPC.SSO/Realtime/PortalRealtime.cs b/EPC.SSO/Realtime/PortalRealtime.cs
+new file mode 100644
+index 0000000..a4df42c
+--- /dev/null
++++ b/EPC.SSO/Realtime/PortalRealtime.cs
+@@ -0,0 +1,170 @@
++﻿using System.Collections.Concurrent;
++using System.Security.Claims;
++using System.Security.Cryptography;
++using System.Text;
++using System.Text.Json;
++using System.Text.Json.Serialization;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.AspNetCore.SignalR;
++
++namespace EPC.SSO.Realtime;
++
++/// <summary>
++/// Hub اعلان‌های لحظه‌ای پرتال (/hubs/portal). احراز هویت با همان کوکی ورود SSO است و هر اتصال
++/// فقط در گروه کاربر خودش (claim: sub) قرار می‌گیرد.
++/// متد سمت کلاینت: <c>portalNotification</c>
++/// </summary>
++[Authorize]
++public sealed class PortalHub : Hub
++{
++    public const string Path = "/hubs/portal";
++    public const string ClientMethod = "portalNotification";
++
++    public static string UserGroup(Guid userGuid) => $"u:{userGuid:N}";
++
++    public override async Task OnConnectedAsync()
++    {
++        var sub = Context.User?.FindFirst("sub")?.Value ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
++        if (!Guid.TryParse(sub, out var userGuid))
++        {
++            Context.Abort();
++            return;
++        }
++
++        await Groups.AddToGroupAsync(Context.ConnectionId, UserGroup(userGuid));
++        await base.OnConnectedAsync();
++    }
++}
++
++/// <summary>
++/// نسخه‌ی کش داشبورد هر کاربر. با رسیدن رویداد جدید (مثلاً ثبت جلسه) نسخه افزایش می‌یابد تا
++/// ویجت‌های کش‌شده (جلسات پیش رو) بلافاصله از منبع خوانده شوند.
++/// </summary>
++public sealed class PortalCacheVersions
++{
++    private readonly ConcurrentDictionary<Guid, int> _versions = new();
++
++    public int Of(Guid userGuid) => _versions.TryGetValue(userGuid, out var v) ? v : 0;
++
++    public void Bump(Guid userGuid) => _versions.AddOrUpdate(userGuid, 1, (_, v) => v + 1);
++}
++
++/// <summary>منبع مجاز ارسال اعلان (مثلاً سامانه جلسات) و کلید مشترک آن</summary>
++public sealed class RealtimeSourceOptions
++{
++    public string Name { get; set; } = string.Empty;
++    public string SharedSecret { get; set; } = string.Empty;
++}
++
++public sealed record PortalNotification(
++    [property: JsonPropertyName("source")] string Source,
++    [property: JsonPropertyName("type")] string Type,
++    [property: JsonPropertyName("title")] string Title,
++    [property: JsonPropertyName("message")] string Message,
++    [property: JsonPropertyName("link")] string? Link,
++    [property: JsonPropertyName("occurredAt")] DateTime OccurredAt);
++
++/// <summary>
++/// دریافت اعلان از سامانه‌های دیگر و ارسال لحظه‌ای به کاربران پرتال.
++/// ─────────────────────────────────────────────────────────────────────────
++/// امنیت: درخواست باید با HMAC-SHA256 و کلید مشترک همان منبع (Realtime:Sources) امضا شده باشد:
++///   X-Realtime-Timestamp : زمان Unix (ثانیه) — حداکثر ۵ دقیقه اختلاف
++///   X-Realtime-Signature : Base64(HMAC(secret, "{timestamp}.{body}"))
++/// </summary>
++[ApiController]
++[AllowAnonymous]
++[Route("api/realtime")]
++public sealed class RealtimeController(
++    IHubContext<PortalHub> hub,
++    PortalCacheVersions cacheVersions,
++    IConfiguration configuration,
++    ILogger<RealtimeController> logger) : ControllerBase
++{
++    private static readonly TimeSpan MaxClockSkew = TimeSpan.FromMinutes(5);
++    private const int MaxBodyBytes = 256 * 1024;
++
++    private sealed class Envelope
++    {
++        [JsonPropertyName("source")] public string? Source { get; set; }
++        [JsonPropertyName("items")] public List<Item> Items { get; set; } = [];
++    }
++
++    private sealed class Item
++    {
++        [JsonPropertyName("type")] public string? Type { get; set; }
++        [JsonPropertyName("title")] public string? Title { get; set; }
++        [JsonPropertyName("message")] public string? Message { get; set; }
++        [JsonPropertyName("link")] public string? Link { get; set; }
++        [JsonPropertyName("users")] public List<Guid> Users { get; set; } = [];
++        [JsonPropertyName("occurredAt")] public DateTime? OccurredAt { get; set; }
++    }
++
++    [HttpPost("publish")]
++    [RequestSizeLimit(MaxBodyBytes)]
++    public async Task<IActionResult> Publish(CancellationToken ct)
++    {
++        Request.EnableBuffering();
++        using var reader = new StreamReader(Request.Body, Encoding.UTF8, leaveOpen: true);
++        var body = await reader.ReadToEndAsync(ct);
++
++        Envelope? envelope;
++        try
++        {
++            envelope = JsonSerializer.Deserialize<Envelope>(body);
++        }
++        catch (JsonException)
++        {
++            return BadRequest();
++        }
++
++        var source = (configuration.GetSection("Realtime:Sources").Get<List<RealtimeSourceOptions>>() ?? [])
++            .FirstOrDefault(s => string.Equals(s.Name, envelope?.Source, StringComparison.OrdinalIgnoreCase));
++        if (envelope is null || source is null || string.IsNullOrWhiteSpace(source.SharedSecret)
++            || !IsValidSignature(body, source.SharedSecret))
++        {
++            logger.LogWarning("Rejected realtime publish from {Ip} (source {Source})", HttpContext.Connection.RemoteIpAddress, envelope?.Source);
++            return Unauthorized();
++        }
++
++        foreach (var item in envelope.Items.Where(i => i.Users.Count > 0).Take(500))
++        {
++            var notification = new PortalNotification(
++                source.Name,
++                Truncate(item.Type, 64),
++                Truncate(item.Title, 200),
++                Truncate(item.Message, 1000),
++                IsSafeLink(item.Link) ? item.Link : null,
++                item.OccurredAt ?? DateTime.Now);
++
++            var users = item.Users.Distinct().Take(1000).ToList();
++            foreach (var user in users) cacheVersions.Bump(user);
++
++            await hub.Clients.Groups(users.Select(PortalHub.UserGroup).ToList())
++                .SendAsync(PortalHub.ClientMethod, notification, ct);
++        }
++
++        return Ok(new { received = envelope.Items.Count });
++    }
++
++    private bool IsValidSignature(string body, string secret)
++    {
++        var timestampRaw = Request.Headers["X-Realtime-Timestamp"].ToString();
++        var signature = Request.Headers["X-Realtime-Signature"].ToString();
++        if (!long.TryParse(timestampRaw, out var timestamp) || string.IsNullOrEmpty(signature)) return false;
++
++        var sentAt = DateTimeOffset.FromUnixTimeSeconds(timestamp);
++        if ((DateTimeOffset.UtcNow - sentAt).Duration() > MaxClockSkew) return false;
++
++        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
++        var expected = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes($"{timestampRaw}.{body}")));
++        return CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(signature));
++    }
++
++    /// <summary>فقط لینک http/https (جلوگیری از javascript: و ...)</summary>
++    private static bool IsSafeLink(string? link) =>
++        Uri.TryCreate(link, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
++
++    private static string Truncate(string? value, int max) =>
++        string.IsNullOrEmpty(value) ? string.Empty : value.Length <= max ? value : value[..max];
++}
+diff --git a/EPC.SSO/Startup.cs b/EPC.SSO/Startup.cs
+index 9ce3ea0..551ea04 100644
+--- a/EPC.SSO/Startup.cs
++++ b/EPC.SSO/Startup.cs
+@@ -155,6 +155,10 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
+         services.AddHostedService<LoginAnnouncementRefreshService>();
+         services.AddHostedService<ExternalApiWarmupService>();
+ 
++        // ─── اعلان لحظه‌ای پرتال (دریافت از سامانه‌ها با امضای HMAC و ارسال با SignalR) ───
++        services.AddSignalR();
++        services.AddSingleton<EPC.SSO.Realtime.PortalCacheVersions>();
++
+         if (environment.IsDevelopment())
+             services.AddDatabaseDeveloperPageExceptionFilter();
+     }
+@@ -217,6 +221,7 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
+         {
+             endpoints.MapHealthChecks("/health");
+             endpoints.MapControllers();
++            endpoints.MapHub<EPC.SSO.Realtime.PortalHub>(EPC.SSO.Realtime.PortalHub.Path);
+             endpoints.MapControllerRoute("default", "{controller=Account}/{action=Login}/{id?}");
+         });
+     }
+diff --git a/EPC.SSO/Views/Grants/Index.cshtml b/EPC.SSO/Views/Grants/Index.cshtml
+index 9a76af2..12ede6a 100644
+--- a/EPC.SSO/Views/Grants/Index.cshtml
++++ b/EPC.SSO/Views/Grants/Index.cshtml
+@@ -209,5 +209,7 @@
+     <script src="~/js/jalali-picker.js" asp-append-version="true"></script>
+     <script src="~/js/page-tour.js" asp-append-version="true"></script>
+     <script src="~/js/announcement-common.js" asp-append-version="true"></script>
++    <script src="~/js/signalr.min.js" asp-append-version="true"></script>
+     <script src="~/js/dashboard.js" asp-append-version="true"></script>
++    <script src="~/js/portal-realtime.js" asp-append-version="true"></script>
+ }
+diff --git a/EPC.SSO/wwwroot/js/dashboard.js b/EPC.SSO/wwwroot/js/dashboard.js
+index 8f009e3..e551d47 100644
+--- a/EPC.SSO/wwwroot/js/dashboard.js
++++ b/EPC.SSO/wwwroot/js/dashboard.js
+@@ -183,7 +183,7 @@
+     const MEETING_STATUS = {
+         1: { label: 'پیش رو', color: '#0ea5e9' },
+         2: { label: 'برگزار شده', color: '#10b981' },
+-        3: { label: 'لغو شده', color: '#ef4444' }
++        3: { label: 'اتمام یافته', color: '#64748b' }
+     };
+ 
+     function renderMeetings(list) {
+@@ -489,6 +489,16 @@
+ 
+     document.addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(); });
+ 
++    // با رسیدن اعلان لحظه‌ای سامانه جلسات (portal-realtime.js)، فقط ویجت جلسات دوباره خوانده می‌شود
++    let meetingsReloadTimer;
++    window.addEventListener('portal:notification', e => {
++        if (e.detail?.source !== 'MeetManage') return;
++        clearTimeout(meetingsReloadTimer);
++        meetingsReloadTimer = setTimeout(async () => {
++            try { renderMeetings(await getJson('/Grants/GetMeetings')); } catch { /* ویجت قبلی می‌ماند */ }
++        }, 500);
++    });
++
+     load();
+     async function load() {
+         try {
+diff --git a/EPC.SSO/wwwroot/js/portal-realtime.js b/EPC.SSO/wwwroot/js/portal-realtime.js
+new file mode 100644
+index 0000000..e8be301
+--- /dev/null
++++ b/EPC.SSO/wwwroot/js/portal-realtime.js
+@@ -0,0 +1,50 @@
++/* ════════════════════════════════════════════════════════════════════════
++   اعلان‌های لحظه‌ای پرتال (SignalR: /hubs/portal)
++   ─────────────────────────────────────────────────────────────────────────
++   • احراز هویت با کوکی SSO؛ هر کاربر فقط اعلان‌های خودش را دریافت می‌کند.
++   • با هر اعلان: نمایش toast + رویداد «portal:notification» برای به‌روزرسانی ویجت‌ها.
++   • قطع ارتباط: اتصال مجدد خودکار با فاصله‌ی افزایشی.
++   ════════════════════════════════════════════════════════════════════════ */
++(function () {
++    'use strict';
++    if (!window.signalR) return;
++
++    function show(n) {
++        const text = n.title ? `${n.title}: ${n.message || ''}` : (n.message || '');
++        if (typeof window.showToast === 'function') {
++            window.showToast(text);
++        } else {
++            console.info('[portal]', text);
++        }
++
++        // اعلان مرورگر (فقط اگر کاربر قبلاً اجازه داده باشد و صفحه در پس‌زمینه است)
++        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
++            const notification = new Notification(n.title || 'پرتال', { body: n.message || '', dir: 'rtl', lang: 'fa' });
++            if (n.link) notification.onclick = () => window.open(n.link, '_blank', 'noopener');
++        }
++    }
++
++    const connection = new signalR.HubConnectionBuilder()
++        .withUrl('/hubs/portal')
++        .withAutomaticReconnect([0, 2000, 5000, 10000, 30000, 60000])
++        .configureLogging(signalR.LogLevel.Warning)
++        .build();
++
++    connection.on('portalNotification', n => {
++        show(n);
++        window.dispatchEvent(new CustomEvent('portal:notification', { detail: n }));
++    });
++
++    async function start(delay = 0) {
++        if (delay) await new Promise(r => setTimeout(r, delay));
++        try {
++            await connection.start();
++        } catch {
++            // سرور در دسترس نیست؛ با تأخیر بیشتر دوباره تلاش می‌شود (حداکثر هر ۲ دقیقه)
++            start(Math.min((delay || 2000) * 2, 120000));
++        }
++    }
++
++    connection.onclose(() => start(5000));
++    start();
++})();
+diff --git a/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs b/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs
+index b536773..f80ce3a 100644
+--- a/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs
++++ b/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs
+@@ -38,43 +38,52 @@ namespace UserManagement.Infrastructure.Query
+         //}
+ 
+ 
++        /// <summary>
++        /// سمت‌های خود کاربر جاری + تفویض‌های فعالی که به او داده شده.
++        /// قبلاً همه‌ی کاربران و سمت‌هایشان در هر درخواست در حافظه بارگذاری می‌شد؛ این متد در هر درخواست
++        /// سامانه‌ی جلسات (برای راستی‌آزمایی سمت) صدا زده می‌شود، پس با چند Query هدفمند جایگزین شد.
++        /// </summary>
+         public async Task<List<DelegationViewModel>> Handle(DelegationGuidModel condition)
+         {
+-            var now= DateTime.Now;
++            var now = DateTime.Now;
+             var userGuid = claimHelper.GetCurrentUserGuid();
+-            var users = await context.Users
+-                .Include(user => user.Positions)
+-                .ThenInclude(userPosition => userPosition.Position).ToListAsync(); // دریافت لیست کاربران برای کاهش درخواست‌های دیتابیس
+-            var user = users.FirstOrDefault(c => c.Guid == userGuid);
+-            var position=await context.Positions.FirstOrDefaultAsync(c=>c.Guid==condition.PositionGuid);
+-            var delegations = await context.Delegations
+-                .Where(c=>c.StartDate<=now&&c.EndDate>=now)
+-                .Where(c => c.DelegatedUserId==user.Id && c.IsActive == 1)
++            var user = await context.Users.AsNoTracking()
++                .Where(u => u.Guid == userGuid)
++                .Select(u => new { u.Id, FullName = u.FirstName + " " + u.LastName })
++                .FirstOrDefaultAsync();
++            if (user is null) return [];
+ 
+-                .ToListAsync();
+-            var positions = await context.UserPositions.Include(x=>x.Position).Where(c => c.UserId == user.Id).ToListAsync();
+-            var result = delegations.Select(item => new DelegationViewModel()
+-            {
+-                Id=item.Id,
+-                Position = context.Positions.FirstOrDefault(c => c.Id == item.PositionId)?.Title??"",
+-                PositionGuid =context.Positions.FirstOrDefault(c=>c.Id==item.PositionId)?.Guid??Guid.Empty ,
+-                UserGuid = users.FirstOrDefault(c=>c.Id==item.UserId)?.Guid??Guid.Empty,
+-                UserName = (users.FirstOrDefault(u => u.Id == item.UserId)?.FirstName ?? "" )+ " " + (users.FirstOrDefault(u => u.Id == item.UserId)?.LastName ?? ""),
+-                IsDelegate = true
+-            })
+-                .ToList();
+-                result.AddRange(positions.Select(item => new DelegationViewModel()
++            var own = await context.UserPositions.AsNoTracking()
++                .Where(up => up.UserId == user.Id)
++                .Select(up => new DelegationViewModel
+                 {
+-                    UserName = user.FirstName + " " + user.LastName,
+-                    Position = item.Position.Title,
+                     Id = 0,
++                    UserName = user.FullName,
+                     UserGuid = userGuid,
++                    Position = up.Position.Title,
++                    PositionGuid = up.Position.Guid,
+                     IsDelegate = false,
+-                    PositionGuid = item.Position.Guid,
+-                    IsSuperAdmin=item.Position.IsSuperAdmin,
+-                }));
++                    IsSuperAdmin = up.Position.IsSuperAdmin,
++                })
++                .ToListAsync();
++
++            var delegated = await (
++                    from d in context.Delegations.AsNoTracking()
++                    where d.DelegatedUserId == user.Id && d.IsActive == 1 && d.StartDate <= now && d.EndDate >= now
++                    join p in context.Positions on d.PositionId equals p.Id
++                    join u in context.Users on d.UserId equals u.Id
++                    select new DelegationViewModel
++                    {
++                        Id = d.Id,
++                        UserName = (u.FirstName ?? "") + " " + (u.LastName ?? ""),
++                        UserGuid = u.Guid,
++                        Position = p.Title ?? "",
++                        PositionGuid = p.Guid,
++                        IsDelegate = true,
++                    })
++                .ToListAsync();
+ 
+-            return result.OrderBy(c => c.IsDelegate).ToList();
++            return own.Concat(delegated).ToList();
+         }
+ 
+         //async Task<List<DelegationViewModel>> IQueryHandlerAsync<List<DelegationViewModel>, Guid>.Handle(Guid condition)
+@@ -131,7 +140,18 @@ namespace UserManagement.Infrastructure.Query
+         //}
+         public async Task<string> Handle(DelegationPermissionRequestDto request)
+         {
++            // فقط تفویض‌گیرنده‌ی همان تفویض (و در بازه‌ی فعال) دسترسی‌های آن را می‌بیند
++            var now = DateTime.Now;
++            var userGuid = claimHelper.GetCurrentUserGuid();
++            var ownsDelegation = await (
++                from d in context.Delegations.AsNoTracking()
++                join u in context.Users on d.DelegatedUserId equals u.Id
++                where d.Id == request.DelegationId && u.Guid == userGuid && d.IsActive == 1 && d.StartDate <= now && d.EndDate >= now
++                select d.Id).AnyAsync();
++            if (!ownsDelegation) return string.Empty;
++
+             var system = context.Systems.FirstOrDefault(c => c.ClientId == request.ClientId);
++            if (system is null) return string.Empty;
+             var permissions =
+                 context.DelegationSystemPermissions
+                     .Where(c=>c.DelegationSystem.SystemId==system.Id)
+diff --git a/UserManagement.Infrastructure.Query/PermissionQueryHandler.cs b/UserManagement.Infrastructure.Query/PermissionQueryHandler.cs
+index 6da3ad4..643c828 100644
+--- a/UserManagement.Infrastructure.Query/PermissionQueryHandler.cs
++++ b/UserManagement.Infrastructure.Query/PermissionQueryHandler.cs
+@@ -67,19 +67,31 @@ IQueryHandler<PermissionTreeNodeViewModel, Guid>
+         return null;
+     }
+ 
++    /// <summary>
++    /// دسترسی‌های یک سمت در یک سامانه.
++    /// فقط برای سمتی که متعلق به کاربر جاری است و فقط دسترسی‌های همان سامانه (ClientId) برگردانده می‌شود؛
++    /// قبلاً دسترسی‌های هر سمتی، از همه‌ی سامانه‌ها، برای هر کاربری قابل دریافت بود.
++    /// (برای تفویض از GetDelegationPermissions استفاده می‌شود.)
++    /// </summary>
+     public string Handle(PermissionRequestDto request)
+     {
+         var userGuid = claimHelper.GetCurrentUserGuid();
+-        var system = context.Systems.FirstOrDefault(c => c.ClientId == request.ClientId);
+-        var position = context.Positions.FirstOrDefault(c => c.Guid == request.PositionGuid);
+-        var groups = context.PositionGroups.Include(c=>c.Position).Where(x => x.PositionId==position.Id).Select(c => c.GroupId)
+-            .ToList();
+-        var positionPermissions = context.PositionPermissions.Where(c => c.Position.Guid == request.PositionGuid)
+-            .Select(c => c.PermissionId).ToList();
+-        var groupPermissions = context.GroupPermissions.Where(c => groups.Contains(c.GroupId))
+-            .Select(c => c.PermissionId).ToList();
+-        var permissions = context.Permissions
+-            .Where(c => positionPermissions.Contains(c.Id) || groupPermissions.Contains(c.Id)).Select(c => c.Title)
++        var system = context.Systems.AsNoTracking().FirstOrDefault(c => c.ClientId == request.ClientId);
++        var position = context.Positions.AsNoTracking().FirstOrDefault(c => c.Guid == request.PositionGuid);
++        if (system is null || position is null) return string.Empty;
++
++        var ownsPosition = context.UserPositions.AsNoTracking()
++            .Any(up => up.PositionId == position.Id && up.User.Guid == userGuid);
++        if (!ownsPosition) return string.Empty;
++
++        var groupIds = context.PositionGroups.AsNoTracking().Where(x => x.PositionId == position.Id).Select(c => c.GroupId);
++        var positionPermissionIds = context.PositionPermissions.AsNoTracking().Where(c => c.PositionId == position.Id).Select(c => c.PermissionId);
++        var groupPermissionIds = context.GroupPermissions.AsNoTracking().Where(c => groupIds.Contains(c.GroupId)).Select(c => c.PermissionId);
++
++        var permissions = context.Permissions.AsNoTracking()
++            .Where(c => c.SystemId == system.Id && (positionPermissionIds.Contains(c.Id) || groupPermissionIds.Contains(c.Id)))
++            .Select(c => c.Title)
++            .Distinct()
+             .ToList();
+         return string.Join(",", permissions);
+     }

@@ -1,4 +1,6 @@
-﻿using MeetingManagement.Domain.MeetingAgg;
+using MeetingManagement.Common.Extensions;
+using MeetingManagement.Domain.Shared.Notifications;
+using MeetingManagement.Domain.MeetingAgg;
 using MeetingManagement.Domain.SettingAgg;
 using MeetingManagement.Domain.Shared.Access;
 using Microsoft.Extensions.Logging;
@@ -9,22 +11,28 @@ using System.Threading.Tasks;
 namespace MeetingManagement.Infrastructure.Configuration.Job;
 
 /// <summary>
-/// جاب اتمام خودکار جلسات پس از امضای رئیس و دبیر
-/// اجرا: هر شب ساعت 2:00
+/// اتمام خودکار جلسات «ثبت نهایی» که از امضای رئیس آن‌ها بیش از MeetingAutoCloseMinutes گذشته است.
+/// امضای رئیس تنها شرط است؛ سایر اعضا تا آن زمان فرصت امضا دارند.
+/// اجرا: هر ۳۰ دقیقه
 /// </summary>
 [DisallowConcurrentExecution] // ✅ جایگزین LockTimer
 [PersistJobDataAfterExecution]
 public class MeetingAutoCloseJob : IJob
 {
     private readonly IMeetingRepository _meetingRepository;
+    private readonly INotificationPublisher _publisher;
+    private readonly IRealtimeNotifier _realtime;
     private readonly ILogger<MeetingAutoCloseJob> _logger;
-
 
     public MeetingAutoCloseJob(
         IMeetingRepository meetingRepository,
+        INotificationPublisher publisher,
+        IRealtimeNotifier realtime,
         ILogger<MeetingAutoCloseJob> logger)
     {
         _meetingRepository = meetingRepository;
+        _publisher = publisher;
+        _realtime = realtime;
         _logger = logger;
     }
 
@@ -64,6 +72,7 @@ public class MeetingAutoCloseJob : IJob
                 {
                     meeting.ChangeStatus(systemGuid, MeetingStatusIds.Completed);
                     _meetingRepository.Update(meeting);
+                    await _publisher.PublishAsync(NotificationEventCode.MeetingFinalized, new NotificationPayload { MeetingId = meeting.Id });
                     closedCount++;
 
                     _logger.LogInformation("Meeting {MeetingId} ({Number}) auto-closed", meeting.Id, meeting.Number);
@@ -75,8 +84,10 @@ public class MeetingAutoCloseJob : IJob
                 }
             }
 
-            // ذخیره تغییرات
+            // ذخیره تغییرات و سپس ارسال اعلان‌های لحظه‌ای
             await _meetingRepository.SaveChangesAsync();
+            await _realtime.FlushAsync(context.CancellationToken);
+            _logger.LogInformation("MeetingAutoCloseJob closed {Closed} meetings ({Failed} failed)", closedCount, failedCount);
 
 
         }

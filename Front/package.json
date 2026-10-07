@@ -35,6 +35,7 @@
     "@fullcalendar/daygrid": "^6.1.19",
     "@fullcalendar/interaction": "^6.1.19",
     "@fullcalendar/timegrid": "^6.1.19",
+    "@microsoft/signalr": "^8.0.29",
     "@ng-bootstrap/ng-bootstrap": "^20.0.0",
     "@ng-select/ng-select": "^21.0.0",
     "ag-grid-angular": "^34.3.1",

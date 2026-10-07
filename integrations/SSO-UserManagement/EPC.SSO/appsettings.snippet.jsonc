@@ -1,0 +1,9 @@
+// افزودنی به appsettings.json سامانه SSO
+{
+  "Realtime": {
+    "Sources": [
+      // SharedSecret باید با Realtime:Sso:SharedSecret در appsettings سامانه جلسات یکی باشد
+      { "Name": "MeetManage", "SharedSecret": "" }
+    ]
+  }
+}

@@ -1,0 +1,268 @@
+diff --git a/FileManagement.Infrastructure.Tus/TusConfiguration.cs b/FileManagement.Infrastructure.Tus/TusConfiguration.cs
+index f7814ec..dcfee75 100644
+--- a/FileManagement.Infrastructure.Tus/TusConfiguration.cs
++++ b/FileManagement.Infrastructure.Tus/TusConfiguration.cs
+@@ -49,7 +49,8 @@ public static class TusConfiguration
+             // ❌ UrlPath را ست نکنید وقتی از MapTus استفاده می‌کنید! 
+             // UrlPath = settings.UrlPath, // این خط باعث خطا می‌شود 
+             Store = new TusDiskStore(storagePath, deletePartialFilesOnConcat: true),
+-            MaxAllowedUploadSizeInBytes = (int?)settings.MaxFileSizeBytes,
++            // ✅ قبلاً (int?) بود و 5GB به 1GB سرریز می‌شد (و مقادیر 2 تا 4 گیگ همه‌ی آپلودها را رد می‌کرد)
++            MaxAllowedUploadSizeInBytesLong = settings.MaxFileSizeBytes,
+             Expiration = new AbsoluteExpiration(TimeSpan.FromHours(settings.ExpirationHours)),
+             Events = new Events
+             {
+diff --git a/FileManagement.Infrastructure.Tus/TusFileService.cs b/FileManagement.Infrastructure.Tus/TusFileService.cs
+index 89fdeab..4e612b9 100644
+--- a/FileManagement.Infrastructure.Tus/TusFileService.cs
++++ b/FileManagement.Infrastructure.Tus/TusFileService.cs
+@@ -27,7 +27,7 @@ public class TusFileService : ITusFileService
+     {
+         _logger = logger;
+         // ✅ مسیر را دقیقاً مثل TusConfiguration بساز! 
+-        var relativePath = configuration["TusSettings:StoragePath"] ?? "wwwroot/tus-uploads";
++        var relativePath = configuration["TusSettings:StoragePath"] ?? "App_Data/tus-uploads";
+         _storagePath = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
+         _logger.LogInformation("TusFileService initialized with storage path: {Path}", _storagePath);
+         if (!Directory.Exists(_storagePath))
+diff --git a/FileManagement.Infrastructure.Tus/TusSettings.cs b/FileManagement.Infrastructure.Tus/TusSettings.cs
+index ba3fe2b..7dadeb5 100644
+--- a/FileManagement.Infrastructure.Tus/TusSettings.cs
++++ b/FileManagement.Infrastructure.Tus/TusSettings.cs
+@@ -2,7 +2,10 @@
+ 
+ public class TusSettings
+ {
+-    public string StoragePath { get; set; } = "wwwroot/tus-uploads";
++    /// <summary>
++    /// محل فایل‌های نیمه‌کاره‌ی tus. نباید زیر wwwroot باشد؛ وگرنه با UseStaticFiles بدون احراز هویت قابل دانلودند.
++    /// </summary>
++    public string StoragePath { get; set; } = "App_Data/tus-uploads";
+     // ❌ حذف شد - وقتی از MapTus استفاده می‌کنیم نباید ست شود 
+     // public string UrlPath { get; set; } = "/api/Upload/tus"; 
+     public long MaxFileSizeBytes { get; set; } = 5L * 1024 * 1024 * 1024; // 5GB 
+diff --git a/FileManagement.Presentation.Api/Controllers/AttachmentController.cs b/FileManagement.Presentation.Api/Controllers/AttachmentController.cs
+index f2960a2..e71adfa 100644
+--- a/FileManagement.Presentation.Api/Controllers/AttachmentController.cs
++++ b/FileManagement.Presentation.Api/Controllers/AttachmentController.cs
+@@ -19,7 +19,8 @@ public class AttachmentController(
+     IAttachmentCommandFacade attachmentCommandFacade,
+     IAttachmentQueryFacade attachmentQueryFacade,
+     IWebHostEnvironment webHostEnvironment,
+-    IConfiguration configuration)
++    IConfiguration configuration,
++    FileManagement.Presentation.Api.Security.SignedFileUrl signedFileUrl)
+     : ControllerBase
+ {
+     [HttpGet("GetList")]
+@@ -28,7 +29,12 @@ public class AttachmentController(
+ 
+     [HttpGet("GetForOtherSystems")]
+     public async Task<IActionResult> GetForOtherSystems([FromQuery] OtherSystemAttachmentSearchModel searchModel)
+-        => new JsonResult(await attachmentQueryFacade.GetForOtherSystems(searchModel));
++    {
++        var items = await attachmentQueryFacade.GetForOtherSystems(searchModel);
++        foreach (var item in items)
++            item.Path = ToPublicPath(item.Path);
++        return new JsonResult(items);
++    }
+ 
+     [HttpGet("GetFileName/{guid:guid}")]
+     public async Task<IActionResult> GetFileName(Guid guid)
+@@ -201,7 +207,7 @@ public class AttachmentController(
+             var full = Path.GetFullPath(storedPath);
+             var rel = Path.GetRelativePath(basePath, full).Replace('\\', '/');
+             rel = rel.TrimStart('.').TrimStart('/');
+-            return "/files/" + rel;
++            return signedFileUrl.Sign("/files/" + rel);
+         }
+ 
+         var normalized = storedPath.Replace('\\', '/').TrimStart('/');
+@@ -209,6 +215,6 @@ public class AttachmentController(
+         if (normalized.StartsWith(baseFolderName + "/", StringComparison.OrdinalIgnoreCase))
+             normalized = normalized.Substring(baseFolderName.Length + 1);
+ 
+-        return "/files/" + normalized;
++        return signedFileUrl.Sign("/files/" + normalized);
+     }
+ }
+diff --git a/FileManagement.Presentation.Api/Controllers/ImageController.cs b/FileManagement.Presentation.Api/Controllers/ImageController.cs
+index 39681be..2ef40f6 100644
+--- a/FileManagement.Presentation.Api/Controllers/ImageController.cs
++++ b/FileManagement.Presentation.Api/Controllers/ImageController.cs
+@@ -54,7 +54,7 @@ public class ImageController(
+             // محاسبه ارتفاع متناسب
+             var height = (int)Math.Round((double)original.Height / original.Width * width);
+ 
+-            using var resized = original.Resize(new SKImageInfo(width, height), SKFilterQuality.Medium);
++            using var resized = original.Resize(new SKImageInfo(width, height), new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
+             if (resized == null)
+                 return StatusCode(500, new { message = "خطا در تغییر اندازه" });
+ 
+diff --git a/FileManagement.Presentation.Api/Controllers/UploadController.cs b/FileManagement.Presentation.Api/Controllers/UploadController.cs
+index b9de506..b87b89d 100644
+--- a/FileManagement.Presentation.Api/Controllers/UploadController.cs
++++ b/FileManagement.Presentation.Api/Controllers/UploadController.cs
+@@ -100,22 +100,25 @@ public class UploadController : ControllerBase
+     /// ✅ DEBUG: بررسی وضعیت TUS Storage 
+     /// </summary> 
+     [HttpGet("Debug/Status")]
+-    public IActionResult DebugStatus()
++    public IActionResult DebugStatus([FromServices] IWebHostEnvironment env)
+     {
++        // فهرست فایل‌های در حال آپلود همه‌ی کاربران؛ فقط در محیط توسعه
++        if (!env.IsDevelopment()) return NotFound();
+         var files = _tusFileService.GetAllFiles().ToList();
+         return Ok(new
+         {
+             TotalFiles = files.Count,
+             Files = files,
+-            StoragePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/tus-uploads")
++            StoragePath = "(hidden)"
+         });
+     }
+     /// <summary> 
+     /// ✅ DEBUG: بررسی یک فایل خاص 
+     /// </summary> 
+     [HttpGet("Debug/File/{tusFileId}")]
+-    public async Task<IActionResult> DebugFile(string tusFileId)
++    public async Task<IActionResult> DebugFile(string tusFileId, [FromServices] IWebHostEnvironment env)
+     {
++        if (!env.IsDevelopment()) return NotFound();
+         var exists = _tusFileService.FileExists(tusFileId);
+         var status = await _tusFileService.GetUploadStatusAsync(tusFileId);
+         var metadata = await _tusFileService.GetMetadataAsync(tusFileId);
+diff --git a/FileManagement.Presentation.Api/Program.cs b/FileManagement.Presentation.Api/Program.cs
+index d69959a..c082c50 100644
+--- a/FileManagement.Presentation.Api/Program.cs
++++ b/FileManagement.Presentation.Api/Program.cs
+@@ -14,6 +14,7 @@ using Microsoft.IdentityModel.Logging;
+ using Microsoft.IdentityModel.Tokens;
+ using System.IO.Compression;
+ using tusdotnet;
++using FileManagement.Presentation.Api.Security;
+ 
+ var builder = WebApplication.CreateBuilder(args);
+ 
+@@ -111,6 +112,7 @@ builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
+     containerBuilder.RegisterModule(new FileManagementModule(connectionString));
+ });
+ builder.Services.AddTusServices(builder.Configuration);
++builder.Services.AddSingleton<FileManagement.Presentation.Api.Security.SignedFileUrl>();
+ 
+ var app = builder.Build();
+ 
+@@ -167,6 +169,9 @@ string frameAncestors = "'self'";
+ if (allowedOrigins.Length > 0)
+     frameAncestors += " " + string.Join(" ", allowedOrigins);
+ 
++// ✅ فایل‌های جلسات/مصوبات فقط با آدرس امضاشده‌ی موقت (صادرشده توسط API احرازهویت‌شده) قابل دریافت‌اند
++app.UseSignedFileUrls("/files");
++
+ app.UseStaticFiles(new StaticFileOptions
+ {
+     FileProvider = new PhysicalFileProvider(fileBasePath),
+diff --git a/FileManagement.Presentation.Api/Security/SignedFileUrl.cs b/FileManagement.Presentation.Api/Security/SignedFileUrl.cs
+new file mode 100644
+index 0000000..72bcebd
+--- /dev/null
++++ b/FileManagement.Presentation.Api/Security/SignedFileUrl.cs
+@@ -0,0 +1,98 @@
++﻿using System.Security.Cryptography;
++using System.Text;
++using Microsoft.AspNetCore.WebUtilities;
++
++namespace FileManagement.Presentation.Api.Security;
++
++/// <summary>
++/// آدرس امضاشده و موقت برای فایل‌های ایستا (/files/...).
++/// ─────────────────────────────────────────────────────────────────────────
++/// قبلاً هر کسی که مسیر فایل را می‌دانست (حتی بدون ورود) می‌توانست آن را دانلود کند؛ مسیرها هم
++/// شامل شماره جلسه و نام فایل و قابل حدس بودند. حالا مسیر فقط از API احرازهویت‌شده (GetMeta/GetMetas/...)
++/// با امضای HMAC و تاریخ انقضا برگردانده می‌شود و Middleware هر درخواست بدون امضای معتبر را رد می‌کند.
++/// تگ‌های img/iframe/video فرانت بدون تغییر کار می‌کنند چون امضا در Query String است.
++/// </summary>
++public sealed class SignedFileUrl
++{
++    public const string ExpiresParam = "exp";
++    public const string SignatureParam = "sig";
++
++    private readonly byte[] _key;
++    private readonly TimeSpan _lifetime;
++
++    public bool Enforced { get; }
++
++    public SignedFileUrl(IConfiguration configuration, ILogger<SignedFileUrl> logger)
++    {
++        var key = configuration["FileSettings:UrlSigningKey"];
++        if (string.IsNullOrWhiteSpace(key))
++        {
++            // بدون کلید ثابت، با هر راه‌اندازی مجدد لینک‌های قبلی باطل می‌شوند (در چند سرور باید کلید ثابت تنظیم شود)
++            _key = RandomNumberGenerator.GetBytes(32);
++            logger.LogWarning("FileSettings:UrlSigningKey is not set; a random key is used until the next restart.");
++        }
++        else
++        {
++            _key = Encoding.UTF8.GetBytes(key);
++        }
++
++        _lifetime = TimeSpan.FromMinutes(Math.Clamp(configuration.GetValue("FileSettings:UrlLifetimeMinutes", 120), 5, 24 * 60));
++        Enforced = configuration.GetValue("FileSettings:RequireSignedUrls", true);
++    }
++
++    /// <summary>افزودن امضا به مسیر عمومی (مثل /files/1404/a.pdf)</summary>
++    public string Sign(string publicPath)
++    {
++        if (string.IsNullOrWhiteSpace(publicPath)) return publicPath;
++        var path = Normalize(publicPath);
++        var exp = DateTimeOffset.UtcNow.Add(_lifetime).ToUnixTimeSeconds();
++        return $"{path}?{ExpiresParam}={exp}&{SignatureParam}={Compute(path, exp)}";
++    }
++
++    public bool IsValid(PathString path, string? exp, string? sig)
++    {
++        if (!long.TryParse(exp, out var expiresAt) || string.IsNullOrEmpty(sig)) return false;
++        if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expiresAt) return false;
++
++        var expected = Compute(Normalize(path.Value ?? string.Empty), expiresAt);
++        return CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(sig));
++    }
++
++    private string Compute(string path, long exp)
++    {
++        using var hmac = new HMACSHA256(_key);
++        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes($"{path}|{exp}"));
++        return WebEncoders.Base64UrlEncode(hash);
++    }
++
++    /// <summary>مسیر با / شروع شود و حروف رمزگذاری‌شده‌ی URL یکسان مقایسه شوند</summary>
++    private static string Normalize(string path)
++    {
++        var decoded = Uri.UnescapeDataString(path.Split('?')[0]).Replace('\\', '/');
++        return decoded.StartsWith('/') ? decoded : "/" + decoded;
++    }
++}
++
++public static class SignedFileUrlMiddlewareExtensions
++{
++    /// <summary>فقط درخواست‌های دارای امضای معتبر به فایل‌های زیر <paramref name="requestPath"/> می‌رسند.</summary>
++    public static IApplicationBuilder UseSignedFileUrls(this IApplicationBuilder app, string requestPath)
++    {
++        var signer = app.ApplicationServices.GetRequiredService<SignedFileUrl>();
++        if (!signer.Enforced) return app;
++
++        return app.Use(async (context, next) =>
++        {
++            if (context.Request.Path.StartsWithSegments(requestPath, StringComparison.OrdinalIgnoreCase)
++                && !HttpMethods.IsOptions(context.Request.Method)
++                && !signer.IsValid(context.Request.Path,
++                    context.Request.Query[SignedFileUrl.ExpiresParam], context.Request.Query[SignedFileUrl.SignatureParam]))
++            {
++                context.Response.StatusCode = StatusCodes.Status403Forbidden;
++                return;
++            }
++
++            await next();
++        });
++    }
++}

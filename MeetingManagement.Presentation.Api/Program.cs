@@ -9,6 +9,9 @@ using MeetingManagement.Infrastructure.Configuration.Notifications;
 using MeetingManagement.Infrastructure.Configuration.Service;
 using MeetingManagement.Presentation.Api;
 using MeetingManagement.Presentation.Api.Filters;
+using MeetingManagement.Presentation.Api.Realtime;
+using MeetingManagement.Domain.Shared.Notifications;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using MeetingManagement.Infrastructure.Configuration.Services;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -48,9 +51,18 @@ builder.Services.AddCors(options => options.AddPolicy("FileManagement", policy =
     .AllowAnyMethod()
     .AllowCredentials()));
 
+// ═══ اعلان لحظه‌ای (SignalR + ارسال به پرتال SSO) ═══
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<SsoRealtimeRelay>();
+builder.Services.AddSingleton<IRealtimeBroadcaster, RealtimeBroadcaster>();
+builder.Services.AddHostedService<SsoRealtimeRelayWorker>();
+builder.Services.AddHttpClient(SsoRealtimeRelayWorker.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(10));
 // ✅ مقادیر «کاربر/سمت فراخوان» در مدل‌های ورودی همیشه از هویت راستی‌آزمایی‌شده پر می‌شوند
-builder.Services.AddControllers(options => options.Filters.Add<CallerIdentityFilter>()).AddNewtonsoftJson();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<CallerIdentityFilter>();
+    options.Filters.Add<RealtimeFlushFilter>();
+}).AddNewtonsoftJson();
 
 // فایل‌ها با tus مستقیماً در سامانه مدیریت فایل آپلود می‌شوند؛ این API فقط درخواست‌های کوچک می‌پذیرد.
 // سقف پیش‌فرض سرور (۳۰ مگابایت) حفظ می‌شود و endpointهای فرم در صورت نیاز با [RequestSizeLimit] مشخص می‌شوند.
@@ -66,6 +78,17 @@ builder.Services.AddAuthentication("Bearer")
         {
             ValidateAudience = false,
             ClockSkew = TimeSpan.FromMinutes(1),
+        };
+        // WebSocket مرورگر هدر Authorization ندارد؛ برای Hub توکن از Query String خوانده می‌شود
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                    context.Token = token;
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -138,6 +161,7 @@ app.UseAuthorization();
 app.UseAntiXssMiddleware();
 
 app.MapControllers().RequireAuthorization("FileManagementApi");
+app.MapHub<NotificationsHub>(NotificationsHub.Path);
 app.MapRazorPages();
 app.MapDefaultControllerRoute();
 
