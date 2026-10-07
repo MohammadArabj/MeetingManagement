@@ -1,0 +1,82 @@
+﻿@{
+    Layout = "_Layout";
+    ViewData["Title"] = "مستندات سیستم‌ها | پورتال یکپارچه سازمانی";
+    var rootFolderUuid = ViewData["RootFolderUuid"] as string ?? "";
+}
+
+@section style {
+    <link href="~/css/document-browser.css" rel="stylesheet" asp-append-version="true" />
+}
+
+<main>
+    <div class="doc-wrap">
+        <div class="doc-hero">
+            <div class="doc-hero-inner">
+                <div class="doc-hero-title"><i class="fa fa-folder-tree"></i> مستندات سیستم‌های مدیریتی</div>
+                <div class="doc-hero-sub">مرور، پیش‌نمایش و دانلود مستندات سازمانی از سامانه مدیریت اسناد (کاج)</div>
+            </div>
+        </div>
+
+        <div class="doc-toolbar">
+            <div class="doc-breadcrumb" id="docBreadcrumb"></div>
+            <div class="doc-search-wrap">
+                <input type="text" id="docSearchInput" class="doc-search-input" placeholder="جستجو در همین پوشه..." />
+                <i class="fa fa-search doc-search-icon"></i>
+            </div>
+        </div>
+
+        <div class="doc-loading-bar doc-loading-bar--hidden" id="docLoadingBar">
+            <div class="doc-loading-bar__fill"></div>
+        </div>
+
+        <div id="docFoldersSection">
+            <div class="doc-section-label">
+                <i class="fa fa-folder"></i> پوشه‌ها
+                <span class="doc-count-badge" id="docFoldersCount"></span>
+            </div>
+            <div class="doc-grid" id="docFoldersGrid">
+                <div class="doc-skeleton"></div><div class="doc-skeleton"></div><div class="doc-skeleton"></div>
+            </div>
+        </div>
+
+        <div id="docFilesSection" style="margin-top:1.4rem">
+            <div class="doc-section-label">
+                <i class="fa fa-file"></i> فایل‌ها
+                <span class="doc-count-badge" id="docFilesCount"></span>
+            </div>
+            <div class="doc-grid" id="docFilesGrid">
+                <div class="doc-skeleton"></div><div class="doc-skeleton"></div><div class="doc-skeleton"></div><div class="doc-skeleton"></div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- Modal پیش‌نمایش فایل -->
+<div class="modal fade" id="docPreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <i class="fa fa-eye"></i>
+                <div class="doc-preview-name" id="docPreviewName"></div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="doc-preview-body" id="docPreviewBody"></div>
+            <div class="modal-footer doc-preview-footer">
+                <button type="button" class="btn btn-sm" id="docPreviewDownloadBtn"
+                        style="background:var(--orange);color:#fff;border-radius:8px">
+                    <i class="fa fa-download"></i> دانلود
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/js/jalali-picker.js"></script>
+    <script src="~/js/document-browser.js" asp-append-version="true"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+        DocBrowser.init(@Json.Serialize(rootFolderUuid), 'مستندات سیستم‌ها');
+        });
+    </script>
+}

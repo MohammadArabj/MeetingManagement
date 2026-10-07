@@ -1,0 +1,291 @@
+@using EPC.SSO.Quickstart.Home
+@model EPC.SSO.Quickstart.Account.LoginViewModel
+@{
+    Layout = "_LoginLayout";
+    var anns = Model.Announcements ?? [];
+    string FileIcon(string ct) => ct.Contains("pdf") ? "fa-file-pdf" : ct.Contains("sheet") || ct.Contains("excel") ? "fa-file-excel"
+        : ct.Contains("word") ? "fa-file-word" : ct.StartsWith("image/") ? "fa-image" : "fa-file-lines";
+}
+@section style {
+    <link href="~/css/login-v2.css" rel="stylesheet" asp-append-version="true" />
+}
+
+<div class="lg">
+    <div class="lg__bg" aria-hidden="true"></div>
+    <div class="lg__overlay" aria-hidden="true"></div>
+    <div class="lg__lines" aria-hidden="true"></div>
+    <div class="lg__glow lg__glow--a" aria-hidden="true"></div>
+    <div class="lg__glow lg__glow--b" aria-hidden="true"></div>
+
+    @* ═══════════ کارت ورود ═══════════ *@
+    <section class="lg-card lg-glass">
+        <div class="lg-top">
+            <div class="lg-brand">
+                <span class="lg-brand__logo"><img src="/images/logo.png" alt="" onerror="this.remove()" /></span>
+                <span><small>درگاه یکپارچه ورود</small><b>@Model.CompanyName</b></span>
+            </div>
+            <button type="button" class="lg-theme" id="themeToggle" aria-label="تغییر حالت روشن / تیره" title="حالت روشن / تیره">
+                <i class="fa fa-moon"></i><i class="fa fa-sun"></i>
+            </button>
+        </div>
+
+        <div class="lg-main">
+            @* ── ورود ── *@
+            <div class="lg-panel" id="panelLogin">
+                <h1 class="lg-title">ورود به سامانه‌ها</h1>
+                <p class="lg-sub">با کد پرسنلی و رمز عبور خود وارد شوید؛ یک‌بار ورود برای همه‌ی سامانه‌های سازمان.</p>
+
+                @if (!ViewData.ModelState.IsValid)
+                {
+                    <div class="lg-errors" role="alert">
+                        <ul>@foreach (var e in ViewData.ModelState.Values.SelectMany(v => v.Errors)) { <li>@e.ErrorMessage</li> }</ul>
+                    </div>
+                }
+                <div class="lg-errors" id="clientErrors" role="alert" hidden></div>
+
+                <form asp-controller="Account" asp-action="Login" method="post" id="loginForm" novalidate>
+                    <input type="hidden" asp-for="ReturnUrl" />
+
+                    <div class="lg-field">
+                        <label class="lg-label" for="Username">نام کاربری (کد پرسنلی)</label>
+                        <div class="lg-input-wrap">
+                            <input class="lg-input" asp-for="Username" autocomplete="username" inputmode="numeric" placeholder="کد پرسنلی" autofocus />
+                            <i class="fa fa-user lg-input-icon"></i>
+                        </div>
+                    </div>
+
+                    <div class="lg-field">
+                        <label class="lg-label" for="password">رمز عبور</label>
+                        <div class="lg-input-wrap">
+                            <input class="lg-input" asp-for="Password" type="password" id="password" autocomplete="current-password" placeholder="••••••••" value="" />
+                            <i class="fa fa-lock lg-input-icon"></i>
+                            <button type="button" class="lg-eye" id="passToggle" tabindex="-1" aria-label="نمایش رمز"><i class="fa fa-eye"></i></button>
+                        </div>
+                        <div class="lg-caps" id="capsWarn" role="status" hidden><i class="fa fa-triangle-exclamation"></i> کلید Caps Lock روشن است</div>
+                    </div>
+
+                    @if (Model.HasCaptcha)
+                    {
+                        <div class="lg-field">
+                            <label class="lg-label" for="EnteredCaptcha">کد امنیتی</label>
+                            <div class="lg-captcha">
+                                <img class="lg-captcha__code lg-captcha__img" id="captchaImage" src="@Url.Action("Captcha", "Account", new { t = DateTime.UtcNow.Ticks })" alt="کد امنیتی" width="180" height="56" />
+                                <button type="button" class="lg-captcha__btn" id="captchaRefresh" title="کد جدید" aria-label="کد جدید"><i class="fa fa-rotate"></i></button>
+                            </div>
+                            <div class="lg-input-wrap">
+                                <input class="lg-input" asp-for="EnteredCaptcha" autocomplete="off" dir="ltr" placeholder="کد بالا را وارد کنید" />
+                                <i class="fa fa-keyboard lg-input-icon"></i>
+                            </div>
+                        </div>
+                    }
+
+                    <button class="lg-submit" name="button" value="login" type="submit" id="loginButton">
+                        <i class="fa fa-right-to-bracket"></i><span>ورود</span>
+                    </button>
+                </form>
+
+                <div class="lg-row">
+                    <button type="button" class="lg-link" id="openForgot"><i class="fa fa-key"></i> رمز عبور را فراموش کرده‌ام</button>
+                </div>
+
+                <details class="lg-sec">
+                    <summary><span><i class="fa fa-shield-halved"></i> الزامات امنیتی رمز عبور</span><i class="fa fa-chevron-down"></i></summary>
+                    <ul>
+                        <li><i class="fa fa-check"></i>حداقل ۸ کاراکتر، ترکیبی از حروف بزرگ و کوچک انگلیسی</li>
+                        <li><i class="fa fa-check"></i>دست‌کم یک عدد و یک نویسه‌ی خاص (مانند ! @@ # $ %)</li>
+                        <li><i class="fa fa-check"></i>بدون اطلاعات قابل‌حدس مانند نام یا تاریخ تولد</li>
+                        <li><i class="fa fa-check"></i>رمز خود را با هیچ‌کس، حتی پشتیبانی، به اشتراک نگذارید</li>
+                    </ul>
+                </details>
+            </div>
+
+            @* ── فراموشی رمز ── *@
+            <div class="lg-panel" id="panelForgot" hidden>
+                <div id="fpForm">
+                    <h1 class="lg-title">بازیابی رمز عبور</h1>
+                    <p class="lg-sub">کد پرسنلی و ۴ رقم آخر شماره همراه ثبت‌شده را وارد کنید تا رمز موقت پیامک شود.</p>
+                    <div class="lg-errors" id="fpError" hidden></div>
+                    <div class="lg-field">
+                        <label class="lg-label" for="fpCode">کد پرسنلی</label>
+                        <div class="lg-input-wrap">
+                            <input class="lg-input" id="fpCode" inputmode="numeric" autocomplete="off" maxlength="20" />
+                            <i class="fa fa-id-card lg-input-icon"></i>
+                        </div>
+                    </div>
+                    <div class="lg-field">
+                        <label class="lg-label" for="fpPhone">۴ رقم آخر شماره همراه</label>
+                        <div class="lg-input-wrap">
+                            <input class="lg-input" id="fpPhone" inputmode="numeric" autocomplete="off" maxlength="4" dir="ltr" placeholder="••••" />
+                            <i class="fa fa-mobile-screen lg-input-icon"></i>
+                        </div>
+                    </div>
+                    <button type="button" class="lg-submit" id="fpSubmit"><i class="fa fa-paper-plane"></i><span>ارسال رمز موقت</span></button>
+                    <div class="lg-row"><button type="button" class="lg-link" data-back><i class="fa fa-arrow-right"></i> بازگشت به ورود</button></div>
+                </div>
+                <div id="fpDone" class="lg-success" hidden>
+                    <div class="lg-success__icon"><i class="fa fa-check"></i></div>
+                    <h2 class="lg-title" style="font-size:19px">درخواست ثبت شد</h2>
+                    <p class="lg-sub" id="fpDoneMsg"></p>
+                    <button type="button" class="lg-submit lg-submit--ghost" data-back><i class="fa fa-right-to-bracket"></i> بازگشت به ورود</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg-foot">فناوری اطلاعات و ارتباطات · @Model.CompanyName</div>
+        @Html.AntiForgeryToken()
+    </section>
+
+    @* ═══════════ اطلاعیه‌ها و دسترسی سریع ═══════════ *@
+    <section class="lg-side">
+        <div class="lg-head">
+            <div>
+                <h2>درگاه مرکزی <span>سامانه‌های سازمانی</span></h2>
+                <p>آخرین اطلاعیه‌ها و دسترسی سریع به سامانه‌های پرکاربرد</p>
+            </div>
+            <nav class="lg-quick" aria-label="دسترسی سریع">
+                @foreach (var link in Model.QuickLinks)
+                {
+                    var external = link.Mode == HomeQuickLinkMode.ExternalLink;
+                    <a class="lg-q @(link.IsAvailable ? "" : "lg-q--off")" style="--_c:@link.AccentColor"
+                       href="@(link.IsAvailable ? link.Url : "#")" target="@(external && link.IsAvailable ? "_blank" : "_self")"
+                       rel="noopener noreferrer" data-soon="@(!link.IsAvailable ? "1" : null)" title="@link.Description">
+                        <span class="lg-q__icon"><i class="fa @link.Icon"></i></span>@link.Title
+                    </a>
+                }
+                <a class="lg-q" style="--_c:#0ea5e9" asp-controller="PhoneDirectory" asp-action="Index" title="دفترچه تلفن داخلی">
+                    <span class="lg-q__icon"><i class="fa fa-address-book"></i></span>دفترچه تلفن
+                </a>
+            </nav>
+        </div>
+
+        <div class="lg-ann lg-glass" id="annBox" data-interval="@Model.SlideIntervalMs">
+            <div class="lg-ann__bar">
+                <h3><i class="fa fa-bullhorn"></i> اطلاعیه‌های سازمان</h3>
+                @if (anns.Count > 1)
+                {
+                    <div class="lg-ann__nav">
+                        <button type="button" data-ann="prev" aria-label="قبلی"><i class="fa fa-chevron-right"></i></button>
+                        <span class="lg-ann__count" id="annCount"></span>
+                        <button type="button" data-ann="next" aria-label="بعدی"><i class="fa fa-chevron-left"></i></button>
+                    </div>
+                }
+            </div>
+
+            @if (anns.Count == 0)
+            {
+                <div class="lg-ann__empty"><div><i class="fa fa-bell-slash"></i>در حال حاضر اطلاعیه‌ای وجود ندارد.</div></div>
+            }
+            else
+            {
+                <div class="lg-ann__viewport">
+                    @for (var i = 0; i < anns.Count; i++)
+                    {
+                        var a = anns[i];
+                        var media = a.Files.Where(f => f.IsImage || f.IsPdf).ToList();
+                        var others = a.Files.Where(f => !f.IsImage && !f.IsPdf).ToList();
+                        var hasText = !string.IsNullOrWhiteSpace(a.Body) || others.Count > 0;
+                        <article class="lg-slide @(media.Count == 0 ? "lg-slide--text" : "") @(i == 0 ? "is-active" : "")" data-idx="@i">
+                            @if (media.Count > 0)
+                            {
+                                @* ── پیش‌نمایش؛ تمام فضای پنل ── *@
+                                <div class="lg-stage">
+                                    @for (var m = 0; m < media.Count; m++)
+                                    {
+                                        var f = media[m];
+                                        <div class="lg-stage__item @(m == 0 ? "is-active" : "")" data-media="@m">
+                                            @if (f.IsImage)
+                                            {
+                                                <img src="@(i == 0 && m == 0 ? f.FileUrl : null)" data-src="@f.FileUrl" alt="@f.DisplayName" decoding="async" data-zoom />
+                                            }
+                                            else
+                                            {
+                                                <div class="lg-stage__loading"><span class="p-spin"></span> در حال بارگذاری PDF...</div>
+                                                <iframe data-src="@(f.FileUrl)#toolbar=0&navpanes=0&view=FitH" title="@f.DisplayName"></iframe>
+                                            }
+                                        </div>
+                                    }
+
+                                    @if (media.Count > 1)
+                                    {
+                                        <div class="lg-stage__tabs" role="tablist">
+                                            @for (var m = 0; m < media.Count; m++)
+                                            {
+                                                <button type="button" class="lg-stage__tab @(m == 0 ? "is-active" : "")" data-media="@m" title="@media[m].DisplayName">
+                                                    <i class="fa @(media[m].IsPdf ? "fa-file-pdf" : "fa-image")"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+
+                                    <div class="lg-stage__tools">
+                                        @{ var first = media[0]; }
+                                        <a href="@first.FileUrl" target="_blank" rel="noopener" title="نمایش کامل در صفحه‌ی جدید" data-tool="open"><i class="fa fa-up-right-from-square"></i></a>
+                                        <a href="@first.FileUrl" download="@first.DisplayName" title="دانلود" data-tool="download"><i class="fa fa-download"></i></a>
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(a.Title) || hasText)
+                                    {
+                                        <div class="lg-caption">
+                                            <div class="lg-caption__text">
+                                                @if (!string.IsNullOrWhiteSpace(a.Title)) { <h4>@a.Title</h4> }
+                                                <span><i class="fa fa-calendar"></i> @a.Date</span>
+                                            </div>
+                                            @if (hasText)
+                                            {
+                                                <button type="button" class="lg-caption__more" data-more><i class="fa fa-align-right"></i> متن اطلاعیه</button>
+                                            }
+                                        </div>
+                                    }
+
+                                    @if (hasText)
+                                    {
+                                        <div class="lg-drawer" hidden>
+                                            <button type="button" class="lg-drawer__close" data-more aria-label="بستن"><i class="fa fa-xmark"></i></button>
+                                            @if (!string.IsNullOrWhiteSpace(a.Title)) { <h4>@a.Title</h4> }
+                                            @if (!string.IsNullOrWhiteSpace(a.Body)) { <div class="lg-drawer__body">@a.Body</div> }
+                                            @if (others.Count > 0)
+                                            {
+                                                <div class="lg-files">
+                                                    @foreach (var f in others)
+                                                    {
+                                                        <a class="lg-file" href="@f.FileUrl" download="@f.DisplayName" title="@f.DisplayName"><i class="fa @FileIcon(f.ContentType)"></i><span>@f.DisplayName</span></a>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                @* ── اطلاعیه‌ی بدون تصویر/PDF ── *@
+                                <div class="lg-textcard">
+                                    <span class="lg-textcard__icon"><i class="fa fa-bullhorn"></i></span>
+                                    @if (!string.IsNullOrWhiteSpace(a.Title)) { <h4>@a.Title</h4> }
+                                    <span class="lg-textcard__date">@a.Date</span>
+                                    @if (!string.IsNullOrWhiteSpace(a.Body)) { <div class="lg-textcard__body">@a.Body</div> }
+                                    @if (others.Count > 0)
+                                    {
+                                        <div class="lg-files">
+                                            @foreach (var f in others)
+                                            {
+                                                <a class="lg-file" href="@f.FileUrl" download="@f.DisplayName" title="@f.DisplayName"><i class="fa @FileIcon(f.ContentType)"></i><span>@f.DisplayName</span></a>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </article>
+                    }
+                </div>
+                <div class="lg-ann__progress"><span id="annProgress"></span></div>
+            }
+        </div>
+    </section>
+</div>
+
+<div class="lg-lightbox" id="lightbox" role="dialog" aria-label="نمایش تصویر"><img alt="" /></div>
+
+@section scripts {
+    <script src="~/js/login.js" asp-append-version="true"></script>
+}

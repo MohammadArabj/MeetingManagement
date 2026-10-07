@@ -55,7 +55,6 @@ public class AccountController(
     ILogger<AccountController> logger) : Controller
 {
     private const string CaptchaSessionKey = "login.captcha";
-    private const string CaptchaChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private const string GenericForgotMessage =
         "اگر اطلاعات واردشده صحیح باشد، رمز موقت به شماره همراه ثبت‌شده ارسال می‌شود.";
 
@@ -83,6 +82,11 @@ public class AccountController(
             var result = await TryExternalKeyLoginAsync(userName.Value.ToString(), key, returnUrl, authContext);
             if (result is not null) return result;
         }
+
+        // کاربری که باید رمزش را عوض کند تا تغییر رمز به هیچ سامانه‌ای وارد نمی‌شود (ActiveUserProfileService)
+        if (User.Identity?.IsAuthenticated == true &&
+            string.Equals(User.FindFirst("PasswordExpired")?.Value, "true", StringComparison.OrdinalIgnoreCase))
+            return RedirectToAction(nameof(ChangePassword));
 
         if (User.Identity?.IsAuthenticated == true && authContext is null)
             return RedirectToAction("Index", "Grants");
@@ -213,11 +217,24 @@ public class AccountController(
         return Ok(new { success = true });
     }
 
+    /// <summary>کد جدید؛ متن کد برگردانده نمی‌شود (فقط آدرس تصویر)</summary>
     [HttpGet]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
     public IActionResult RefreshCaptcha()
     {
-        var text = NewCaptcha();
-        return Json(new { text });
+        NewCaptcha();
+        return Json(new { url = Url.Action(nameof(Captcha), new { t = DateTime.UtcNow.Ticks }) });
+    }
+
+    /// <summary>تصویر کد امنیتی جاری (SVG بدون متن)</summary>
+    [HttpGet]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public IActionResult Captcha()
+    {
+        var text = HttpContext.Session.GetString(CaptchaSessionKey) ?? NewCaptcha();
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'";
+        return Content(CaptchaImage.Render(text), "image/svg+xml");
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -504,7 +521,7 @@ public class AccountController(
 
     private string NewCaptcha()
     {
-        var text = new string(Enumerable.Range(0, 5).Select(_ => CaptchaChars[RandomNumberGenerator.GetInt32(CaptchaChars.Length)]).ToArray());
+        var text = CaptchaImage.NewText();
         HttpContext.Session.SetString(CaptchaSessionKey, text);
         return text;
     }

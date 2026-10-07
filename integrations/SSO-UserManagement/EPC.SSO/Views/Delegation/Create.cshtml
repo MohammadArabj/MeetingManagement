@@ -1,0 +1,785 @@
+﻿@model EPC.SSO.Quickstart.Delegation.CreateDelegationViewModel
+
+
+
+@section style {
+    <link href="~/assets/libs/jalalidatepicker/jalalidatepicker.min.css" rel="stylesheet" />
+    <link href="~/assets/libs/select2/select2.css" rel="stylesheet" />
+    <style>
+        :root {
+            --c1: #1c2751;
+            --c2: #1e293b;
+            --acc: #f97316;
+            --acc2: #fb923c;
+            --acc-lt: #fff7ed;
+            --acc-bd: #fed7aa;
+            --teal: #0ea5e9;
+            --teal-lt: #f0f9ff;
+            --green: #10b981;
+            --green-lt: #ecfdf5;
+            --red: #ef4444;
+            --amber: #f59e0b;
+            --s: #ffffff;
+            --s2: #f8fafc;
+            --s3: #f1f5f9;
+            --bd: #e2e8f0;
+            --bd2: #cbd5e1;
+            --t1: #1c2751;
+            --t2: #334155;
+            --t3: #64748b;
+            --t4: #94a3b8;
+            --r: 12px;
+            --r2: 18px;
+            --sh: 0 1px 3px rgba(0,0,0,.06),0 4px 12px rgba(0,0,0,.04);
+            --sh2: 0 4px 24px rgba(15,23,42,.1),0 1px 4px rgba(15,23,42,.06);
+            --tr: all .22s cubic-bezier(.4,0,.2,1);
+        }
+
+        body {
+            background: var(--s3) !important;
+        }
+
+        /* ─── Page wrapper ─── */
+        .create-page {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        /* ─── Top bar ─── */
+        .create-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: .65rem;
+        }
+
+        .page-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--t1);
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+        }
+
+            .page-title i {
+                width: 34px;
+                height: 34px;
+                border-radius: 9px;
+                background: linear-gradient(135deg,var(--acc),var(--amber));
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: .85rem;
+                color: #fff;
+                flex-shrink: 0;
+            }
+
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .46rem .95rem;
+            border-radius: 8px;
+            font-size: .8rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            border: none;
+            transition: var(--tr);
+        }
+
+        .action-btn--outline {
+            background: var(--s);
+            color: var(--t2);
+            border: 1.5px solid var(--bd2);
+        }
+
+            .action-btn--outline:hover {
+                background: var(--s3);
+                border-color: var(--t2);
+                color: var(--t1);
+                transform: translateY(-1px);
+                box-shadow: var(--sh);
+            }
+
+        /* ─── Cards ─── */
+        .g-card {
+            background: var(--s);
+            border-radius: var(--r2);
+            border: 1px solid var(--bd);
+            overflow: hidden;
+            box-shadow: var(--sh);
+            transition: var(--tr);
+        }
+
+            .g-card:hover {
+                box-shadow: var(--sh2);
+            }
+
+        .g-card__head {
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            padding: .75rem 1rem;
+            background: var(--c1);
+            color: #fff;
+            font-size: .82rem;
+            font-weight: 700;
+            position: relative;
+            overflow: hidden;
+        }
+
+            .g-card__head::before {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(135deg,#4d5671 0%,transparent 60%);
+            }
+
+            .g-card__head i {
+                width: 26px;
+                height: 26px;
+                border-radius: 7px;
+                background: rgba(249,115,22,.2);
+                border: 1px solid rgba(249,115,22,.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: .78rem;
+                color: var(--acc);
+                flex-shrink: 0;
+                position: relative;
+            }
+
+        .g-card__head-text {
+            position: relative;
+        }
+
+        .g-card__body {
+            padding: 1.1rem 1.25rem;
+        }
+
+        /* ─── Form fields ─── */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(3,1fr);
+            gap: .85rem;
+        }
+        @@media(max-width:768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        @@media(max-width:1024px) and (min-width:769px) {
+            .form-grid {
+                grid-template-columns: repeat(2,1fr);
+            }
+        }
+
+        .field-group {
+            display: flex;
+            flex-direction: column;
+            gap: .32rem;
+        }
+
+        .field-label {
+            font-size: .75rem;
+            font-weight: 700;
+            color: var(--t2);
+            display: flex;
+            align-items: center;
+            gap: .3rem;
+        }
+
+            .field-label i {
+                color: var(--teal);
+                font-size: .68rem;
+            }
+
+            .field-label .req {
+                color: var(--red);
+            }
+
+        .field-input, .field-select {
+            padding: .58rem .85rem;
+            border: 1.5px solid var(--bd);
+            border-radius: 9px;
+            font-size: .83rem;
+            color: var(--t1);
+            background: var(--s2);
+            outline: none;
+            transition: var(--tr);
+            width: 100%;
+        }
+
+            .field-input:focus, .field-select:focus {
+                border-color: var(--acc);
+                box-shadow: 0 0 0 3px rgba(249,115,22,.1);
+                background: var(--s);
+            }
+
+        .field-error {
+            font-size: .72rem;
+            color: var(--red);
+            display: flex;
+            align-items: center;
+            gap: .25rem;
+        }
+
+            .field-error::before {
+                content: "\f06a";
+                font-family: "Font Awesome 5 Free";
+                font-weight: 900;
+                font-size: .65rem;
+            }
+
+        /* select2 override */
+        .select2-container--bootstrap5 .select2-selection {
+            border: 1.5px solid var(--bd) !important;
+            border-radius: 9px !important;
+            background: var(--s2) !important;
+            font-size: .83rem !important;
+            min-height: 38px !important;
+            padding: .48rem .85rem !important;
+            transition: var(--tr);
+        }
+
+        .select2-container--bootstrap5.select2-container--focus .select2-selection,
+        .select2-container--bootstrap5.select2-container--open .select2-selection {
+            border-color: var(--acc) !important;
+            box-shadow: 0 0 0 3px rgba(249,115,22,.1) !important;
+        }
+
+        /* ─── Systems section ─── */
+        .section-divider {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            margin: .3rem 0 .9rem;
+            font-size: .78rem;
+            font-weight: 700;
+            color: var(--t3);
+        }
+
+            .section-divider::after {
+                content: '';
+                flex: 1;
+                height: 1px;
+                background: var(--bd);
+            }
+
+        .system-cards {
+            display: flex;
+            flex-direction: column;
+            gap: .7rem;
+        }
+
+        .sys-card {
+            border: 1.5px solid var(--bd);
+            border-radius: var(--r);
+            overflow: hidden;
+            background: var(--s2);
+            transition: var(--tr);
+        }
+
+            .sys-card:has(.sys-toggle:checked) {
+                border-color: rgba(249,115,22,.3);
+                background: var(--s);
+            }
+
+        .sys-card__header {
+            display: flex;
+            align-items: center;
+            gap: .65rem;
+            padding: .75rem 1rem;
+            background: var(--s);
+            border-bottom: 1px solid transparent;
+            transition: var(--tr);
+        }
+
+        .sys-card:has(.sys-toggle:checked) .sys-card__header {
+            border-bottom-color: var(--bd);
+            background: var(--acc-lt);
+        }
+
+        /* Custom toggle switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            cursor: pointer;
+        }
+
+            .toggle-switch input {
+                display: none;
+            }
+
+        .toggle-track {
+            width: 36px;
+            height: 20px;
+            border-radius: 99px;
+            background: var(--bd2);
+            position: relative;
+            transition: background .2s;
+        }
+
+            .toggle-track::after {
+                content: '';
+                position: absolute;
+                width: 14px;
+                height: 14px;
+                border-radius: 50%;
+                background: #fff;
+                top: 3px;
+                right: 3px;
+                transition: transform .2s;
+                box-shadow: 0 1px 4px rgba(0,0,0,.2);
+            }
+
+        .toggle-switch input:checked ~ .toggle-track {
+            background: var(--acc);
+        }
+
+            .toggle-switch input:checked ~ .toggle-track::after {
+                transform: translateX(-16px);
+            }
+
+        .toggle-label {
+            font-size: .82rem;
+            font-weight: 700;
+            color: var(--t1);
+        }
+
+        .sys-expand-btn {
+            margin-right: auto;
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
+            border: 1.5px solid var(--bd);
+            background: var(--s);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .65rem;
+            color: var(--t4);
+            cursor: pointer;
+            transition: var(--tr);
+        }
+
+            .sys-expand-btn:hover {
+                border-color: var(--acc);
+                color: var(--acc);
+                background: var(--acc-lt);
+            }
+
+            .sys-expand-btn.open {
+                transform: rotate(180deg);
+                color: var(--acc);
+            }
+
+        .sys-card__body {
+            display: none;
+            padding: .9rem 1rem;
+        }
+
+            .sys-card__body.show {
+                display: block;
+            }
+
+        /* Permission tree inside card */
+        .permission-tree {
+            max-height: 340px;
+            overflow-y: auto;
+            padding-right: .25rem;
+        }
+
+            .permission-tree::-webkit-scrollbar {
+                width: 3px;
+            }
+
+            .permission-tree::-webkit-scrollbar-thumb {
+                background: var(--bd2);
+                border-radius: 99px;
+            }
+
+        .permission-item {
+            margin-bottom: 6px;
+        }
+
+        .permission-checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: .45rem;
+            padding: .38rem .6rem;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: background .15s;
+        }
+
+            .permission-checkbox-container:hover {
+                background: var(--s3);
+            }
+
+        .expand-icon {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            color: var(--t4);
+            font-size: .6rem;
+            transition: transform .2s;
+        }
+
+            .expand-icon.expanded {
+                transform: rotate(90deg);
+            }
+
+        .permission-checkbox {
+            accent-color: var(--acc);
+            cursor: pointer;
+            width: 15px;
+            height: 15px;
+            flex-shrink: 0;
+        }
+
+            .permission-checkbox:indeterminate {
+                accent-color: var(--teal);
+            }
+
+        .form-check-label {
+            font-size: .8rem;
+            color: var(--t2);
+            cursor: pointer;
+        }
+
+        .permission-children {
+            margin-right: 1.4rem;
+            border-right: 2px solid var(--bd);
+            padding-right: .85rem;
+            margin-top: 4px;
+        }
+
+            .permission-children.collapsed {
+                display: none;
+            }
+
+        /* ─── Submit bar ─── */
+        .submit-bar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: .5rem;
+            padding: .9rem 1.25rem;
+            background: var(--s2);
+            border-top: 1px solid var(--bd);
+        }
+
+        .btn-submit {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .55rem 1.4rem;
+            border-radius: 8px;
+            font-size: .85rem;
+            font-weight: 700;
+            background: linear-gradient(135deg,var(--acc),var(--amber));
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            transition: var(--tr);
+        }
+
+            .btn-submit:hover {
+                filter: brightness(1.08);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 16px rgba(249,115,22,.3);
+            }
+
+        .btn-cancel {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .55rem 1.1rem;
+            border-radius: 8px;
+            font-size: .85rem;
+            font-weight: 600;
+            background: var(--s);
+            color: var(--t3);
+            border: 1.5px solid var(--bd2);
+            text-decoration: none;
+            transition: var(--tr);
+        }
+
+            .btn-cancel:hover {
+                background: var(--s3);
+                color: var(--t1);
+                transform: translateY(-1px);
+            }
+    </style>
+}
+<main>
+    <div class="create-page">
+        <div class="create-topbar">
+            <div class="page-title">
+                <i class="fa fa-@(Model.Id > 0 ? "pen" : "plus")"></i>
+                @(Model.Id > 0 ? "ویرایش تفویض" : "ثبت تفویض جدید")
+            </div>
+            <a asp-action="Index" class="action-btn action-btn--outline">
+                <i class="fa fa-list-ul"></i> بازگشت به لیست
+            </a>
+        </div>
+
+        <form asp-action="Create" method="post" id="delegForm">
+            <input type="hidden" asp-for="Id" />
+
+            <div class="g-card">
+                <div class="g-card__head">
+                    <i class="fa fa-user-shield"></i>
+                    <span class="g-card__head-text">اطلاعات تفویض</span>
+                </div>
+                <div class="g-card__body">
+                    <div class="form-grid">
+
+                        <div class="field-group">
+                            <label class="field-label" asp-for="StartDate">
+                                <i class="fa fa-calendar-check"></i> تاریخ شروع <span class="req">*</span>
+                            </label>
+                            <input data-jdp asp-for="StartDate" class="field-input"
+                                   placeholder="۱۴۰۴/۰۱/۰۱" autocomplete="off" />
+                            <span asp-validation-for="StartDate" class="field-error"></span>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="field-label" asp-for="EndDate">
+                                <i class="fa fa-calendar-times"></i> تاریخ پایان <span class="req">*</span>
+                            </label>
+                            <input data-jdp asp-for="EndDate" class="field-input"
+                                   placeholder="۱۴۰۴/۰۶/۳۱" autocomplete="off" />
+                            <span asp-validation-for="EndDate" class="field-error"></span>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="field-label" asp-for="DelegatedUserId">
+                                <i class="fa fa-user-tag"></i> کاربر دریافت‌کننده <span class="req">*</span>
+                            </label>
+                            <select asp-for="DelegatedUserId"
+                                    asp-items="@(new SelectList(Model.Users, "Id", "FullName"))"
+                                    class="field-select select2">
+                                <option value="">-- انتخاب کنید --</option>
+                            </select>
+                            <span asp-validation-for="DelegatedUserId" class="field-error"></span>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <div class="g-card">
+                <div class="g-card__head">
+                    <i class="fa fa-laptop-code"></i>
+                    <span class="g-card__head-text">انتخاب سامانه و دسترسی‌ها</span>
+                </div>
+                <div class="g-card__body">
+
+                    <div class="section-divider">
+                        سامانه‌های قابل تفویض
+                    </div>
+
+                    <div class="system-cards">
+                        @for (int i = 0; i < Model.Systems.Count; i++)
+                        {
+                            var collapseId = $"sysbody{i}";
+                            var toggleBtnId = $"sysToggleBtn{i}";
+                            var selectedSystem = Model.SelectedSystems.FirstOrDefault(s => s.SystemId == Model.Systems[i].SystemId);
+                            var isSelected = selectedSystem != null && selectedSystem.IsSelected;
+                            var selectedPermissions = selectedSystem?.SelectedPermissions ?? new List<int>();
+
+                            <div class="sys-card">
+                                <div class="sys-card__header">
+                                    <input type="hidden" name="SelectedSystems[@i].SystemId" value="@Model.Systems[i].SystemId" />
+
+                                    <label class="toggle-switch">
+                                        <input type="checkbox"
+                                               name="SelectedSystems[@i].IsSelected"
+                                               value="true"
+                                               class="sys-toggle"
+                                               id="system-@i"
+                                               onchange="togglePermissions(this, @i, '@collapseId', '@toggleBtnId')"
+                                               @(isSelected ? "checked" : "") />
+                                        <span class="toggle-track"></span>
+                                        <span class="toggle-label">@Model.Systems[i].SystemName</span>
+                                    </label>
+
+                                    <button type="button"
+                                            id="@toggleBtnId"
+                                            class="sys-expand-btn @(isSelected ? "open" : "")"
+                                            onclick="toggleSysBody('@collapseId','@toggleBtnId')">
+                                        <i class="fa fa-chevron-down"></i>
+                                    </button>
+                                </div>
+
+                                <div id="@collapseId" class="sys-card__body @(isSelected ? "show" : "")">
+                                    <div class="permission-tree">
+                                        @{
+                                            var permViewData = new ViewDataDictionary(ViewData);
+                                            permViewData["permissions"] = Model.Systems[i].Permissions;
+                                            permViewData["selectedPermissions"] = selectedPermissions;
+                                            permViewData["systemIndex"] = i;
+                                            permViewData["namePrefix"] = $"SelectedSystems[{i}].SelectedPermissions";
+                                            Html.RenderPartial("_PermissionTreePartial", permViewData);
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                </div>
+
+                <div class="submit-bar">
+                    <a asp-action="Index" class="btn-cancel">
+                        <i class="fa fa-times"></i> انصراف
+                    </a>
+                    <button type="submit" class="btn-submit">
+                        <i class="fa fa-check-circle"></i>
+                        @(Model.Id > 0 ? "ذخیره تغییرات" : "ثبت تفویض")
+                    </button>
+                </div>
+            </div>
+
+        </form>
+    </div>
+
+</main>
+
+@section scripts {
+    <script src="~/assets/libs/jalalidatepicker/jalalidatepicker.min.js"></script>
+    <script src="~/assets/libs/select2/select2.js"></script>
+    <script>
+        // ── Toggle system body panel ──────────────────────
+        function toggleSysBody(bodyId, btnId) {
+            var body = document.getElementById(bodyId);
+            var btn  = document.getElementById(btnId);
+            body.classList.toggle('show');
+            btn.classList.toggle('open');
+        }
+
+        // ── Enable/disable system checkbox ───────────────
+        function togglePermissions(checkbox, index, bodyId, btnId) {
+            var body = document.getElementById(bodyId);
+            var btn  = document.getElementById(btnId);
+            var permBoxes = document.querySelectorAll('.permission-checkbox.system-' + index);
+
+            if (checkbox.checked) {
+                permBoxes.forEach(function(cb) { cb.checked = true; cb.indeterminate = false; });
+                body.classList.add('show');
+                btn.classList.add('open');
+            } else {
+                permBoxes.forEach(function(cb) { cb.checked = false; cb.indeterminate = false; });
+                body.classList.remove('show');
+                btn.classList.remove('open');
+            }
+        }
+
+        // ── Permission tree: toggle children ─────────────
+        function handlePermissionChange(checkbox) {
+            toggleChildren(checkbox);
+            updateParentCheckboxes(checkbox);
+        }
+
+        function toggleChildren(checkbox) {
+            var item     = checkbox.closest('.permission-item');
+            var children = item.querySelector('.permission-children');
+            if (children) {
+                children.querySelectorAll(':scope > .permission-item > .permission-checkbox-container > .permission-checkbox')
+                    .forEach(function(cb) {
+                        cb.checked = checkbox.checked;
+                        cb.indeterminate = false;
+                        toggleChildren(cb);
+                    });
+            }
+        }
+
+        function updateParentCheckboxes(checkbox) {
+            var currentItem   = checkbox.closest('.permission-item');
+            var parentContainer = currentItem.parentElement;
+            if (parentContainer && parentContainer.classList.contains('permission-children')) {
+                var parentItem = parentContainer.parentElement;
+                if (parentItem && parentItem.classList.contains('permission-item')) {
+                    var parentCheckbox = parentItem.querySelector(':scope > .permission-checkbox-container > .permission-checkbox');
+                    if (parentCheckbox) {
+                        var siblings = parentContainer.querySelectorAll(':scope > .permission-item > .permission-checkbox-container > .permission-checkbox');
+                        var checked = 0, indet = 0;
+                        siblings.forEach(function(s) {
+                            if (s.checked) checked++;
+                            else if (s.indeterminate) indet++;
+                        });
+                        if (checked === 0 && indet === 0) {
+                            parentCheckbox.checked = false; parentCheckbox.indeterminate = false;
+                        } else if (checked === siblings.length && indet === 0) {
+                            parentCheckbox.checked = true;  parentCheckbox.indeterminate = false;
+                        } else {
+                            parentCheckbox.checked = true;  parentCheckbox.indeterminate = true;
+                        }
+                        updateParentCheckboxes(parentCheckbox);
+                    }
+                }
+            }
+        }
+
+        function toggleBranch(element) {
+            var icon     = element.querySelector('.expand-icon');
+            var item     = element.closest('.permission-item');
+            var children = item.querySelector('.permission-children');
+            if (children && icon) {
+                children.classList.toggle('collapsed');
+                icon.classList.toggle('expanded');
+            }
+        }
+
+        // ── Init ─────────────────────────────────────────
+        $(document).ready(function () {
+            jalaliDatepicker.startWatch({
+                hideAfterChange: true, autoHide: true,
+                showTodayBtn: true, showEmptyBtn: true,
+                topSpace: 10, bottomSpace: 30
+            });
+
+            $('.select2').select2({
+                theme: 'bootstrap5',
+                placeholder: '-- انتخاب کنید --',
+                width: '100%'
+            });
+
+            // Set initial parent states
+            setTimeout(function () {
+                document.querySelectorAll('.permission-checkbox').forEach(function (cb) {
+                    var item = cb.closest('.permission-item');
+                    if (!(item.querySelector('.permission-children'))) {
+                        if (cb.checked) updateParentCheckboxes(cb);
+                    }
+                });
+            }, 100);
+        });
+
+        // ── Form validation ──────────────────────────────
+        document.getElementById('delegForm').addEventListener('submit', function (e) {
+            var start = new Date($('#StartDate').val());
+            var end   = new Date($('#EndDate').val());
+            if (start >= end) {
+                e.preventDefault();
+                var toast = document.createElement('div');
+                toast.style.cssText = 'position:fixed;top:76px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:.6rem 1.3rem;border-radius:10px;font-size:.82rem;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.25);border:1px solid rgba(239,68,68,.4)';
+                toast.innerHTML = '<i class="fa fa-exclamation-triangle" style="color:#ef4444;margin-left:.4rem"></i> تاریخ پایان باید بعد از تاریخ شروع باشد';
+                document.body.appendChild(toast);
+                setTimeout(function () { toast.remove(); }, 3500);
+            }
+        });
+    </script>
+}

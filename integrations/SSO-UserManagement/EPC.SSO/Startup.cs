@@ -78,7 +78,8 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
                 if (!string.IsNullOrWhiteSpace(issuer))
                     options.IssuerUri = issuer;
             })
-            .AddCustomTokenRequestValidator<CustomTokenRequestValidator>();
+            .AddCustomTokenRequestValidator<CustomTokenRequestValidator>()
+            .AddProfileService<ActiveUserProfileService>();
 
         // ✅ قبلاً services.BuildServiceProvider() داخل ConfigureServices صدا زده می‌شد (یک Container دوم
         //    با Singletonهای تکراری). حالا فقط یک DbContext موقت ساخته و Dispose می‌شود.

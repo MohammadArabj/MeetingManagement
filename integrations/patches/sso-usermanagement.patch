@@ -1,3 +1,516 @@
+diff --git a/EPC.SSO/AntiXssMiddleware.cs b/EPC.SSO/AntiXssMiddleware.cs
+index bbf1d2d..e137e95 100644
+--- a/EPC.SSO/AntiXssMiddleware.cs
++++ b/EPC.SSO/AntiXssMiddleware.cs
+@@ -4,11 +4,26 @@ using Newtonsoft.Json;
+ 
+ namespace EPC.SSO;
+ 
++/// <summary>
++/// فیلتر ساده‌ی ورودی‌های حاوی تگ خطرناک (لایه‌ی دفاعی دوم؛ لایه‌ی اصلی Encode خروجی Razor است).
++/// اصلاحات:
++///  • فقط بدنه‌های JSON و فرم (urlencoded) بررسی می‌شوند. قبلاً هر بدنه‌ای (از جمله فایل‌های آپلودی و
++///    باینری) کامل در حافظه کپی و به رشته تبدیل می‌شد؛ هم کند و پرمصرف بود و هم فایل‌هایی که اتفاقاً
++///    بایت‌های «&lt;html» داشتند با 400 رد می‌شدند.
++///  • سقف اندازه (۲۵۶ کیلوبایت) و EnableBuffering به جای کپی دستی Stream.
++///  • بدنه‌ی فرم URL-decode می‌شود و مقایسه حساس به حروف کوچک/بزرگ نیست (قبلاً &lt;SCRIPT&gt; یا
++///    %3Cscript%3E عبور می‌کرد).
++/// </summary>
+ public class AntiXssMiddleware
+ {
++    private const int MaxInspectedBodyBytes = 256 * 1024;
++    private static readonly string ErrorJson = new ErrorResponse
++    {
++        Description = "Error from AntiXssMiddleware",
++        ErrorCode = 500
++    }.ToJSON();
++
+     private readonly RequestDelegate _next;
+-    private ErrorResponse _error;
+-    private readonly int _statusCode = (int)HttpStatusCode.BadRequest;
+ 
+     public AntiXssMiddleware(RequestDelegate next)
+     {
+@@ -17,81 +32,69 @@ public class AntiXssMiddleware
+ 
+     public async Task Invoke(HttpContext context)
+     {
+-        // Check XSS in URL
+-        if (!string.IsNullOrWhiteSpace(context.Request.Path.Value))
+-        {
+-            var url = context.Request.Path.Value;
++        var request = context.Request;
+ 
+-            if (CrossSiteScriptingValidation.IsDangerousString(url, out _))
+-            {
+-                await RespondWithAnError(context).ConfigureAwait(false);
+-                return;
+-            }
+-        }
+-
+-        // Check XSS in query string
+-        if (!string.IsNullOrWhiteSpace(context.Request.QueryString.Value))
++        if (CrossSiteScriptingValidation.IsDangerousString(WebUtility.UrlDecode(request.Path.Value ?? string.Empty), out _) ||
++            CrossSiteScriptingValidation.IsDangerousString(WebUtility.UrlDecode(request.QueryString.Value ?? string.Empty), out _))
+         {
+-            var queryString = WebUtility.UrlDecode(context.Request.QueryString.Value);
+-
+-            if (CrossSiteScriptingValidation.IsDangerousString(queryString, out _))
+-            {
+-                await RespondWithAnError(context).ConfigureAwait(false);
+-                return;
+-            }
++            await RespondWithAnError(context).ConfigureAwait(false);
++            return;
+         }
+ 
+-        // Check XSS in request content
+-        var originalBody = context.Request.Body;
+-        try
++        if (ShouldInspectBody(request))
+         {
+-            var content = await ReadRequestBody(context);
+-
+-            if (CrossSiteScriptingValidation.IsDangerousString(content, out _))
++            var content = await ReadRequestBody(request).ConfigureAwait(false);
++            if (content is not null && CrossSiteScriptingValidation.IsDangerousString(content, out _))
+             {
+                 await RespondWithAnError(context).ConfigureAwait(false);
+                 return;
+             }
+-            await _next(context).ConfigureAwait(false);
+-        }
+-        finally
+-        {
+-            context.Request.Body = originalBody;
+         }
++
++        await _next(context).ConfigureAwait(false);
+     }
+ 
+-    private static async Task<string> ReadRequestBody(HttpContext context)
++    private static bool ShouldInspectBody(HttpRequest request)
+     {
+-        var buffer = new MemoryStream();
+-        await context.Request.Body.CopyToAsync(buffer);
+-        context.Request.Body = buffer;
+-        buffer.Position = 0;
+-
+-        var encoding = Encoding.UTF8;
+-
+-        var requestContent = await new StreamReader(buffer, encoding).ReadToEndAsync();
+-        context.Request.Body.Position = 0;
++        if (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method) || HttpMethods.IsOptions(request.Method))
++            return false;
++        if (request.ContentLength is 0) return false;
++
++        var type = request.ContentType ?? string.Empty;
++        return type.StartsWith("application/json", StringComparison.OrdinalIgnoreCase)
++               || type.StartsWith("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase)
++               || type.StartsWith("text/", StringComparison.OrdinalIgnoreCase);
++    }
+ 
+-        return requestContent;
++    /// <summary>بدنه تا سقف مشخص؛ بزرگ‌تر از سقف بررسی نمی‌شود (null)</summary>
++    private static async Task<string?> ReadRequestBody(HttpRequest request)
++    {
++        if (request.ContentLength > MaxInspectedBodyBytes) return null;
++
++        request.EnableBuffering(MaxInspectedBodyBytes);
++        var buffer = new byte[MaxInspectedBodyBytes + 1];
++        var read = 0;
++        int n;
++        while (read < buffer.Length &&
++               (n = await request.Body.ReadAsync(buffer.AsMemory(read, buffer.Length - read)).ConfigureAwait(false)) > 0)
++            read += n;
++        request.Body.Position = 0;
++
++        if (read > MaxInspectedBodyBytes) return null;
++
++        var text = Encoding.UTF8.GetString(buffer, 0, read);
++        return (request.ContentType ?? string.Empty).StartsWith("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase)
++            ? WebUtility.UrlDecode(text)
++            : text;
+     }
+ 
+-    private async Task RespondWithAnError(HttpContext context)
++    private static async Task RespondWithAnError(HttpContext context)
+     {
+         context.Response.Clear();
+         context.Response.Headers.AddHeaders();
+         context.Response.ContentType = "application/json; charset=utf-8";
+-        context.Response.StatusCode = _statusCode;
+-
+-        if (_error == null)
+-        {
+-            _error = new ErrorResponse
+-            {
+-                Description = "Error from AntiXssMiddleware",
+-                ErrorCode = 500
+-            };
+-        }
+-
+-        await context.Response.WriteAsync(_error.ToJSON());
++        context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
++        await context.Response.WriteAsync(ErrorJson);
+     }
+ }
+ 
+@@ -105,7 +108,7 @@ public static class AntiXssMiddlewareExtension
+ 
+ public static class CrossSiteScriptingValidation
+ {
+-    private static readonly char[] StartingChars = { '<', '&' };
++    private static readonly string[] DangerousTags = ["<script", "<html", "<css", "<php", "<iframe", "<object", "<embed"];
+ 
+     #region Public methods
+ 
+@@ -114,50 +117,24 @@ public static class CrossSiteScriptingValidation
+         //bool inComment = false;
+         matchIndex = 0;
+ 
+-        if (s.Contains("<script") || s.Contains("<html") || s.Contains("<css") || s.Contains("<php"))
+-            return true;
++        if (string.IsNullOrEmpty(s)) return false;
+ 
+-        for (var i = 0; ;)
++        foreach (var tag in DangerousTags)
+         {
+-
+-            // Look for the start of one of our patterns 
+-            var n = s.IndexOfAny(StartingChars, i);
+-
+-            // If not found, the string is safe
+-            if (n < 0) return false;
+-
+-            // If it's the last char, it's safe 
+-            if (n == s.Length - 1) return false;
+-
+-            matchIndex = n;
+-
+-            //switch (s[n])
+-            //{
+-            //    case '<':
+-            //        // If the < is followed by a letter or '!', it's unsafe (looks like a tag or HTML comment)
+-            //        if (IsAtoZ(s[n + 1]) || s[n + 1] == '!' || s[n + 1] == '/' || s[n + 1] == '?') 
+-            //            return true;
+-            //        break;
+-            //    case '&':
+-            //        // If the & is followed by a #, it's unsafe (e.g. S) 
+-            //        if (s[n + 1] == '#') 
+-            //            return true;
+-            //        break;
+-
+-            //}
+-
+-            // Continue searching
+-            i = n + 1;
++            var index = s.IndexOf(tag, StringComparison.OrdinalIgnoreCase);
++            if (index >= 0)
++            {
++                matchIndex = index;
++                return true;
++            }
+         }
+-    }
+-
+-    #endregion
+ 
+-    #region Private methods
++        // JSON escape شده‌ی «<» (\u003c) هم بررسی می‌شود
++        if (s.Contains("\\u003c", StringComparison.OrdinalIgnoreCase) &&
++            IsDangerousString(System.Text.RegularExpressions.Regex.Replace(s, @"\\u003c", "<", System.Text.RegularExpressions.RegexOptions.IgnoreCase), out matchIndex))
++            return true;
+ 
+-    private static bool IsAtoZ(char c)
+-    {
+-        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
++        return false;
+     }
+ 
+     #endregion
+@@ -183,5 +160,5 @@ public static class CrossSiteScriptingValidation
+ public class ErrorResponse
+ {
+     public int ErrorCode { get; set; }
+-    public string Description { get; set; }
++    public string Description { get; set; } = string.Empty;
+ }
+diff --git a/EPC.SSO/Filters/ForcePasswordChangeFilter.cs b/EPC.SSO/Filters/ForcePasswordChangeFilter.cs
+index 0d0d050..bbb30a9 100644
+--- a/EPC.SSO/Filters/ForcePasswordChangeFilter.cs
++++ b/EPC.SSO/Filters/ForcePasswordChangeFilter.cs
+@@ -15,6 +15,8 @@ public class ForcePasswordChangeFilter : IAsyncActionFilter
+         ("Account", "ChangePassword"),
+         ("Account", "Logout"),
+         ("Account", "AccessDenied"),
++        // مدیری که با کاربر دارای رمز منقضی وارد شده باید بتواند به حساب خودش برگردد
++        ("Grants", "EndImpersonation"),
+     ];
+ 
+     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+diff --git a/EPC.SSO/IdentitySettings/ActiveUserProfileService.cs b/EPC.SSO/IdentitySettings/ActiveUserProfileService.cs
+new file mode 100644
+index 0000000..638c305
+--- /dev/null
++++ b/EPC.SSO/IdentitySettings/ActiveUserProfileService.cs
+@@ -0,0 +1,64 @@
++using IdentityServer8.Models;
++using IdentityServer8.Services;
++using Microsoft.EntityFrameworkCore;
++using Microsoft.Extensions.Caching.Memory;
++using UserManagement.Infrastructure.Persistence;
++
++namespace EPC.SSO.IdentitySettings;
++
++/// <summary>
++/// وضعیت حساب در هر درخواست IdentityServer (authorize / token / userinfo) دوباره بررسی می‌شود.
++///  • کاربر قفل‌شده یا حذف‌شده با کوکی قبلی‌اش دیگر Code/Token جدید برای سامانه‌ها نمی‌گیرد
++///    (قبلاً DefaultProfileService همیشه IsActive=true برمی‌گرداند).
++///  • کاربری که باید رمزش را عوض کند (رمز موقت/منقضی) تا تغییر رمز وارد هیچ سامانه‌ای نمی‌شود؛
++///    ForcePasswordChangeFilter فقط صفحات MVC را می‌بست و /connect/authorize باز بود.
++/// نتیجه‌ی کوئری برای هر کاربر ۳۰ ثانیه کش می‌شود.
++/// </summary>
++public sealed class ActiveUserProfileService(
++    ILogger<DefaultProfileService> logger,
++    IDbContextFactory<UserManagementCommandContext> contextFactory,
++    IMemoryCache cache) : DefaultProfileService(logger)
++{
++    private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(30);
++
++    public override async Task IsActiveAsync(IsActiveContext context)
++    {
++        if (context.Caller == IdentityServer8.IdentityServerConstants.ProfileIsActiveCallers.AuthorizeEndpoint &&
++            string.Equals(context.Subject.FindFirst("PasswordExpired")?.Value, "true", StringComparison.OrdinalIgnoreCase))
++        {
++            context.IsActive = false;
++            return;
++        }
++
++        if (!Guid.TryParse(context.Subject.FindFirst("sub")?.Value, out var userGuid))
++        {
++            context.IsActive = false;
++            return;
++        }
++
++        context.IsActive = await IsUserActiveAsync(userGuid);
++    }
++
++    private async Task<bool> IsUserActiveAsync(Guid userGuid)
++    {
++        var key = $"profile:active:{userGuid:N}";
++        if (cache.TryGetValue(key, out bool active)) return active;
++
++        try
++        {
++            await using var db = await contextFactory.CreateDbContextAsync();
++            active = await db.Users.AsNoTracking()
++                .AnyAsync(u => u.Guid == userGuid && !u.IsRemoved
++                               && u.IsLocked != Epc.Domain.AuditableAggregateRootBase<int>.LockStates.Lock);
++        }
++        catch (Exception ex)
++        {
++            // خطای دیتابیس نباید همه را از سامانه‌ها بیرون کند
++            Logger.LogError(ex, "Checking account state of {User} failed", userGuid);
++            return true;
++        }
++
++        cache.Set(key, active, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = CacheFor });
++        return active;
++    }
++}
+diff --git a/EPC.SSO/IdentitySettings/IdentityServiceConfiguration.cs b/EPC.SSO/IdentitySettings/IdentityServiceConfiguration.cs
+index 4104301..fb61964 100644
+--- a/EPC.SSO/IdentitySettings/IdentityServiceConfiguration.cs
++++ b/EPC.SSO/IdentitySettings/IdentityServiceConfiguration.cs
+@@ -79,7 +79,8 @@ public class IdentityServiceConfiguration(UserManagementCommandContext context)
+                 PostLogoutRedirectUris = { system.Url },
+                 RequireClientSecret = false,
+                 IdentityTokenLifetime = tokenExpiryTime,
+-                AuthorizationCodeLifetime = tokenExpiryTime,
++                // کد یک‌بارمصرف فقط برای چند ثانیه‌ی بین Redirect و Token لازم است (قبلاً هم‌اندازه‌ی توکن: ۸ ساعت)
++                AuthorizationCodeLifetime = 300,
+                 AccessTokenLifetime = tokenExpiryTime,
+                 AllowedCorsOrigins = allowedOrigins,
+                 AllowOfflineAccess = false,
+diff --git a/EPC.SSO/IdentitySettings/UserAuthenticationValidator.cs b/EPC.SSO/IdentitySettings/UserAuthenticationValidator.cs
+deleted file mode 100644
+index cbbf04e..0000000
+--- a/EPC.SSO/IdentitySettings/UserAuthenticationValidator.cs
++++ /dev/null
+@@ -1,171 +0,0 @@
+-﻿using System.Security.Claims;
+-using Epc.Application.Setting;
+-using Epc.Domain;
+-using Epc.Identity;
+-using EPC.SSO.SettingModels;
+-using IdentityServer8.Models;
+-using IdentityServer8.Validation;
+-using Microsoft.EntityFrameworkCore;
+-using Serilog;
+-using Serilog.Events;
+-using Serilog.Sinks.SystemConsole.Themes;
+-using UserManagement.Domain.UserAgg;
+-using UserManagement.Infrastructure.Persistence;
+-
+-namespace EPC.SSO.IdentitySettings;
+-
+-public class UserAuthenticationValidator(
+-    IPasswordHasher passwordHasher,
+-    IConnectionStringBuilder connectionStringBuilder,
+-    IHttpContextAccessor httpContextAccessor,
+-    ISettingService settingService)
+-    : IResourceOwnerPasswordValidator
+-{
+-    private SecuritySettingViewModel Settings { get; set; } = settingService.Fetch<SecuritySettingViewModel>();
+-
+-    public Task ValidateAsync(ResourceOwnerPasswordValidationContext context)
+-    {
+-        var dbContextOptionsBuilder = new DbContextOptionsBuilder<UserManagementCommandContext>();
+-        var dbName = context.Request.Raw["dbName"];
+-        var connectionString = connectionStringBuilder.Build(dbName);
+-        dbContextOptionsBuilder.UseSqlServer(connectionString);
+-        var identityContext = new UserManagementCommandContext(dbContextOptionsBuilder.Options);
+-
+-        try
+-        {
+-            Log.Logger = new LoggerConfiguration()
+-           .MinimumLevel.Debug()
+-           .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+-           .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+-           .MinimumLevel.Override("System", LogEventLevel.Warning)
+-           .MinimumLevel.Override("Microsoft.AspNetCore.Authentication", LogEventLevel.Information)
+-           .Enrich.FromLogContext()
+-           .WriteTo.Console(
+-               outputTemplate:
+-               "222[{Timestamp:HH:mm:ss} {Level}] {SourceContext}{NewLine}{Message:lj}{NewLine}{Exception}{NewLine}",
+-               theme: AnsiConsoleTheme.Code)
+-           .CreateLogger();
+-
+-
+-            var user = identityContext
+-                .Users
+-                .Include(x => x.Passwords)
+-                .Include(x => x.Company)
+-                .Include(x => x.Unit)
+-                .Include(x => x.Sessions
+-                    .Where(x => x.IsSuccessful)
+-                    .Where(x => x.IsActive == EntityBase<long>.ActiveStates.Active))
+-                .Include(u => u.Positions).ThenInclude(userPosition => userPosition.Position)
+-                .FirstOrDefault(x => x.PersonnelCode == context.UserName && !x.IsRemoved);
+-            var unit = identityContext.Units.Find(user.UnitId);
+-            if (user is null)
+-            {
+-                context.Result =
+-                    new GrantValidationResult(TokenRequestErrors.InvalidClient,
+-                        "مشخصات ورود اشتباه است. لطفا دوباره تلاش کنید.");
+-                return Task.FromResult(context.Result);
+-            }
+-
+-            if (user.IsLocked == AuditableAggregateRootBase<int>.LockStates.Lock)
+-            {
+-                context.Result = LoginFailed("کاربر قفل شده است، لطفا به راهبر سیستم اطلاع رسانی کنید.");
+-                return Task.FromResult(context.Result);
+-            }
+-
+-            if (LoginAttemptsCountReached(user))
+-            {
+-                user.Lock(user.Guid);
+-                identityContext.SaveChanges();
+-                context.Result = LoginFailed("کاربر قفل شده است، لطفا به راهبر سیستم اطلاع رسانی کنید.");
+-                return Task.FromResult(context.Result);
+-            }
+-
+-            var clientIpAddress = httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+-
+-            //if (user.Sessions.Any(x => !x.IsExpired()))
+-            //{
+-            //    user.OpenSession(user.Guid, user.NationalCode, user.FirstName + ' ' + user.LastName, user.UserName, user.Company.Title,
+-            //        user.Unit.Title, false, clientIpAddress);
+-            //    identityContext.SaveChanges();
+-
+-            //    context.Result = LoginFailed("کاربر با این مشخصات قبلا وارد سیستم شده است.");
+-            //    return Task.FromResult(context.Result);
+-            //}
+-
+-            var userPassword = user.Passwords
+-                .First(x => x.IsActive == EntityBase<long>.ActiveStates.Active);
+-
+-            var (verified, _) = passwordHasher.Check(userPassword.Password, context.Password);
+-
+-            if (!verified)
+-            {
+-                user.LoginFailed();
+-                if (LoginAttemptsCountReached(user))
+-                {
+-                    user.Lock(user.Guid);
+-                    identityContext.SaveChanges();
+-                    context.Result = LoginFailed("کاربر قفل شده است، لطفا به راهبر سیستم اطلاع رسانی کنید.");
+-                    return Task.FromResult(context.Result);
+-                }
+-
+-                user.OpenSession(user.Guid, user.NationalCode, user.FirstName + ' ' + user.LastName, user.PersonnelCode, user.Company.Title,
+-                    unit?.Title??"", false, clientIpAddress);
+-                identityContext.SaveChanges();
+-
+-                context.Result = LoginFailed("مشخصات ورود اشتباه است. لطفا دوباره تلاش کنید.");
+-                return Task.FromResult(context.Result);
+-            }
+-            Log.Information("before open session ...");
+-            user.OpenSession(user.Guid, user.NationalCode, user.FirstName + ' ' + user.LastName, user.PersonnelCode, user.Company.Title,
+-                unit?.Title ?? "", true, clientIpAddress, Settings.TokenExpiryTime);
+-
+-            var firstLogin = identityContext.Users
+-                .Where(x => x.Guid == user.Guid)
+-                .SelectMany(x => x.Sessions)
+-                .Any(x => x.IsSuccessful) == false;
+-
+-            var shouldChangePassword = firstLogin || userPassword.IsExpired();
+-
+-            if (shouldChangePassword)
+-                user.ShouldChangePassword();
+-            else
+-                user.PasswordRenewed();
+-
+-            user.ResetFailedLoginAttempts(user.Guid);
+-            identityContext.SaveChanges();
+-            Log.Information("ResetFailedLoginAttempts ...");
+-
+-            context.Result = new GrantValidationResult(user.Id.ToString(), "Bearer", DateTime.Now,
+-                new List<Claim>
+-                {
+-                    new("id", user.Guid.ToString()),
+-                    new("position", string.Join(",", user.Positions.Select(x => x.PositionId))),
+-                    new("position", user.Positions.Any()?user.Positions.FirstOrDefault()?.Position.Title:""),
+-                    new("positionGuid",user.Positions.Any()?user.Positions.FirstOrDefault()?.Position.Guid.ToString():""),
+-                    new("dbName", dbName),
+-                    new("organizationChartGuid", unit.Guid.ToString())
+-                });
+-            Log.Information("Task.FromResult ...");
+-            return Task.FromResult(context.Result);
+-        }
+-        catch (Exception exception)
+-        {
+-            Log.Information(exception.ToString());
+-            Console.WriteLine(exception);
+-            throw;
+-        }
+-    }
+-
+-    private bool LoginAttemptsCountReached(User user)
+-    {
+-        return user.FailedLoginAttempts >= Settings.LoginAttemptsCountLimit;
+-    }
+-
+-    private static GrantValidationResult LoginFailed(string message)
+-    {
+-        return new GrantValidationResult(TokenRequestErrors.InvalidClient, message)
+-        {
+-            CustomResponse = new Dictionary<string, object> { { "a", "500" } }
+-        };
+-    }
+-}
+\ No newline at end of file
 diff --git a/EPC.SSO/Infrastructure/AppCache.cs b/EPC.SSO/Infrastructure/AppCache.cs
 index b857f70..dcc3049 100644
 --- a/EPC.SSO/Infrastructure/AppCache.cs
@@ -133,11 +646,192 @@ index b857f70..dcc3049 100644
 -        return locks;
 -    }
  }
+diff --git a/EPC.SSO/Infrastructure/CaptchaImage.cs b/EPC.SSO/Infrastructure/CaptchaImage.cs
+new file mode 100644
+index 0000000..54c6682
+--- /dev/null
++++ b/EPC.SSO/Infrastructure/CaptchaImage.cs
+@@ -0,0 +1,96 @@
++using System.Globalization;
++using System.Security.Cryptography;
++using System.Text;
++
++namespace EPC.SSO.Infrastructure;
++
++/// <summary>
++/// تصویر کد امنیتی (SVG) که متن آن فقط به صورت خطوط کج و معوج رسم می‌شود.
++/// قبلاً متن کد در HTML و در پاسخ JSON (RefreshCaptcha) برگردانده می‌شد و ربات به‌راحتی آن را می‌خواند.
++/// SVG فقط در تگ img استفاده می‌شود (اسکریپت در آن اجرا نمی‌شود) و هیچ متن یا فونتی در آن نیست.
++/// </summary>
++public static class CaptchaImage
++{
++    /// <summary>کاراکترهای مجاز (بدون ارقام قابل اشتباه ۰ و ۱)</summary>
++    public const string Alphabet = "23456789";
++
++    // هر رقم: چند خط شکسته روی شبکه‌ی 10×16
++    private static readonly Dictionary<char, float[][]> Glyphs = new()
++    {
++        ['2'] = [[1, 4, 3, 1, 7, 1, 9, 4, 9, 6, 1, 15, 9, 15]],
++        ['3'] = [[1, 2, 8, 1, 9, 4, 8, 7, 4, 8], [4, 8, 8, 9, 9, 12, 8, 15, 1, 14]],
++        ['4'] = [[7, 15, 7, 1, 1, 11, 9, 11]],
++        ['5'] = [[9, 1, 2, 1, 1, 7, 7, 7, 9, 10, 8, 14, 1, 15]],
++        ['6'] = [[8, 1, 3, 3, 1, 9, 2, 14, 7, 15, 9, 12, 8, 9, 3, 8, 1, 10]],
++        ['7'] = [[1, 1, 9, 1, 4, 15], [3, 8, 8, 8]],
++        ['8'] = [[5, 8, 2, 6, 2, 2, 5, 1, 8, 2, 8, 6, 5, 8, 1, 11, 2, 15, 8, 15, 9, 11, 5, 8]],
++        ['9'] = [[8, 6, 6, 8, 2, 7, 1, 3, 3, 1, 7, 1, 9, 4, 8, 10, 5, 15, 2, 15]],
++    };
++
++    public const int Width = 180;
++    public const int Height = 56;
++
++    public static string NewText(int length = 5) =>
++        new(Enumerable.Range(0, length).Select(_ => Alphabet[RandomNumberGenerator.GetInt32(Alphabet.Length)]).ToArray());
++
++    public static string Render(string text)
++    {
++        var sb = new StringBuilder(4096);
++        sb.Append(CultureInfo.InvariantCulture,
++            $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{Width}\" height=\"{Height}\" viewBox=\"0 0 {Width} {Height}\">");
++        sb.Append(CultureInfo.InvariantCulture, $"<rect width=\"{Width}\" height=\"{Height}\" fill=\"#f4efe9\"/>");
++
++        // نویز پس‌زمینه
++        for (var i = 0; i < 40; i++)
++            sb.Append(CultureInfo.InvariantCulture,
++                $"<circle cx=\"{R(0, Width)}\" cy=\"{R(0, Height)}\" r=\"{R(0.6, 1.8):0.#}\" fill=\"{Color(150, 210)}\"/>");
++        for (var i = 0; i < 3; i++)
++            sb.Append(Curve(Color(140, 200), R(1, 1.8)));
++
++        var step = (Width - 24.0) / text.Length;
++        for (var i = 0; i < text.Length; i++)
++        {
++            if (!Glyphs.TryGetValue(text[i], out var strokes)) continue;
++            var scale = R(2.2, 2.7);
++            var x = 12 + i * step + R(-3, 3);
++            var y = (Height - 16 * scale) / 2 + R(-4, 4);
++            var angle = R(-22, 22);
++            var color = Color(30, 90);
++
++            sb.Append(CultureInfo.InvariantCulture,
++                $"<g transform=\"translate({x:0.##} {y:0.##}) rotate({angle:0.#} {5 * scale:0.#} {8 * scale:0.#})\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{R(2.4, 3.2):0.#}\" stroke-linecap=\"round\" stroke-linejoin=\"round\">");
++            foreach (var stroke in strokes)
++            {
++                sb.Append("<polyline points=\"");
++                for (var p = 0; p < stroke.Length; p += 2)
++                {
++                    var px = (stroke[p] + R(-0.5, 0.5)) * scale;
++                    var py = (stroke[p + 1] + R(-0.5, 0.5)) * scale;
++                    sb.Append(CultureInfo.InvariantCulture, $"{px:0.#},{py:0.#} ");
++                }
++                sb.Append("\"/>");
++            }
++            sb.Append("</g>");
++        }
++
++        // خطوط روی متن
++        for (var i = 0; i < 2; i++)
++            sb.Append(Curve(Color(60, 120), R(1.2, 2)));
++
++        sb.Append("</svg>");
++        return sb.ToString();
++    }
++
++    private static string Curve(string color, double width) =>
++        string.Create(CultureInfo.InvariantCulture,
++            $"<path d=\"M{R(0, 20):0} {R(5, Height - 5):0} C{R(40, 80):0} {R(0, Height):0},{R(100, 140):0} {R(0, Height):0},{R(160, Width):0} {R(5, Height - 5):0}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{width:0.#}\"/>");
++
++    private static double R(double min, double max) =>
++        min + RandomNumberGenerator.GetInt32(0, 10_000) / 10_000.0 * (max - min);
++
++    private static string Color(int min, int max)
++    {
++        int C() => RandomNumberGenerator.GetInt32(min, max);
++        return $"#{C():x2}{C():x2}{C():x2}";
++    }
++}
+diff --git a/EPC.SSO/Infrastructure/HttpClientSetup.cs b/EPC.SSO/Infrastructure/HttpClientSetup.cs
+index b489c16..b7fbe66 100644
+--- a/EPC.SSO/Infrastructure/HttpClientSetup.cs
++++ b/EPC.SSO/Infrastructure/HttpClientSetup.cs
+@@ -31,28 +31,36 @@ public static class HttpClientSetup
+     {
+         // ⚠️ فقط برای سرویس‌هایی که گواهی Self-signed دارند. لیست در appsettings:
+         //    "Http": { "AcceptAnyCertificateClients": [ "FarzinClient", "SmsClient" ] }
+-        var acceptAny = configuration.GetSection("Http:AcceptAnyCertificateClients").Get<string[]>()
+-                        ?? [FarzinClient, SmsClient];
++        // پیش‌فرض خالی است (قبلاً بدون تنظیم، گواهی SMS و فرزین بررسی نمی‌شد و رمزهای موقت در معرض MITM بودند).
++        // امن‌تر: به جای پذیرش هر گواهی، Thumbprint گواهی همان سرویس را ثابت کنید:
++        //    "Http": { "PinnedCertificates": { "SmsClient": "<SHA1 thumbprint>" } }
++        var acceptAny = configuration.GetSection("Http:AcceptAnyCertificateClients").Get<string[]>() ?? [];
++        var pinned = configuration.GetSection("Http:PinnedCertificates").GetChildren()
++            .Where(c => !string.IsNullOrWhiteSpace(c.Value))
++            .ToDictionary(c => c.Key, c => c.Value!.Replace(" ", "").Replace(":", ""), StringComparer.OrdinalIgnoreCase);
++        SslMode Mode(string client) => pinned.TryGetValue(client, out var thumb)
++            ? new SslMode(false, thumb)
++            : new SslMode(acceptAny.Contains(client, StringComparer.OrdinalIgnoreCase), null);
+ 
+         services.AddHttpClient(IdentityServerClient, c => c.Timeout = TimeSpan.FromSeconds(10))
+-            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(acceptAny.Contains(IdentityServerClient)));
++            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(Mode(IdentityServerClient)));
+ 
+         services.AddHttpClient(InternalApi, c => c.Timeout = TimeSpan.FromSeconds(15))
+-            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(acceptAny.Contains(InternalApi)));
++            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(Mode(InternalApi)));
+ 
+         // انتقال فایل: Timeout کلی نداریم؛ لغو با RequestAborted/CancellationToken کنترل می‌شود.
+         services.AddHttpClient(InternalApiFile, c => c.Timeout = Timeout.InfiniteTimeSpan)
+-            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(acceptAny.Contains(InternalApiFile)));
++            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(Mode(InternalApiFile)));
+ 
+         services.AddHttpClient(FarzinClient, c => c.Timeout = TimeSpan.FromSeconds(15))
+-            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(acceptAny.Contains(FarzinClient)));
++            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(Mode(FarzinClient)));
+ 
+         services.AddHttpClient(SmsClient, c => c.Timeout = TimeSpan.FromSeconds(15))
+-            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(acceptAny.Contains(SmsClient)));
++            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(Mode(SmsClient)));
+ 
+         // کلاینت پیش‌فرض (KaajDocumentApiService از CreateClient() بدون نام استفاده می‌کند)
+         services.AddHttpClient(Microsoft.Extensions.Options.Options.DefaultName)
+-            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(false));
++            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(default));
+ 
+         // ✅ قبلاً ManagementSystemsApiService با AddScoped ثبت شده بود و HttpClient بدون BaseAddress
+         //    دریافت می‌کرد؛ چون endpointها نسبی هستند، همه‌ی درخواست‌ها Exception می‌دادند و
+@@ -64,12 +72,14 @@ public static class HttpClientSetup
+                     c.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+                 c.Timeout = TimeSpan.FromSeconds(15);
+             })
+-            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(acceptAny.Contains("ManagementSystemsApi")));
++            .ConfigurePrimaryHttpMessageHandler(() => CreateHandler(Mode("ManagementSystemsApi")));
+ 
+         return services;
+     }
+ 
+-    private static SocketsHttpHandler CreateHandler(bool acceptAnyCertificate)
++    private readonly record struct SslMode(bool AcceptAny, string? PinnedThumbprint);
++
++    private static SocketsHttpHandler CreateHandler(SslMode mode)
+     {
+         var ssl = new SslClientAuthenticationOptions
+         {
+@@ -78,7 +88,11 @@ public static class HttpClientSetup
+             CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+         };
+ 
+-        if (acceptAnyCertificate)
++        if (mode.PinnedThumbprint is { } thumbprint)
++            ssl.RemoteCertificateValidationCallback = (_, cert, _, errors) =>
++                errors == System.Net.Security.SslPolicyErrors.None ||
++                string.Equals(cert?.GetCertHashString(), thumbprint, StringComparison.OrdinalIgnoreCase);
++        else if (mode.AcceptAny)
+             ssl.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
+ 
+         return new SocketsHttpHandler
 diff --git a/EPC.SSO/Quickstart/Account/AccountController.cs b/EPC.SSO/Quickstart/Account/AccountController.cs
-index 2f6ed78..30f3710 100644
+index 2f6ed78..bf035b7 100644
 --- a/EPC.SSO/Quickstart/Account/AccountController.cs
 +++ b/EPC.SSO/Quickstart/Account/AccountController.cs
-@@ -51,6 +51,7 @@ public class AccountController(
+@@ -51,10 +51,10 @@ public class AccountController(
      SmsApiService smsApiService,
      IMemoryCache memoryCache,
      IConfiguration configuration,
@@ -145,7 +839,50 @@ index 2f6ed78..30f3710 100644
      ILogger<AccountController> logger) : Controller
  {
      private const string CaptchaSessionKey = "login.captcha";
-@@ -460,6 +461,10 @@ public class AccountController(
+-    private const string CaptchaChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+     private const string GenericForgotMessage =
+         "اگر اطلاعات واردشده صحیح باشد، رمز موقت به شماره همراه ثبت‌شده ارسال می‌شود.";
+ 
+@@ -83,6 +83,11 @@ public class AccountController(
+             if (result is not null) return result;
+         }
+ 
++        // کاربری که باید رمزش را عوض کند تا تغییر رمز به هیچ سامانه‌ای وارد نمی‌شود (ActiveUserProfileService)
++        if (User.Identity?.IsAuthenticated == true &&
++            string.Equals(User.FindFirst("PasswordExpired")?.Value, "true", StringComparison.OrdinalIgnoreCase))
++            return RedirectToAction(nameof(ChangePassword));
++
+         if (User.Identity?.IsAuthenticated == true && authContext is null)
+             return RedirectToAction("Index", "Grants");
+ 
+@@ -212,11 +217,24 @@ public class AccountController(
+         return Ok(new { success = true });
+     }
+ 
++    /// <summary>کد جدید؛ متن کد برگردانده نمی‌شود (فقط آدرس تصویر)</summary>
+     [HttpGet]
++    [EnableRateLimiting(RateLimitPolicies.Login)]
+     public IActionResult RefreshCaptcha()
+     {
+-        var text = NewCaptcha();
+-        return Json(new { text });
++        NewCaptcha();
++        return Json(new { url = Url.Action(nameof(Captcha), new { t = DateTime.UtcNow.Ticks }) });
++    }
++
++    /// <summary>تصویر کد امنیتی جاری (SVG بدون متن)</summary>
++    [HttpGet]
++    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
++    public IActionResult Captcha()
++    {
++        var text = HttpContext.Session.GetString(CaptchaSessionKey) ?? NewCaptcha();
++        Response.Headers["X-Content-Type-Options"] = "nosniff";
++        Response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'";
++        return Content(CaptchaImage.Render(text), "image/svg+xml");
+     }
+ 
+     // ════════════════════════════════════════════════════════════════════════
+@@ -460,6 +478,10 @@ public class AccountController(
              DisplayName = user.PersonnelCode,
              AdditionalClaims = claims
          }, null);
@@ -156,6 +893,788 @@ index 2f6ed78..30f3710 100644
      }
  
      private IActionResult ResolveRedirect(AuthorizationRequest? authContext, string? returnUrl)
+@@ -499,7 +521,7 @@ public class AccountController(
+ 
+     private string NewCaptcha()
+     {
+-        var text = new string(Enumerable.Range(0, 5).Select(_ => CaptchaChars[RandomNumberGenerator.GetInt32(CaptchaChars.Length)]).ToArray());
++        var text = CaptchaImage.NewText();
+         HttpContext.Session.SetString(CaptchaSessionKey, text);
+         return text;
+     }
+diff --git a/EPC.SSO/Quickstart/Delegation/DelegationController.cs b/EPC.SSO/Quickstart/Delegation/DelegationController.cs
+index ba411df..78e0b0b 100644
+--- a/EPC.SSO/Quickstart/Delegation/DelegationController.cs
++++ b/EPC.SSO/Quickstart/Delegation/DelegationController.cs
+@@ -1,5 +1,5 @@
+ ﻿
+-using Epc.Core;
++using Epc.Application;
+ using Microsoft.AspNetCore.Authorization;
+ using Microsoft.AspNetCore.Mvc;
+ using Microsoft.EntityFrameworkCore;
+@@ -7,366 +7,325 @@ using System.Linq;
+ using UserManagement.Domain.DelegationAgg;
+ using UserManagement.Domain.PermissionAgg;
+ using UserManagement.Infrastructure.Persistence;
++using DomainUser = UserManagement.Domain.UserAgg.User;
+ 
+ namespace EPC.SSO.Quickstart.Delegation
++{
++    /// <summary>
++    /// تفویض اختیار کاربر جاری.
++    /// همه‌ی عملیات فقط روی تفویض‌های خود کاربر انجام می‌شود و دسترسی‌های قابل تفویض در سرور دوباره بررسی می‌شوند
++    /// (کاربر فقط دسترسی‌هایی را می‌تواند تفویض کند که خودش دارد + والدهای آن‌ها برای نمایش منو).
++    /// </summary>
++    [Authorize]
++    public class DelegationController(UserManagementCommandContext context) : Controller
+     {
+-        [Authorize]
+-        public class DelegationController(UserManagementCommandContext context, Epc.Identity.IClaimHelper claimHelper) : Controller
++        public async Task<IActionResult> Index()
+         {
+-            public async Task<IActionResult> Index()
++            var user = await CurrentUserAsync();
++            if (user == null) return Unauthorized();
++
++            var delegations = await context.Delegations
++                .AsNoTracking()
++                .Where(c => c.UserId == user.Id)
++                .Select(d => new DelegationListItemViewModel
++                {
++                    Id = d.Id,
++                    UserName = context.Users.Where(c => c.Id == d.DelegatedUserId)
++                        .Select(c => c.FirstName + " " + c.LastName).FirstOrDefault(),
++                    UserId = d.UserId,
++                    DelegatedUserId = d.DelegatedUserId,
++                    StartDate = d.StartDate,
++                    EndDate = d.EndDate,
++                    Systems = d.DelegationSystems.Select(ds => new SystemItemViewModel
++                    {
++                        SystemName = ds.System.Title,
++                        Rights = ds.DelegationSystemPermissions.Select(dsp => dsp.Permission.Name).ToList()
++                    }).ToList()
++                }).ToListAsync();
++
++            return View(delegations);
++        }
++
++        public async Task<IActionResult> Create(int? id)
++        {
++            var user = await CurrentUserAsync();
++            if (user == null) return Unauthorized();
++
++            CreateDelegationViewModel model;
++            Dictionary<int, List<int>> selected = new();
++
++            if (id.HasValue)
+             {
+-                var userGuid = Guid.Parse(User.FindFirst("sub")?.Value ?? "");
+-                var user = context.Users.FirstOrDefault(c => c.Guid == userGuid);
+-                var delegations = await context.Delegations
+-                    .Where(c => c.UserId == user.Id)
+-                    .Include(d => d.DelegationSystems)
+-                    .ThenInclude(ds => ds.System)
++                var delegation = await context.Delegations
++                    .AsNoTracking()
+                     .Include(d => d.DelegationSystems)
+                     .ThenInclude(ds => ds.DelegationSystemPermissions)
+-                    .ThenInclude(dsp => dsp.Permission)
+-                    .Select(d => new DelegationListItemViewModel
++                    .FirstOrDefaultAsync(d => d.Id == id.Value && d.UserId == user.Id);
++                if (delegation == null) return NotFound();
++
++                selected = delegation.DelegationSystems
++                    .GroupBy(ds => ds.SystemId)
++                    .ToDictionary(g => g.Key, g => g.SelectMany(ds => ds.DelegationSystemPermissions.Select(p => p.PermissionId)).ToList());
++
++                model = new CreateDelegationViewModel
++                {
++                    Id = delegation.Id,
++                    UserId = delegation.UserId,
++                    PositionId = delegation.PositionId,
++                    DelegatedUserId = delegation.DelegatedUserId,
++                    DelegatedPositionId = delegation.DelegatedPositionId,
++                    StartDate = delegation.StartDate.ToString("yyyy/MM/dd"),
++                    EndDate = delegation.EndDate.ToString("yyyy/MM/dd"),
++                    SelectedSystems = delegation.DelegationSystems.Select(ds => new SelectedSystemViewModel
+                     {
+-                        Id = d.Id,
+-                        UserName = context.Users.FirstOrDefault(c => c.Id == d.DelegatedUserId).FirstName + " " + context.Users.FirstOrDefault(c => c.Id == d.DelegatedUserId).LastName,
+-                        UserId = d.UserId,
+-                        DelegatedUserId = d.DelegatedUserId,
+-                        StartDate = d.StartDate,
+-                        EndDate = d.EndDate,
+-                        Systems = d.DelegationSystems.Select(ds => new SystemItemViewModel
+-                        {
+-                            SystemName = ds.System.Title,
+-                            Rights = ds.DelegationSystemPermissions.Select(dsp => dsp.Permission.Name).ToList()
+-                        }).ToList()
+-                    }).ToListAsync();
+-
+-                // اگر بخوای اسم کاربر رو هم بیاریم (بجای Id) اینجا باید از User ها جوین بزنیم، فعلاً ساده نوشتم
+-
+-                return View(delegations);
++                        SystemId = ds.SystemId,
++                        IsSelected = true,
++                        SelectedPermissions = ds.DelegationSystemPermissions.Select(dsp => dsp.PermissionId).ToList()
++                    }).ToList()
++                };
+             }
+-        // متد کمکی برای ساخت درخت دسترسی‌ها
+-        private List<PermissionViewModel> BuildPermissionTree(List<Permission> permissions, List<int> selectedPermissions = null)
++            else
+             {
+-                selectedPermissions = selectedPermissions ?? new List<int>();
+-
+-                var permissionViewModels = permissions.Select(p => new PermissionViewModel
+-                {
+-                    PermissionId = p.Id,
+-                    PermissionName = p.Name,
+-                    Title = p.Title,
+-                    ParentId = p.ParentId,
+-                    IsSelected = selectedPermissions.Contains(p.Id)
+-                }).ToList();
+-
+-                // ایجاد درخت - ابتدا والدین (ParentId == null)
+-                var tree = permissionViewModels.Where(p => p.ParentId == null).ToList();
+-
+-                // اضافه کردن فرزندان
+-                foreach (var parent in tree)
+-                {
+-                    AddChildren(parent, permissionViewModels);
+-                }
+-
+-                return tree;
++                model = new CreateDelegationViewModel();
+             }
+ 
+-            private void AddChildren(PermissionViewModel parent, List<PermissionViewModel> allPermissions)
+-            {
+-                var children = allPermissions.Where(p => p.ParentId == parent.PermissionId).ToList();
+-                parent.Children.AddRange(children);
++            var scope = await LoadDelegableScopeAsync(user);
++            model.Systems = BuildSystems(scope, selected);
++            model.Users = await LoadUsersAsync(user.Id);
++            return View(model);
++        }
+ 
+-                foreach (var child in children)
+-                {
+-                    AddChildren(child, allPermissions);
+-                }
+-            }
++        [HttpPost]
++        [ValidateAntiForgeryToken]
++        public async Task<IActionResult> Create(CreateDelegationViewModel model)
++        {
++            var user = await CurrentUserAsync();
++            if (user == null) return Unauthorized();
+ 
+-            // متد کمکی برای دریافت دسترسی‌های کاربر
+-            private async Task<List<int>> GetUserPermissions(int userId, int systemId)
+-            {
+-                var userPermissions = new List<int>();
++            var scope = await LoadDelegableScopeAsync(user);
++            model.SelectedSystems ??= new List<SelectedSystemViewModel>();
+ 
+-                // دریافت اولین سمت کاربر
+-                var userPosition = await context.UserPositions
+-                    .Where(up => up.UserId == userId)
+-                    .Select(up => up.PositionId)
+-                    .FirstOrDefaultAsync();
++            if (model.DelegatedUserId == user.Id)
++                ModelState.AddModelError(nameof(model.DelegatedUserId), "تفویض به خود امکان‌پذیر نیست");
++            else if (!await context.Users.AnyAsync(u => u.Id == model.DelegatedUserId && u.IsActive == 1))
++                ModelState.AddModelError(nameof(model.DelegatedUserId), "کاربر انتخاب‌شده معتبر نیست");
+ 
+-                if (userPosition != 0)
++            if (!string.IsNullOrWhiteSpace(model.StartDate) && !string.IsNullOrWhiteSpace(model.EndDate))
++            {
++                try
+                 {
+-                    // دسترسی‌های مستقیم سمت
+-                    var positionPermissions = await context.PositionPermissions
+-                        .Where(pp => pp.PositionId == userPosition)
+-                        .Select(pp => pp.PermissionId)
+-                        .ToListAsync();
+-
+-                    userPermissions.AddRange(positionPermissions);
+-
+-                    // دسترسی‌های گروه‌های سمت
+-                    var groupPermissions = await context.PositionGroups
+-                        .Where(pg => pg.PositionId == userPosition)
+-                        .SelectMany(pg => pg.Group.GroupPermissions
+-                            .Where(gp => gp.Permission.SystemId == systemId)
+-                            .Select(gp => gp.PermissionId))
+-                        .ToListAsync();
+-
+-                    userPermissions.AddRange(groupPermissions);
++                    if (model.EndDate.ToGeorgianDateTime() < model.StartDate.ToGeorgianDateTime())
++                        ModelState.AddModelError(nameof(model.EndDate), "تاریخ پایان نباید قبل از تاریخ شروع باشد");
++                }
++                catch
++                {
++                    ModelState.AddModelError(nameof(model.StartDate), "فرمت تاریخ نامعتبر است");
+                 }
+-
+-                // حذف تکراری‌ها
+-                return userPermissions.Distinct().ToList();
+             }
+ 
+-            public async Task<IActionResult> Create(int? id)
++            // فقط سامانه‌ها و دسترسی‌هایی که کاربر واقعاً دارد (ورودی فرم قابل اعتماد نیست)
++            var delegationSystems = new List<DelegationSystem>();
++            foreach (var system in model.SelectedSystems.Where(c => c.IsSelected))
+             {
+-                var userGuid = Guid.Parse(User.FindFirst("sub")?.Value ?? "");
+-                var user = await context.Users
+-                    .Where(u => u.Guid == userGuid)
+-                    .FirstOrDefaultAsync();
+-
+-                if (user == null)
++                if (!scope.Delegable.TryGetValue(system.SystemId, out var allowed))
+                 {
+-                    return Unauthorized();
++                    ModelState.AddModelError(string.Empty, "سامانه‌ی انتخاب‌شده در دسترس شما نیست");
++                    break;
+                 }
+ 
+-                var systemIds = context.Users
+-                    .Where(u => u.Guid == userGuid)
+-                    .SelectMany(u =>
+-                        u.Systems.Select(us => us.SystemId)
+-                            .Union(u.Positions.SelectMany(up => up.Position.PositionSystems.Select(ps => ps.SystemId)))
+-                    )
+-                    .Distinct()
+-                    .ToList();
+-
+-                var systems = new List<SystemViewModel>();
+-
+-                foreach (var systemId in systemIds)
++                var permissionIds = (system.SelectedPermissions ?? new List<int>()).Distinct().ToList();
++                if (permissionIds.Any(p => !allowed.Contains(p)))
+                 {
+-                    var system = await context.Systems.FirstOrDefaultAsync(s => s.Id == systemId);
+-
+-                    // دریافت دسترسی‌های کاربر برای این سیستم
+-                    var userPermissionIds = await GetUserPermissions(user.Id, systemId);
+-
+-                    // فقط دسترسی‌هایی که کاربر دارد را بگیر
+-                    var permissions = await context.Permissions
+-                        .Where(p => p.SystemId == systemId && userPermissionIds.Contains(p.Id))
+-                        .ToListAsync();
+-
+-                    // اضافه کردن والدین دسترسی‌های کاربر (برای نمایش درخت)
+-                    var allPermissionIds = new List<int>(userPermissionIds);
+-                    var parentIds = new List<int>();
+-
+-                    foreach (var permissionId in userPermissionIds)
+-                    {
+-                        var permission = await context.Permissions.FirstOrDefaultAsync(p => p.Id == permissionId);
+-                        if (permission != null)
+-                        {
+-                            await AddParentPermissions(permission.ParentId, parentIds, systemId);
+-                        }
+-                    }
+-
+-                    allPermissionIds.AddRange(parentIds);
+-                    allPermissionIds = allPermissionIds.Distinct().ToList();
+-
+-                    // دریافت تمام دسترسی‌هایی که باید نمایش داده شوند (کاربر + والدین)
+-                    var permissionsToShow = await context.Permissions
+-                        .Where(p => p.SystemId == systemId && allPermissionIds.Contains(p.Id))
+-                        .ToListAsync();
+-
+-                    List<int> selectedPermissions = new List<int>();
+-
+-                    // اگر در حال ویرایش هستیم، دسترسی‌های انتخاب شده را بگیریم
+-                    if (id.HasValue)
+-                    {
+-                        selectedPermissions = await context.DelegationSystems
+-                            .Where(ds => ds.DelegationId == id.Value && ds.SystemId == systemId)
+-                            .SelectMany(ds => ds.DelegationSystemPermissions.Select(dsp => dsp.PermissionId))
+-                            .ToListAsync();
+-                    }
+-
+-                    var permissionTree = BuildPermissionTree(permissionsToShow, selectedPermissions);
+-
+-                    systems.Add(new SystemViewModel
+-                    {
+-                        SystemId = system.Id,
+-                        SystemName = system.Title,
+-                        Permissions = permissionTree
+-                    });
++                    ModelState.AddModelError(string.Empty, "فقط دسترسی‌هایی را می‌توانید تفویض کنید که خودتان دارید");
++                    break;
+                 }
+ 
+-                CreateDelegationViewModel model;
+-
+-                if (id.HasValue)
++                delegationSystems.Add(new DelegationSystem
+                 {
+-                    var delegation = await context.Delegations
+-                        .Include(d => d.DelegationSystems)
+-                        .ThenInclude(ds => ds.DelegationSystemPermissions)
+-                        .FirstOrDefaultAsync(d => d.Id == id.Value);
+-
+-                    if (delegation != null)
+-                    {
+-                        model = new CreateDelegationViewModel
+-                        {
+-                            Id = delegation.Id,
+-                            UserId = delegation.UserId,
+-                            PositionId = delegation.PositionId,
+-                            DelegatedUserId = delegation.DelegatedUserId,
+-                            DelegatedPositionId = delegation.DelegatedPositionId,
+-                            StartDate = delegation.StartDate.ToString("yyyy/MM/dd"),
+-                            EndDate = delegation.EndDate.ToString("yyyy/MM/dd"),
+-                            SelectedSystems = delegation.DelegationSystems.Select(ds => new SelectedSystemViewModel
+-                            {
+-                                SystemId = ds.SystemId,
+-                                IsSelected = true,
+-                                SelectedPermissions = ds.DelegationSystemPermissions.Select(dsp => dsp.PermissionId).ToList()
+-                            }).ToList(),
+-                            Systems = systems,
+-                            Users = context.Users.Where(c => c.IsActive == 1).Select(c => new UserViewModel
+-                            {
+-                                FullName = c.FirstName.Replace('ي', 'ی') + " " + (!string.IsNullOrEmpty(c.LastName) ? c.LastName.Replace('ي', 'ی') : ""),
+-                                Id = c.Id
+-                            }).ToList()
+-                        };
+-                    }
+-                    else
+-                    {
+-                        return NotFound();
+-                    }
+-                }
+-                else
+-                {
+-                    model = new CreateDelegationViewModel
+-                    {
+-                        Systems = systems,
+-                        Users = context.Users.Where(c => c.IsActive == 1).Select(c => new UserViewModel
+-                        {
+-                            FullName = c.FirstName.Replace('ي', 'ی') + " " + (!string.IsNullOrEmpty(c.LastName) ? c.LastName.Replace('ي', 'ی') : ""),
+-                            Id = c.Id
+-                        }).ToList()
+-                    };
+-                }
++                    SystemId = system.SystemId,
++                    DelegationSystemPermissions = permissionIds
++                        .Select(permissionId => new DelegationSystemPermission { PermissionId = permissionId })
++                        .ToList()
++                });
++            }
+ 
++            if (!ModelState.IsValid)
++            {
++                var selected = model.SelectedSystems
++                    .Where(s => s.IsSelected)
++                    .GroupBy(s => s.SystemId)
++                    .ToDictionary(g => g.Key, g => g.SelectMany(s => s.SelectedPermissions ?? new List<int>()).ToList());
++                model.Systems = BuildSystems(scope, selected);
++                model.Users = await LoadUsersAsync(user.Id);
+                 return View(model);
+             }
+ 
+-            // متد کمکی برای اضافه کردن والدین دسترسی‌ها
+-            private async Task AddParentPermissions(int? parentId, List<int> parentIds, int systemId)
++            var delegatedPosition = await context.UserPositions
++                .Where(c => c.UserId == model.DelegatedUserId)
++                .Select(c => c.PositionId)
++                .FirstOrDefaultAsync();
++
++            if (model.Id.HasValue)
+             {
+-                if (parentId.HasValue && !parentIds.Contains(parentId.Value))
+-                {
+-                    var parentPermission = await context.Permissions
+-                        .FirstOrDefaultAsync(p => p.Id == parentId.Value && p.SystemId == systemId);
++                var delegation = await context.Delegations
++                    .Include(d => d.DelegationSystems)
++                    .ThenInclude(ds => ds.DelegationSystemPermissions)
++                    .FirstOrDefaultAsync(d => d.Id == model.Id.Value && d.UserId == user.Id);
++                if (delegation == null) return NotFound();
+ 
+-                    if (parentPermission != null)
+-                    {
+-                        parentIds.Add(parentId.Value);
+-                        await AddParentPermissions(parentPermission.ParentId, parentIds, systemId);
+-                    }
+-                }
++                delegation.Edit(user.Guid, model.DelegatedUserId, delegatedPosition ?? 0, model.StartDate, model.EndDate, delegationSystems);
++                context.Delegations.Update(delegation);
+             }
+-
+-            [HttpPost]
+-            public async Task<IActionResult> Create(CreateDelegationViewModel model)
++            else
+             {
+-                if (!ModelState.IsValid)
+-                {
+-                    // در صورت خطا، مجدد دسترسی‌ها را لود کنید
+-                    var userGuid = Guid.Parse(User.FindFirst("sub")?.Value ?? "");
+-                    var user = await context.Users.Where(u => u.Guid == userGuid).FirstOrDefaultAsync();
++                var delegation = new UserManagement.Domain.DelegationAgg.Delegation(
++                    creator: user.Guid,
++                    userId: user.Id,
++                    positionId: scope.PositionId ?? 0,
++                    delegatedUserId: model.DelegatedUserId,
++                    delegatedPositionId: delegatedPosition ?? 0,
++                    startDate: model.StartDate,
++                    endDate: model.EndDate,
++                    systems: delegationSystems
++                );
++
++                context.Delegations.Add(delegation);
++            }
+ 
+-                    // بازسازی سیستم‌ها و دسترسی‌ها
+-                    model.Systems = await RebuildSystemsForUser(user.Id);
+-                    model.Users = context.Users.Where(c => c.IsActive == 1).Select(c => new UserViewModel
+-                    {
+-                        FullName = c.FirstName.Replace('ي', 'ی') + " " + (!string.IsNullOrEmpty(c.LastName) ? c.LastName.Replace('ي', 'ی') : ""),
+-                        Id = c.Id
+-                    }).ToList();
++            await context.SaveChangesAsync();
++            return RedirectToAction("Index", "Delegation");
++        }
+ 
+-                    return View(model);
+-                }
++        // ───────────────────────────── Helpers ─────────────────────────────
+ 
+-                var userGuid2 = Guid.Parse(User.FindFirst("sub")?.Value ?? "");
+-                var user2 = context.Users.Where(c => c.Guid == userGuid2).Include(c => c.Positions).FirstOrDefault();
+-                var position = user2.Positions.FirstOrDefault();
+-                var delegatedPosition = context.UserPositions.Where(c => c.UserId == model.DelegatedUserId)
+-                    .Select(c => c.PositionId).FirstOrDefault();
++        private sealed record DelegableScope(
++            int? PositionId,
++            List<UserManagement.Domain.SystemAgg.System> Systems,
++            List<Permission> Permissions,
++            HashSet<int> Owned,
++            Dictionary<int, HashSet<int>> Delegable);
+ 
+-                var delegationSystems = model.SelectedSystems.Where(c => c.IsSelected).Select(system => new DelegationSystem
+-                {
+-                    SystemId = system.SystemId,
+-                    DelegationSystemPermissions = system.SelectedPermissions
+-                        .Select(permissionId => new DelegationSystemPermission
+-                        {
+-                            PermissionId = permissionId
+-                        }).ToList()
+-                }).ToList();
+-
+-                if (model.Id.HasValue)
+-                {
+-                    var delegation = await context.Delegations
+-                        .Include(d => d.DelegationSystems)
+-                        .ThenInclude(ds => ds.DelegationSystemPermissions)
+-                        .FirstOrDefaultAsync(d => d.Id == model.Id.Value);
++        private async Task<DomainUser?> CurrentUserAsync()
++        {
++            if (!Guid.TryParse(User.FindFirst("sub")?.Value, out var userGuid)) return null;
++            return await context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Guid == userGuid);
++        }
+ 
+-                    delegation.Edit(userGuid2, model.DelegatedUserId, delegatedPosition ?? 0, model.StartDate, model.EndDate, delegationSystems);
+-                    context.Delegations.Update(delegation);
+-                }
+-                else
++        /// <summary>
++        /// سامانه‌ها و دسترسی‌های قابل تفویض کاربر با چند کوئری ثابت (به جای کوئری برای هر سامانه/دسترسی/والد).
++        /// دسترسی‌ها از اولین سمت کاربر (همان سمتی که تفویض با آن ثبت می‌شود) خوانده می‌شوند.
++        /// </summary>
++        private async Task<DelegableScope> LoadDelegableScopeAsync(DomainUser user)
++        {
++            var systemIds = await context.Users
++                .Where(u => u.Id == user.Id)
++                .SelectMany(u => u.Systems.Select(us => us.SystemId)
++                    .Union(u.Positions.SelectMany(up => up.Position.PositionSystems.Select(ps => ps.SystemId))))
++                .Distinct()
++                .ToListAsync();
++
++            var positionId = await context.UserPositions
++                .Where(up => up.UserId == user.Id)
++                .Select(up => up.PositionId)
++                .FirstOrDefaultAsync();
++
++            var owned = new HashSet<int>();
++            if (positionId is > 0)
++            {
++                owned.UnionWith(await context.PositionPermissions
++                    .Where(pp => pp.PositionId == positionId)
++                    .Select(pp => pp.PermissionId)
++                    .ToListAsync());
++                owned.UnionWith(await context.PositionGroups
++                    .Where(pg => pg.PositionId == positionId)
++                    .SelectMany(pg => pg.Group.GroupPermissions.Select(gp => gp.PermissionId))
++                    .ToListAsync());
++            }
++
++            var systems = await context.Systems.AsNoTracking()
++                .Where(s => systemIds.Contains(s.Id))
++                .ToListAsync();
++            var permissions = await context.Permissions.AsNoTracking()
++                .Where(p => systemIds.Contains(p.SystemId))
++                .ToListAsync();
++
++            var byId = permissions.ToDictionary(p => p.Id);
++            var delegable = systemIds.ToDictionary(s => s, _ => new HashSet<int>());
++            foreach (var permission in permissions.Where(p => owned.Contains(p.Id)))
++            {
++                var set = delegable[permission.SystemId];
++                set.Add(permission.Id);
++
++                // والدها فقط برای ساخت درخت (منو) قابل انتخاب‌اند
++                var parentId = permission.ParentId;
++                while (parentId.HasValue
++                       && byId.TryGetValue(parentId.Value, out var parent)
++                       && parent.SystemId == permission.SystemId
++                       && set.Add(parent.Id))
+                 {
+-                    var delegation = new UserManagement.Domain.DelegationAgg.Delegation(
+-                        creator: userGuid2,
+-                        userId: user2.Id,
+-                        positionId: position?.PositionId ?? 0,
+-                        delegatedUserId: model.DelegatedUserId,
+-                        delegatedPositionId: delegatedPosition ?? 0,
+-                        startDate: model.StartDate,
+-                        endDate: model.EndDate,
+-                        systems: delegationSystems
+-                    );
+-
+-                    context.Delegations.Add(delegation);
++                    parentId = parent.ParentId;
+                 }
+-
+-                await context.SaveChangesAsync();
+-                return RedirectToAction("Index", "Delegation");
+             }
+ 
+-            // متد کمکی برای بازسازی سیستم‌ها هنگام خطا
+-            private async Task<List<SystemViewModel>> RebuildSystemsForUser(int userId)
++            return new DelegableScope(positionId, systems, permissions, owned, delegable);
++        }
++
++        private List<SystemViewModel> BuildSystems(DelegableScope scope, Dictionary<int, List<int>> selected)
++        {
++            return scope.Systems.Select(system =>
+             {
+-                var systems = new List<SystemViewModel>();
+-                var userGuid = Guid.Parse(User.FindFirst("sub")?.Value ?? "");
+-
+-                var systemIds = context.Users
+-                    .Where(u => u.Guid == userGuid)
+-                    .SelectMany(u =>
+-                        u.Systems.Select(us => us.SystemId)
+-                            .Union(u.Positions.SelectMany(up => up.Position.PositionSystems.Select(ps => ps.SystemId)))
+-                    )
+-                    .Distinct()
+-                    .ToList();
+-
+-                foreach (var systemId in systemIds)
++                var visible = scope.Delegable.TryGetValue(system.Id, out var ids) ? ids : new HashSet<int>();
++                var permissions = scope.Permissions.Where(p => p.SystemId == system.Id && visible.Contains(p.Id)).ToList();
++                return new SystemViewModel
+                 {
+-                    var system = await context.Systems.FirstOrDefaultAsync(s => s.Id == systemId);
+-                    var userPermissionIds = await GetUserPermissions(userId, systemId);
++                    SystemId = system.Id,
++                    SystemName = system.Title,
++                    Permissions = BuildPermissionTree(permissions, selected.GetValueOrDefault(system.Id))
++                };
++            }).ToList();
++        }
+ 
+-                    var permissions = await context.Permissions
+-                        .Where(p => p.SystemId == systemId && userPermissionIds.Contains(p.Id))
+-                        .ToListAsync();
++        private Task<List<UserViewModel>> LoadUsersAsync(int currentUserId) =>
++            context.Users.AsNoTracking()
++                .Where(c => c.IsActive == 1 && c.Id != currentUserId)
++                .Select(c => new UserViewModel
++                {
++                    FullName = c.FirstName.Replace('ي', 'ی') + " " + (!string.IsNullOrEmpty(c.LastName) ? c.LastName.Replace('ي', 'ی') : ""),
++                    Id = c.Id
++                }).ToListAsync();
+ 
+-                    var permissionTree = BuildPermissionTree(permissions);
++        private static List<PermissionViewModel> BuildPermissionTree(List<Permission> permissions, List<int>? selectedPermissions = null)
++        {
++            selectedPermissions ??= new List<int>();
+ 
+-                    systems.Add(new SystemViewModel
+-                    {
+-                        SystemId = system.Id,
+-                        SystemName = system.Title,
+-                        Permissions = permissionTree
+-                    });
+-                }
++            var permissionViewModels = permissions.Select(p => new PermissionViewModel
++            {
++                PermissionId = p.Id,
++                PermissionName = p.Name,
++                Title = p.Title,
++                ParentId = p.ParentId,
++                IsSelected = selectedPermissions.Contains(p.Id)
++            }).ToList();
++
++            // ریشه‌ها: بدون والد یا والدی که در لیست نیست
++            var ids = permissionViewModels.Select(p => p.PermissionId).ToHashSet();
++            var tree = permissionViewModels.Where(p => p.ParentId == null || !ids.Contains(p.ParentId.Value)).ToList();
++
++            var children = permissionViewModels.Where(p => p.ParentId.HasValue)
++                .ToLookup(p => p.ParentId!.Value);
++            foreach (var parent in tree)
++                AddChildren(parent, children);
++
++            return tree;
++        }
+ 
+-                return systems;
++        private static void AddChildren(PermissionViewModel parent, ILookup<int, PermissionViewModel> children)
++        {
++            foreach (var child in children[parent.PermissionId])
++            {
++                parent.Children.Add(child);
++                AddChildren(child, children);
+             }
+         }
+     }
+-
+-
++}
+diff --git a/EPC.SSO/Quickstart/Documents/DocumentsController.cs b/EPC.SSO/Quickstart/Documents/DocumentsController.cs
+index 5e46522..0abfa32 100644
+--- a/EPC.SSO/Quickstart/Documents/DocumentsController.cs
++++ b/EPC.SSO/Quickstart/Documents/DocumentsController.cs
+@@ -1,13 +1,25 @@
+ ﻿using EPC.SSO.Services;
+ using Microsoft.AspNetCore.Authorization;
+ using Microsoft.AspNetCore.Mvc;
++using Microsoft.AspNetCore.StaticFiles;
+ 
+ namespace EPC.SSO.Quickstart.Documents;
+ 
+-[AllowAnonymous] // فقط نیاز به لاگین — بدون Permission خاص
++/// <summary>
++/// مستندات سامانه‌ها (کاج). فقط کاربران واردشده و فقط زیرمجموعه‌ی پوشه‌ی ریشه.
++/// </summary>
++[Authorize]
+ [SecurityHeaders]
+ public class DocumentsController(KaajDocumentApiService kaajDocumentApiService) : Controller
+ {
++    private static readonly FileExtensionContentTypeProvider ContentTypes = new();
++
++    /// <summary>فقط این نوع‌ها inline نمایش داده می‌شوند؛ بقیه (از جمله SVG/HTML) همیشه دانلود می‌شوند</summary>
++    private static readonly HashSet<string> InlineTypes = new(StringComparer.OrdinalIgnoreCase)
++    {
++        "image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp", "application/pdf"
++    };
++
+     [HttpGet]
+     public IActionResult Index()
+     {
+@@ -20,12 +32,14 @@ public class DocumentsController(KaajDocumentApiService kaajDocumentApiService)
+     {
+         if (string.IsNullOrWhiteSpace(folderUuid))
+             folderUuid = kaajDocumentApiService.GetRootFolderUuid();
++        else if (!await kaajDocumentApiService.IsFolderInScopeAsync(folderUuid))
++            return NotFound();
+ 
+         var foldersTask = kaajDocumentApiService.GetFoldersAsync(folderUuid);
+         var documentsTask = kaajDocumentApiService.GetDocumentsAsync(folderUuid);
+         await Task.WhenAll(foldersTask, documentsTask);
+ 
+-        var folders = foldersTask.Result
++        var folders = (await foldersTask)
+             .OrderBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase)
+             .Select(f => new
+             {
+@@ -35,7 +49,7 @@ public class DocumentsController(KaajDocumentApiService kaajDocumentApiService)
+                 created = f.Created?.ToString("yyyy/MM/dd"),
+             });
+ 
+-        var documents = documentsTask.Result
++        var documents = (await documentsTask)
+             .OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase)
+             .Select(d => new
+             {
+@@ -51,33 +65,53 @@ public class DocumentsController(KaajDocumentApiService kaajDocumentApiService)
+         return Json(new { folders, documents });
+     }
+ 
++    /// <param name="mimeType">نادیده گرفته می‌شود (سازگاری با نسخه‌ی قبلی کلاینت)؛ نوع فایل از اطلاعات خود سند خوانده می‌شود</param>
+     [HttpGet]
+     public async Task<IActionResult> Download(string docUuid, bool inline = false, string? mimeType = null)
+     {
+         if (string.IsNullOrWhiteSpace(docUuid))
+             return NotFound();
+ 
+-        var (data, detectedContentType, fileName) = await kaajDocumentApiService.DownloadDocumentAsync(docUuid);
+-        if (data is null || data.Length == 0)
++        var document = await kaajDocumentApiService.GetDocumentInScopeAsync(docUuid);
++        if (document == null)
+             return NotFound();
+ 
+-        // ✅ اگر mimeType واقعی از سمت کلاینت (که از لیست فایل‌ها گرفته شده) پاس داده شده،
+-        // همیشه اون رو ترجیح بده — چون سرویس کاج گاهی Content-Type درستی روی
+-        // endpoint دانلود برنمی‌گردونه (مثلاً application/octet-stream برای PDF)
+-        var contentType = !string.IsNullOrWhiteSpace(mimeType) ? mimeType : detectedContentType;
+-        if (string.IsNullOrWhiteSpace(contentType))
+-            contentType = "application/octet-stream";
++        var ct = HttpContext.RequestAborted;
++        var (response, detectedContentType, fileName) = await kaajDocumentApiService.OpenDocumentAsync(docUuid, ct);
++        if (response is null)
++            return NotFound();
++        Response.RegisterForDispose(response);
++
++        if (!string.IsNullOrWhiteSpace(document.Name)) fileName = document.Name;
+ 
+-        var isPreviewable = contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+-                          || contentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase);
++        // سرویس کاج گاهی Content-Type درست برنمی‌گرداند (مثلاً octet-stream برای PDF)؛
++        // ترتیب: نوع ثبت‌شده در کاج ← نوع پاسخ دانلود ← پسوند فایل
++        var contentType = FirstSpecific(document.MimeType, detectedContentType)
++                          ?? (ContentTypes.TryGetContentType(fileName, out var byExt) ? byExt : "application/octet-stream");
+ 
+-        var disposition = (inline && isPreviewable)
+-            ? $"inline; filename*=UTF-8''{Uri.EscapeDataString(fileName)}"
+-            : $"attachment; filename*=UTF-8''{Uri.EscapeDataString(fileName)}";
++        var isInline = inline && InlineTypes.Contains(contentType);
++        if (!isInline && !InlineTypes.Contains(contentType))
++            contentType = "application/octet-stream";
+ 
+-        Response.Headers["Content-Disposition"] = disposition;
++        var encodedName = Uri.EscapeDataString(fileName);
++        Response.Headers["Content-Disposition"] = isInline
++            ? $"inline; filename*=UTF-8''{encodedName}"
++            : $"attachment; filename*=UTF-8''{encodedName}";
+         Response.Headers["X-Content-Type-Options"] = "nosniff";
++        // محتوای مخزن اسناد هرگز نباید در مبدأ SSO اسکریپت اجرا کند
++        Response.Headers["Content-Security-Policy"] = contentType == "application/pdf"
++            ? "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; object-src 'self'"
++            : "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox";
+ 
+-        return File(data, contentType);
++        var length = response.Content.Headers.ContentLength;
++        if (length.HasValue) Response.ContentLength = length;
++
++        var stream = await response.Content.ReadAsStreamAsync(ct);
++        return File(stream, contentType, enableRangeProcessing: false);
+     }
+-}
+\ No newline at end of file
++
++    private static string? FirstSpecific(params string?[] types) =>
++        types.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t)
++                                  && !t.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase)
++                                  && !t.Equals("binary/octet-stream", StringComparison.OrdinalIgnoreCase));
++}
 diff --git a/EPC.SSO/Quickstart/Grants/GrantsController.cs b/EPC.SSO/Quickstart/Grants/GrantsController.cs
 index fb94d73..0f009ee 100644
 --- a/EPC.SSO/Quickstart/Grants/GrantsController.cs
@@ -1851,6 +3370,254 @@ index 74fe3f5..a7f2caa 100644
      private async Task PingSqlAsync(string name, string? connectionString, CancellationToken ct)
      {
          if (string.IsNullOrWhiteSpace(connectionString)) return;
+diff --git a/EPC.SSO/Services/KaajDocumentApiService.cs b/EPC.SSO/Services/KaajDocumentApiService.cs
+index 777de67..71f921b 100644
+--- a/EPC.SSO/Services/KaajDocumentApiService.cs
++++ b/EPC.SSO/Services/KaajDocumentApiService.cs
+@@ -1,6 +1,7 @@
+ ﻿using System.Net.Http.Headers;
+ using System.Text;
+ using System.Xml.Linq;
++using Microsoft.Extensions.Caching.Memory;
+ 
+ namespace EPC.SSO.Services;
+ 
+@@ -44,11 +45,18 @@ public class KaajDocumentDto
+ //  توجه: پاسخ سرویس کاج به‌صورت XML است (نه JSON) و فیلد title همیشه خالی
+ //  می‌آید؛ نام واقعی هر آیتم از آخرین بخش path استخراج می‌شود.
+ // ═══════════════════════════════════════════════════════════════════════════════
++//  دامنه‌ی دسترسی: کاربران فقط زیرمجموعه‌ی RootFolderUuid را می‌بینند. هر شناسه‌ای که از کلاینت می‌آید
++//  (پوشه یا سند) باید قبلاً در یک Browse مجاز دیده شده باشد یا مسیرش زیر مسیر ریشه باشد؛
++//  وگرنه با حساب سرویس کاج به هر سندی در کل مخزن دسترسی ایجاد می‌شد.
+ public class KaajDocumentApiService(
+     IHttpClientFactory httpClientFactory,
+     IConfiguration configuration,
++    IMemoryCache cache,
+     ILogger<KaajDocumentApiService> logger)
+ {
++    private static readonly TimeSpan NodeTtl = TimeSpan.FromHours(12);
++    private const string RootPathKey = "kaaj:root-path";
++
+     private KaajDocumentApiConfiguration GetConfig() =>
+         configuration.GetSection("ExternalApis:KaajDocumentApi").Get<KaajDocumentApiConfiguration>()
+         ?? throw new InvalidOperationException("تنظیمات ExternalApis:KaajDocumentApi یافت نشد.");
+@@ -73,7 +81,11 @@ public class KaajDocumentApiService(
+             using var client = CreateClient(cfg);
+             var url = $"{cfg.BaseUrl.TrimEnd('/')}/folder/getChildren?fldId={Uri.EscapeDataString(folderUuid)}";
+             var xml = await client.GetStringAsync(url);
+-            return ParseFolders(xml);
++            var folders = ParseFolders(xml);
++            RememberChildren(folderUuid, folders.Select(f => f.Path));
++            foreach (var f in folders.Where(f => f.Uuid.Length > 0))
++                Remember(FolderKey(f.Uuid), f.Path);
++            return folders;
+         }
+         catch (Exception ex)
+         {
+@@ -90,7 +102,11 @@ public class KaajDocumentApiService(
+             using var client = CreateClient(cfg);
+             var url = $"{cfg.BaseUrl.TrimEnd('/')}/document/getChildren?fldId={Uri.EscapeDataString(folderUuid)}";
+             var xml = await client.GetStringAsync(url);
+-            return ParseDocuments(xml);
++            var documents = ParseDocuments(xml);
++            RememberChildren(folderUuid, documents.Select(d => d.Path));
++            foreach (var d in documents.Where(d => d.Uuid.Length > 0))
++                Remember(DocumentKey(d.Uuid), d);
++            return documents;
+         }
+         catch (Exception ex)
+         {
+@@ -99,35 +115,138 @@ public class KaajDocumentApiService(
+         }
+     }
+ 
+-    public async Task<(byte[]? Data, string ContentType, string FileName)> DownloadDocumentAsync(string docUuid)
++    /// <summary>
++    /// دانلود به صورت Stream (بدون بارگذاری کل فایل در حافظه). پاسخ باید توسط فراخوان Dispose شود.
++    /// </summary>
++    public async Task<(HttpResponseMessage? Response, string ContentType, string FileName)> OpenDocumentAsync(
++        string docUuid, CancellationToken ct)
+     {
+         var cfg = GetConfig();
+         try
+         {
+-            using var client = CreateClient(cfg);
++            // HttpClient کارخانه Dispose نمی‌شود تا Stream پاسخ تا پایان ارسال باز بماند
++            var client = CreateClient(cfg);
++            client.Timeout = Timeout.InfiniteTimeSpan;
++            using var headersTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
++            headersTimeout.CancelAfter(TimeSpan.FromSeconds(30));
++
+             var url = $"{cfg.BaseUrl.TrimEnd('/')}/document/getContent?docId={Uri.EscapeDataString(docUuid)}";
+-            var response = await client.GetAsync(url);
++            var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, headersTimeout.Token);
+ 
+             if (!response.IsSuccessStatusCode)
+             {
+                 logger.LogWarning("[KaajDocumentApi] دانلود ناموفق {DocUuid}: {Status}", docUuid, response.StatusCode);
++                response.Dispose();
+                 return (null, "", "");
+             }
+ 
+-            var bytes = await response.Content.ReadAsByteArrayAsync();
+             var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+             var cd = response.Content.Headers.ContentDisposition;
+             var fileName = (cd?.FileNameStar ?? cd?.FileName ?? docUuid).Trim('"');
+ 
+-            return (bytes, contentType, fileName);
++            return (response, contentType, fileName);
+         }
+-        catch (Exception ex)
++        catch (Exception ex) when (!ct.IsCancellationRequested)
+         {
+             logger.LogError(ex, "[KaajDocumentApi] خطا در دانلود {DocUuid}", docUuid);
+             return (null, "", "");
+         }
+     }
+ 
++    // ─── دامنه‌ی مجاز (فقط زیر پوشه‌ی ریشه) ─────────────────────────────────────
++
++    /// <summary>پوشه زیرمجموعه‌ی پوشه‌ی ریشه است؟</summary>
++    public async Task<bool> IsFolderInScopeAsync(string folderUuid)
++    {
++        var root = GetRootFolderUuid();
++        if (string.Equals(folderUuid, root, StringComparison.OrdinalIgnoreCase)) return true;
++
++        var path = cache.TryGetValue(FolderKey(folderUuid), out string? known)
++            ? known
++            : await FetchPathAsync("folder", "fldId", folderUuid);
++        if (path == null) return false;
++        Remember(FolderKey(folderUuid), path);
++        return await IsUnderRootAsync(path);
++    }
++
++    /// <summary>اطلاعات سند به شرط اینکه زیر پوشه‌ی ریشه باشد (در غیر این صورت null)</summary>
++    public async Task<KaajDocumentDto?> GetDocumentInScopeAsync(string docUuid)
++    {
++        if (!cache.TryGetValue(DocumentKey(docUuid), out KaajDocumentDto? doc) || doc == null)
++        {
++            doc = await FetchDocumentAsync(docUuid);
++            if (doc == null) return null;
++            Remember(DocumentKey(docUuid), doc);
++        }
++        return await IsUnderRootAsync(doc.Path) ? doc : null;
++    }
++
++    private async Task<bool> IsUnderRootAsync(string path)
++    {
++        if (string.IsNullOrWhiteSpace(path)) return false;
++        if (!cache.TryGetValue(RootPathKey, out string? rootPath) || string.IsNullOrEmpty(rootPath))
++        {
++            rootPath = await FetchPathAsync("folder", "fldId", GetRootFolderUuid());
++            if (string.IsNullOrEmpty(rootPath)) return false;
++            Remember(RootPathKey, rootPath);
++        }
++
++        var normalizedRoot = rootPath.TrimEnd('/') + "/";
++        return path.StartsWith(normalizedRoot, StringComparison.Ordinal) && !path.Contains("/../");
++    }
++
++    /// <summary>مسیر ریشه از مسیر فرزندانش استخراج می‌شود (بدون فراخوانی اضافه)</summary>
++    private void RememberChildren(string parentUuid, IEnumerable<string> childPaths)
++    {
++        var first = childPaths.FirstOrDefault(p => p.LastIndexOf('/') > 0);
++        if (first == null) return;
++        var parentPath = first[..first.LastIndexOf('/')];
++        Remember(FolderKey(parentUuid), parentPath);
++        if (string.Equals(parentUuid, GetRootFolderUuid(), StringComparison.OrdinalIgnoreCase))
++            Remember(RootPathKey, parentPath);
++    }
++
++    private async Task<string?> FetchPathAsync(string kind, string idParam, string uuid)
++    {
++        var cfg = GetConfig();
++        try
++        {
++            using var client = CreateClient(cfg);
++            var url = $"{cfg.BaseUrl.TrimEnd('/')}/{kind}/getProperties?{idParam}={Uri.EscapeDataString(uuid)}";
++            var xml = await client.GetStringAsync(url);
++            return (string?)XDocument.Parse(xml).Root?.Element("path");
++        }
++        catch (Exception ex)
++        {
++            logger.LogWarning(ex, "[KaajDocumentApi] دریافت مسیر {Kind} {Uuid} ناموفق بود", kind, uuid);
++            return null;
++        }
++    }
++
++    private async Task<KaajDocumentDto?> FetchDocumentAsync(string docUuid)
++    {
++        var cfg = GetConfig();
++        try
++        {
++            using var client = CreateClient(cfg);
++            var url = $"{cfg.BaseUrl.TrimEnd('/')}/document/getProperties?docId={Uri.EscapeDataString(docUuid)}";
++            var xml = await client.GetStringAsync(url);
++            var root = XDocument.Parse(xml).Root;
++            return root == null ? null : ToDocument(root);
++        }
++        catch (Exception ex)
++        {
++            logger.LogWarning(ex, "[KaajDocumentApi] دریافت مشخصات سند {DocUuid} ناموفق بود", docUuid);
++            return null;
++        }
++    }
++
++    private void Remember<T>(string key, T value) =>
++        cache.Set(key, value, new MemoryCacheEntryOptions { Size = 1, SlidingExpiration = NodeTtl });
++
++    private static string FolderKey(string uuid) => $"kaaj:fld:{uuid}";
++    private static string DocumentKey(string uuid) => $"kaaj:doc:{uuid}";
++
+     // ─── Parsing (XML) ───────────────────────────────────────────────────────
+ 
+     private static List<KaajFolderDto> ParseFolders(string xml)
+@@ -150,25 +269,27 @@ public class KaajDocumentApiService(
+     private static List<KaajDocumentDto> ParseDocuments(string xml)
+     {
+         var doc = XDocument.Parse(xml);
+-        return doc.Root?.Elements("document").Select(d =>
+-        {
+-            var path = (string?)d.Element("path") ?? "";
+-            var actualVersion = d.Element("actualVersion");
+-            long size = 0;
+-            if (actualVersion != null)
+-                long.TryParse((string?)actualVersion.Element("size"), out size);
++        return doc.Root?.Elements("document").Select(ToDocument).ToList() ?? [];
++    }
+ 
+-            return new KaajDocumentDto
+-            {
+-                Uuid = (string?)d.Element("uuid") ?? "",
+-                Path = path,
+-                Name = ExtractNameFromPath(path),
+-                MimeType = (string?)d.Element("mimeType") ?? "application/octet-stream",
+-                Size = size,
+-                Created = ParseDate((string?)d.Element("created")),
+-                LastModified = ParseDate((string?)d.Element("lastModified")),
+-            };
+-        }).ToList() ?? [];
++    private static KaajDocumentDto ToDocument(XElement d)
++    {
++        var path = (string?)d.Element("path") ?? "";
++        var actualVersion = d.Element("actualVersion");
++        long size = 0;
++        if (actualVersion != null)
++            long.TryParse((string?)actualVersion.Element("size"), out size);
++
++        return new KaajDocumentDto
++        {
++            Uuid = (string?)d.Element("uuid") ?? "",
++            Path = path,
++            Name = ExtractNameFromPath(path),
++            MimeType = (string?)d.Element("mimeType") ?? "application/octet-stream",
++            Size = size,
++            Created = ParseDate((string?)d.Element("created")),
++            LastModified = ParseDate((string?)d.Element("lastModified")),
++        };
+     }
+ 
+     private static string ExtractNameFromPath(string path)
 diff --git a/EPC.SSO/Services/OtherProgramService.cs b/EPC.SSO/Services/OtherProgramService.cs
 index 8b531f6..b34572e 100644
 --- a/EPC.SSO/Services/OtherProgramService.cs
@@ -2028,10 +3795,20 @@ index 0e4438d..94aa7eb 100644
  
      private async Task<List<WindowsAppViewModel>> LoadAccessibleAppsAsync(string personnelCode)
 diff --git a/EPC.SSO/Startup.cs b/EPC.SSO/Startup.cs
-index 9ce3ea0..f57203f 100644
+index 9ce3ea0..0e91140 100644
 --- a/EPC.SSO/Startup.cs
 +++ b/EPC.SSO/Startup.cs
-@@ -149,12 +149,18 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
+@@ -78,7 +78,8 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
+                 if (!string.IsNullOrWhiteSpace(issuer))
+                     options.IssuerUri = issuer;
+             })
+-            .AddCustomTokenRequestValidator<CustomTokenRequestValidator>();
++            .AddCustomTokenRequestValidator<CustomTokenRequestValidator>()
++            .AddProfileService<ActiveUserProfileService>();
+ 
+         // ✅ قبلاً services.BuildServiceProvider() داخل ConfigureServices صدا زده می‌شد (یک Container دوم
+         //    با Singletonهای تکراری). حالا فقط یک DbContext موقت ساخته و Dispose می‌شود.
+@@ -149,12 +150,18 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
          services.AddScoped<SuggestionService>();
          services.AddScoped<OtherProgramService>();
          services.AddScoped<WindowsProgramService>();
@@ -2050,7 +3827,7 @@ index 9ce3ea0..f57203f 100644
          if (environment.IsDevelopment())
              services.AddDatabaseDeveloperPageExceptionFilter();
      }
-@@ -217,6 +223,7 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
+@@ -217,6 +224,7 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
          {
              endpoints.MapHealthChecks("/health");
              endpoints.MapControllers();
@@ -2058,6 +3835,275 @@ index 9ce3ea0..f57203f 100644
              endpoints.MapControllerRoute("default", "{controller=Account}/{action=Login}/{id?}");
          });
      }
+diff --git a/EPC.SSO/Validators/PasswordValidator.cs b/EPC.SSO/Validators/PasswordValidator.cs
+index 2481253..6b8ef74 100644
+--- a/EPC.SSO/Validators/PasswordValidator.cs
++++ b/EPC.SSO/Validators/PasswordValidator.cs
+@@ -1,5 +1,6 @@
+ using System.Net;
+ using System.Net.Sockets;
++using System.Runtime.CompilerServices;
+ using System.Security.Cryptography;
+ using System.Text;
+ using Epc.Application.Setting;
+@@ -8,6 +9,7 @@ using Epc.Identity;
+ using EPC.SSO.Models;
+ using EPC.SSO.SettingModels;
+ using Microsoft.EntityFrameworkCore;
++using Microsoft.Extensions.Caching.Memory;
+ using UserManagement.Domain.UserAgg;
+ using UserManagement.Infrastructure.Persistence;
+ 
+@@ -26,14 +28,23 @@ namespace EPC.SSO.Validators;
+ ///  • محدودیت زمانی با ساعت محلی سرور (ایران) مقایسه می‌شود، نه UTC (۳.۵ ساعت اختلاف).
+ ///  • آدرس‌های IPv4-mapped-IPv6 (‎::ffff:10.0.0.5) به IPv4 تبدیل می‌شوند.
+ ///  • مقایسه‌ی کلید ورود خارجی Constant-time است.
++///  • شمارنده‌ی ورود ناموفق اتمیک افزایش می‌یابد (قبلاً با درخواست‌های هم‌زمان چند خطا یک خطا حساب می‌شد
++///    و قفل حساب دور زده می‌شد).
++///  • کلید یک‌بارمصرف (ورود از برنامه‌های دیگر) فقط ۵ رقم است؛ بعد از چند کلید اشتباه برای یک کد پرسنلی،
++///    کلید فعلی باطل می‌شود تا حدس زدن آن ممکن نباشد. محدودیت IP/زمان هم برای این ورود اعمال می‌شود.
++///  • کاربر بدون شرکت (Company=null) دیگر خطای 500 نمی‌دهد.
+ /// </summary>
+ public sealed class PasswordValidator(
+     UserManagementCommandContext context,
+     IPasswordHasher passwordHasher,
+     PortalDbContext portalDbContext,
+     IHttpContextAccessor httpContextAccessor,
+-    ISettingService settingService) : IPasswordValidator
++    ISettingService settingService,
++    IMemoryCache cache) : IPasswordValidator
+ {
++    private const int MaxKeyAttempts = 5;
++    private static readonly TimeSpan KeyAttemptWindow = TimeSpan.FromMinutes(15);
++
+     private const string InvalidCredentials = "مشخصات ورود اشتباه است. لطفا دوباره تلاش کنید.";
+     private const string LockedMessage = "کاربر قفل شده است، لطفا به راهبر سیستم اطلاع رسانی کنید.";
+ 
+@@ -65,13 +76,17 @@ public sealed class PasswordValidator(
+ 
+         var activePassword = user.Passwords.FirstOrDefault(x => x.IsActive == EntityBase<long>.ActiveStates.Active);
+         if (activePassword is null)
+-            return result.Failed("رمز عبور فعالی برای این کاربر تعریف نشده است.");
++        {
++            // پیام یکسان با رمز اشتباه (جلوگیری از شناسایی کدهای پرسنلی معتبر)
++            passwordHasher.Hash(password);
++            return result.Failed(InvalidCredentials);
++        }
+ 
+         var (verified, _) = passwordHasher.Check(activePassword.Password, password + user.PersonnelCode);
+         if (!verified)
+         {
+-            user.LoginFailed();
+-            if (user.FailedLoginAttempts >= settings.LoginAttemptsCountLimit)
++            var attempts = await RegisterFailedAttemptAsync(user.Id, cancellationToken);
++            if (attempts >= settings.LoginAttemptsCountLimit)
+             {
+                 user.Lock(user.Guid);
+                 await context.SaveChangesAsync(cancellationToken);
+@@ -79,30 +94,15 @@ public sealed class PasswordValidator(
+             }
+ 
+             user.OpenSession(user.Guid, user.NationalCode, $"{user.FirstName} {user.LastName}",
+-                user.PersonnelCode, user.Company.Title, unitTitle, false, clientIp?.ToString());
++                user.PersonnelCode, CompanyTitle(user), unitTitle, false, clientIp?.ToString());
+ 
+             await context.SaveChangesAsync(cancellationToken);
+             return result.Failed(InvalidCredentials);
+         }
+ 
+-        if (!user.IsSuperAdmin)
+-        {
+-            var position = user.Positions.Select(p => p.Position).FirstOrDefault();
+-            if (position is null)
+-                return result.Failed("برای کاربر وارد شده هیچ سمتی ثبت نشده است.");
+-
+-            var groupIds = await context.PositionGroups
+-                .AsNoTracking()
+-                .Where(pg => pg.PositionId == position.Id)
+-                .Select(pg => pg.GroupId)
+-                .ToListAsync(cancellationToken);
+-
+-            if (!await IsWithinTimeRestrictionsAsync(position.Id, groupIds, cancellationToken))
+-                return result.Failed("خارج از زمان‌های مجاز برای ورود به سیستم.");
+-
+-            if (!await IsWithinIpRestrictionsAsync(position.Id, groupIds, clientIp, cancellationToken))
+-                return result.Failed("آی‌پی شما مجاز به دسترسی به سیستم نیست.");
+-        }
++        var restriction = await CheckRestrictionsAsync(user, clientIp, cancellationToken);
++        if (restriction is not null)
++            return result.Failed(restriction);
+ 
+         // قبل از ثبت Session جدید بررسی می‌کنیم آیا قبلاً ورود موفقی داشته است.
+         var isFirstLogin = !await context.Users
+@@ -112,7 +112,7 @@ public sealed class PasswordValidator(
+             .AnyAsync(x => x.IsSuccessful, cancellationToken);
+ 
+         user.OpenSession(user.Guid, user.NationalCode, $"{user.FirstName} {user.LastName}",
+-            user.PersonnelCode, user.Company.Title, unitTitle, true, clientIp?.ToString(), settings.TokenExpiryTime);
++            user.PersonnelCode, CompanyTitle(user), unitTitle, true, clientIp?.ToString(), settings.TokenExpiryTime);
+ 
+         if (isFirstLogin || activePassword.IsExpired() || user.PasswordExpired) user.ShouldChangePassword();
+         else user.PasswordRenewed();
+@@ -146,18 +146,34 @@ public sealed class PasswordValidator(
+         }
+ 
+         // کلید یک‌بارمصرف SYSTEM21
+-        var record = await portalDbContext.SYSTEM21
+-            .FirstOrDefaultAsync(c => c.Personeli_Number == personnelNo, cancellationToken);
++        var storedKey = await portalDbContext.SYSTEM21
++            .AsNoTracking()
++            .Where(c => c.Personeli_Number == personnelNo)
++            .Select(c => c.RandomNumber)
++            .FirstOrDefaultAsync(cancellationToken);
+ 
+-        if (record?.RandomNumber is null || !FixedTimeEquals(record.RandomNumber, key))
++        if (storedKey is null || !FixedTimeEquals(storedKey, key))
++        {
++            await RegisterFailedKeyAsync(personnelNo, cancellationToken);
+             return result.Failed("شناسه وارد شده نامعتبر است.");
++        }
+ 
+-        record.RandomNumber = null;
+-        await portalDbContext.SaveChangesAsync(cancellationToken);
++        // مصرف اتمیک: دو درخواست هم‌زمان با یک کلید فقط یک ورود می‌سازند
++        var consumed = await portalDbContext.SYSTEM21
++            .Where(c => c.Personeli_Number == personnelNo && c.RandomNumber == storedKey)
++            .ExecuteUpdateAsync(u => u.SetProperty(c => c.RandomNumber, (string?)null), cancellationToken);
++        if (consumed == 0)
++            return result.Failed("شناسه وارد شده نامعتبر است.");
++        cache.Remove(KeyAttemptsKey(personnelNo));
++
++        var clientIp = GetClientIp();
++        var restriction = await CheckRestrictionsAsync(user, clientIp, cancellationToken);
++        if (restriction is not null)
++            return result.Failed(restriction);
+ 
+         var unitTitle = await GetUnitTitleAsync(user.UnitId, cancellationToken);
+         user.OpenSession(user.Guid, user.NationalCode, $"{user.FirstName} {user.LastName}",
+-            user.PersonnelCode, user.Company.Title, unitTitle, true, GetClientIp()?.ToString(), settings.TokenExpiryTime);
++            user.PersonnelCode, CompanyTitle(user), unitTitle, true, clientIp?.ToString(), settings.TokenExpiryTime);
+ 
+         user.ResetFailedLoginAttempts(user.Guid);
+         await context.SaveChangesAsync(cancellationToken);
+@@ -167,6 +183,65 @@ public sealed class PasswordValidator(
+ 
+     // ─── Helpers ─────────────────────────────────────────────────────────────
+ 
++    private static string CompanyTitle(User user) => user.Company?.Title ?? string.Empty;
++
++    /// <summary>افزایش اتمیک شمارنده در دیتابیس و برگرداندن مقدار جدید</summary>
++    private async Task<int> RegisterFailedAttemptAsync(int userId, CancellationToken cancellationToken)
++    {
++        await context.Users
++            .Where(u => u.Id == userId)
++            .ExecuteUpdateAsync(u => u.SetProperty(x => x.FailedLoginAttempts, x => x.FailedLoginAttempts + 1), cancellationToken);
++
++        return await context.Users.AsNoTracking()
++            .Where(u => u.Id == userId)
++            .Select(u => u.FailedLoginAttempts)
++            .FirstAsync(cancellationToken);
++    }
++
++    private static string KeyAttemptsKey(int personnelNo) => $"login:key-attempts:{personnelNo}";
++
++    /// <summary>بعد از چند کلید اشتباه، کلید فعلی باطل می‌شود (کلید ۵ رقمی قابل حدس است)</summary>
++    private async Task RegisterFailedKeyAsync(int personnelNo, CancellationToken cancellationToken)
++    {
++        var counter = cache.GetOrCreate(KeyAttemptsKey(personnelNo), e =>
++        {
++            e.AbsoluteExpirationRelativeToNow = KeyAttemptWindow;
++            e.Size = 1;
++            return new StrongBox<int>();
++        })!;
++
++        if (Interlocked.Increment(ref counter.Value) < MaxKeyAttempts) return;
++
++        await portalDbContext.SYSTEM21
++            .Where(c => c.Personeli_Number == personnelNo)
++            .ExecuteUpdateAsync(u => u.SetProperty(c => c.RandomNumber, (string?)null), cancellationToken);
++        cache.Remove(KeyAttemptsKey(personnelNo));
++    }
++
++    /// <summary>محدودیت سمت، زمان و IP (برای هر دو نوع ورود). null یعنی مجاز.</summary>
++    private async Task<string?> CheckRestrictionsAsync(User user, IPAddress? clientIp, CancellationToken cancellationToken)
++    {
++        if (user.IsSuperAdmin) return null;
++
++        var position = user.Positions.Select(p => p.Position).FirstOrDefault();
++        if (position is null)
++            return "برای کاربر وارد شده هیچ سمتی ثبت نشده است.";
++
++        var groupIds = await context.PositionGroups
++            .AsNoTracking()
++            .Where(pg => pg.PositionId == position.Id)
++            .Select(pg => pg.GroupId)
++            .ToListAsync(cancellationToken);
++
++        if (!await IsWithinTimeRestrictionsAsync(position.Id, groupIds, cancellationToken))
++            return "خارج از زمان‌های مجاز برای ورود به سیستم.";
++
++        if (!await IsWithinIpRestrictionsAsync(position.Id, groupIds, clientIp, cancellationToken))
++            return "آی‌پی شما مجاز به دسترسی به سیستم نیست.";
++
++        return null;
++    }
++
+     private Task<User?> LoadUserAsync(string personnelCode, CancellationToken cancellationToken) =>
+         context.Users
+             .Include(x => x.Passwords)
+diff --git a/EPC.SSO/Views/Account/Login.cshtml b/EPC.SSO/Views/Account/Login.cshtml
+index 6bcf3d0..b535d85 100644
+--- a/EPC.SSO/Views/Account/Login.cshtml
++++ b/EPC.SSO/Views/Account/Login.cshtml
+@@ -69,7 +69,7 @@
+                         <div class="lg-field">
+                             <label class="lg-label" for="EnteredCaptcha">کد امنیتی</label>
+                             <div class="lg-captcha">
+-                                <div class="lg-captcha__code" id="captchaText">@Model.CaptchaText</div>
++                                <img class="lg-captcha__code lg-captcha__img" id="captchaImage" src="@Url.Action("Captcha", "Account", new { t = DateTime.UtcNow.Ticks })" alt="کد امنیتی" width="180" height="56" />
+                                 <button type="button" class="lg-captcha__btn" id="captchaRefresh" title="کد جدید" aria-label="کد جدید"><i class="fa fa-rotate"></i></button>
+                             </div>
+                             <div class="lg-input-wrap">
+diff --git a/EPC.SSO/Views/Delegation/Create.cshtml b/EPC.SSO/Views/Delegation/Create.cshtml
+index 181b1f8..390707e 100644
+--- a/EPC.SSO/Views/Delegation/Create.cshtml
++++ b/EPC.SSO/Views/Delegation/Create.cshtml
+@@ -536,7 +536,7 @@
+         </div>
+ 
+         <form asp-action="Create" method="post" id="delegForm">
+-            <input type="hidden" value="@Model.Id" />
++            <input type="hidden" asp-for="Id" />
+ 
+             <div class="g-card">
+                 <div class="g-card__head">
+diff --git a/EPC.SSO/Views/Documents/Index.cshtml b/EPC.SSO/Views/Documents/Index.cshtml
+index fd939d6..980b6a6 100644
+--- a/EPC.SSO/Views/Documents/Index.cshtml
++++ b/EPC.SSO/Views/Documents/Index.cshtml
+@@ -5,7 +5,7 @@
+ }
+ 
+ @section style {
+-    <link href="~/css/documents-browser.css" rel="stylesheet" />
++    <link href="~/css/document-browser.css" rel="stylesheet" asp-append-version="true" />
+ }
+ 
+ <main>
+@@ -73,10 +73,10 @@
+ 
+ @section scripts {
+     <script src="~/js/jalali-picker.js"></script>
+-    <script src="~/js/documents-browser.js"></script>
++    <script src="~/js/document-browser.js" asp-append-version="true"></script>
+     <script>
+         document.addEventListener('DOMContentLoaded', () => {
+-        DocBrowser.init('@Html.Raw(rootFolderUuid)', 'مستندات سیستم‌ها');
++        DocBrowser.init(@Json.Serialize(rootFolderUuid), 'مستندات سیستم‌ها');
+         });
+     </script>
+ }
+\ No newline at end of file
 diff --git a/EPC.SSO/Views/Grants/Index.cshtml b/EPC.SSO/Views/Grants/Index.cshtml
 index 9a76af2..12ede6a 100644
 --- a/EPC.SSO/Views/Grants/Index.cshtml
@@ -2070,6 +4116,18 @@ index 9a76af2..12ede6a 100644
      <script src="~/js/dashboard.js" asp-append-version="true"></script>
 +    <script src="~/js/portal-realtime.js" asp-append-version="true"></script>
  }
+diff --git a/EPC.SSO/wwwroot/css/login-v2.css b/EPC.SSO/wwwroot/css/login-v2.css
+index 42af830..48a6db1 100644
+--- a/EPC.SSO/wwwroot/css/login-v2.css
++++ b/EPC.SSO/wwwroot/css/login-v2.css
+@@ -121,6 +121,7 @@ html[data-theme="dark"] .lg-theme .fa-sun { display: inline-block; color: var(--
+ .lg-caps[hidden] { display: none !important; }
+ 
+ .lg-captcha { display: flex; gap: 8px; margin-bottom: 8px; }
++.lg-captcha__img { object-fit: contain; padding: 0; min-width: 0; width: 100%; background: #f4efe9 !important; }
+ .lg-captcha__code { flex: 1; height: 50px; border-radius: 14px; display: grid; place-items: center; user-select: none; font: 700 21px/1 'Courier New', monospace; letter-spacing: 8px;
+     color: var(--t1); border: 1.5px dashed var(--acc2); background: repeating-linear-gradient(45deg, var(--hero-bg1), var(--hero-bg1) 8px, rgba(251,146,60,.18) 8px, rgba(251,146,60,.18) 16px); }
+ html[data-theme="dark"] .lg-captcha__code { background: repeating-linear-gradient(45deg, #2a1b10, #2a1b10 8px, #3a2414 8px, #3a2414 16px); }
 diff --git a/EPC.SSO/wwwroot/js/dashboard.js b/EPC.SSO/wwwroot/js/dashboard.js
 index 8f009e3..df91c31 100644
 --- a/EPC.SSO/wwwroot/js/dashboard.js
@@ -2164,6 +4222,159 @@ index 8f009e3..df91c31 100644
 +
 +    load();
  })();
+diff --git a/EPC.SSO/wwwroot/js/document-browser.js b/EPC.SSO/wwwroot/js/document-browser.js
+index 980b1f2..2a139d5 100644
+--- a/EPC.SSO/wwwroot/js/document-browser.js
++++ b/EPC.SSO/wwwroot/js/document-browser.js
+@@ -16,9 +16,12 @@ const DocBrowser = (function () {
+     }
+ 
+     function escHtml(s) {
+-        return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
++        return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
++            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+     }
+-    function escAttr(s) { return String(s ?? '').replace(/"/g, '&quot;'); }
++    // داده‌ها هرگز داخل onclick قرار نمی‌گیرند (decode شدن entity ها قبل از اجرای JS = XSS)؛
++    // فقط در data-* و با یک listener مرکزی خوانده می‌شوند
++    const escAttr = escHtml;
+ 
+     function iconForMime(mime, name) {
+         const m = (mime || '').toLowerCase();
+@@ -41,7 +44,7 @@ const DocBrowser = (function () {
+             return `
+             ${i > 0 ? '<span class="doc-crumb-sep"><i class="fa fa-chevron-left"></i></span>' : ''}
+             <button type="button" class="doc-crumb${isLast ? ' doc-crumb--active' : ''}"
+-                onclick="DocBrowser.goToCrumb(${i})" ${isLast ? 'disabled' : ''}>
++                data-action="crumb" data-index="${i}" ${isLast ? 'disabled' : ''}>
+                 ${i === 0 ? '<i class="fa fa-folder-tree"></i>' : ''} ${escHtml(c.name)}
+             </button>`;
+         }).join('');
+@@ -90,8 +93,8 @@ const DocBrowser = (function () {
+         foldersSection.style.display = folders.length ? '' : 'none';
+ 
+         foldersGrid.innerHTML = folders.map(f => `
+-            <div class="doc-card doc-card--folder" data-name="${escAttr(f.name)}"
+-                 onclick="DocBrowser.openFolder('${escAttr(f.uuid)}', '${escAttr(f.name)}')">
++            <div class="doc-card doc-card--folder" data-name="${escAttr(f.name)}" tabindex="0" role="button"
++                 data-action="folder" data-uuid="${escAttr(f.uuid)}">
+                 <i class="fa fa-chevron-left doc-folder-chevron"></i>
+                 <div class="doc-card-icon"><i class="fa fa-folder"></i></div>
+                 <div class="doc-card-name">${escHtml(f.name || 'بدون‌نام')}</div>
+@@ -106,10 +109,10 @@ const DocBrowser = (function () {
+         docsGrid.innerHTML = documents.map(d => {
+             const { icon, cls } = iconForMime(d.mimeType, d.name);
+             return `
+-    <div class="doc-card" data-name="${escAttr(d.name)}"
+-         onclick="DocBrowser.openDocument('${escAttr(d.uuid)}','${escAttr(d.name)}',${!!d.isPdf},${!!d.isImage},'${escAttr(d.mimeType)}')">
+-        <button type="button" class="doc-card-download" title="دانلود"
+-            onclick="event.stopPropagation(); DocBrowser.download('${escAttr(d.uuid)}','${escAttr(d.name)}','${escAttr(d.mimeType)}')">
++    <div class="doc-card" data-name="${escAttr(d.name)}" tabindex="0" role="button"
++         data-action="open" data-uuid="${escAttr(d.uuid)}">
++        <button type="button" class="doc-card-download" title="دانلود" aria-label="دانلود"
++            data-action="download" data-uuid="${escAttr(d.uuid)}">
+             <i class="fa fa-download"></i>
+         </button>
+         <div class="doc-card-icon ${cls}"><i class="fa ${icon}"></i></div>
+@@ -132,29 +135,28 @@ const DocBrowser = (function () {
+         browse(crumbs[crumbs.length - 1].uuid);
+     }
+ 
+-    function download(uuid, name, mimeType) {
++    function download(uuid, name) {
+         const a = document.createElement('a');
+-        const mimeParam = mimeType ? `&mimeType=${encodeURIComponent(mimeType)}` : '';
+-        a.href = `/Documents/Download?docUuid=${encodeURIComponent(uuid)}${mimeParam}`;
++        a.href = `/Documents/Download?docUuid=${encodeURIComponent(uuid)}`;
+         a.download = name || '';
+         document.body.appendChild(a);
+         a.click();
+         document.body.removeChild(a);
+     }
+ 
+-    function openDocument(uuid, name, isPdf, isImage, mimeType) {
+-        if (!isPdf && !isImage) { download(uuid, name, mimeType); return; }
++    function openDocument(uuid, name, isPdf, isImage) {
++        if (!isPdf && !isImage) { download(uuid, name); return; }
+ 
+         document.getElementById('docPreviewName').textContent = name;
+         const body = document.getElementById('docPreviewBody');
+-        const url = `/Documents/Download?docUuid=${encodeURIComponent(uuid)}&inline=true&mimeType=${encodeURIComponent(mimeType || '')}`;
++        const url = `/Documents/Download?docUuid=${encodeURIComponent(uuid)}&inline=true`;
+ 
+         body.innerHTML = isImage
+             ? `<img src="${url}" alt="${escAttr(name)}" />`
+             : `<iframe src="${url}" class="doc-preview-iframe" title="${escAttr(name)}"></iframe>`;
+ 
+-        document.getElementById('docPreviewDownloadBtn').onclick = () => download(uuid, name, mimeType);
+-        new bootstrap.Modal(document.getElementById('docPreviewModal')).show();
++        document.getElementById('docPreviewDownloadBtn').onclick = () => download(uuid, name);
++        bootstrap.Modal.getOrCreateInstance(document.getElementById('docPreviewModal')).show();
+     }
+ 
+     function filter(term) {
+@@ -172,6 +174,48 @@ const DocBrowser = (function () {
+         browse(rootUuid);
+ 
+         document.getElementById('docSearchInput')?.addEventListener('input', e => filter(e.target.value));
++
++        if (!listenersBound) {
++            listenersBound = true;
++            document.addEventListener('click', onAction);
++            document.addEventListener('keydown', e => {
++                if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.doc-card[data-action]')) {
++                    e.preventDefault();
++                    onAction(e);
++                }
++            });
++        }
++    }
++
++    let listenersBound = false;
++    const findDoc = uuid => currentDocuments.find(d => d.uuid === uuid);
++    const findFolder = uuid => currentFolders.find(f => f.uuid === uuid);
++
++    function onAction(e) {
++        const el = e.target.closest?.('[data-action]');
++        if (!el || !el.closest('#docBreadcrumb, #docFoldersGrid, #docFilesGrid')) return;
++        const uuid = el.dataset.uuid;
++        switch (el.dataset.action) {
++            case 'crumb':
++                goToCrumb(Number(el.dataset.index));
++                break;
++            case 'folder': {
++                const f = findFolder(uuid);
++                if (f) openFolder(f.uuid, f.name);
++                break;
++            }
++            case 'download': {
++                e.stopPropagation();
++                const d = findDoc(uuid);
++                if (d) download(d.uuid, d.name);
++                break;
++            }
++            case 'open': {
++                const d = findDoc(uuid);
++                if (d) openDocument(d.uuid, d.name, !!d.isPdf, !!d.isImage);
++                break;
++            }
++        }
+     }
+ 
+     return { init, openFolder, goToCrumb, openDocument, download, filter };
+diff --git a/EPC.SSO/wwwroot/js/login.js b/EPC.SSO/wwwroot/js/login.js
+index bb039a7..27080c2 100644
+--- a/EPC.SSO/wwwroot/js/login.js
++++ b/EPC.SSO/wwwroot/js/login.js
+@@ -67,7 +67,7 @@
+         try {
+             const r = await fetch('/Account/RefreshCaptcha', { credentials: 'same-origin', cache: 'no-store' });
+             const d = await r.json();
+-            $('#captchaText').textContent = d.text;
++            if (d.url) $('#captchaImage').src = d.url;
+             const inp = $('#EnteredCaptcha');
+             inp.value = ''; inp.focus();
+         } catch { }
 diff --git a/EPC.SSO/wwwroot/js/portal-realtime.js b/EPC.SSO/wwwroot/js/portal-realtime.js
 new file mode 100644
 index 0000000..e8be301
