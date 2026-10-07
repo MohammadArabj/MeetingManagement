@@ -1,0 +1,1110 @@
+@model EPC.SSO.Quickstart.Home.HomeIndexViewModel
+@{
+    Layout = null;
+    ViewData["Title"] = "پورتال یکپارچه سازمانی — " + Model.CompanyName;
+}
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+    <link rel="manifest" href="/favicon/site.webmanifest">
+    <link href="~/assets/css/saas/bootstrap-rtl.min.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/assets/css/saas/app.min.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/assets/css/icons.min.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/assets/css/saas/custom.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+            :root {
+                --navy: #131b3a;
+                --navy-dark: #0b1128;
+                --navy-light: #1e2a55;
+                --orange: #f97316;
+                --orange-light: #fb923c;
+                --blue: #0ea5e9;
+                --purple: #8b5cf6;
+                --green: #10b981;
+                --bg: #f4f6fa;
+                --t1: #16263f;
+                --t2: rgba(22,38,63,.72);
+                --t3: rgba(22,38,63,.5);
+                --card-bg: #ffffff;
+                --card-border: rgba(28,39,81,.08);
+                --shadow-md: 0 10px 30px rgba(20,30,60,.08);
+                --shadow-lg: 0 20px 50px rgba(20,30,60,.14);
+                /* ── پالت روشنِ Hero ── */
+                --hero-bg1: #fde9d0;
+                --hero-bg2: #dbeafe;
+                --hero-bg3: #e6ddfb;
+                --hero-text: #16263f;
+                --hero-text-soft: rgba(22,38,63,.62);
+                --hero-border: rgba(22,38,63,.12);
+            }
+
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            html {
+                scroll-behavior: smooth;
+            }
+
+            body {
+                font-family: 'Vazirmatn', 'Sahel', sans-serif;
+                background: var(--bg);
+                color: var(--t1);
+                overflow-x: hidden;
+            }
+
+            a {
+                text-decoration: none;
+                color: inherit;
+            }
+
+            /* ══════════════════════════════════════════════
+                                               NAVBAR
+                                               ══════════════════════════════════════════════ */
+            .hp-nav {
+                position: fixed;
+                top: 0;
+                right: 0;
+                left: 0;
+                z-index: 200;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 1.1rem 3rem;
+                transition: all .35s ease;
+            }
+
+            .hp-nav--solid {
+                background: rgba(255,255,255,.85);
+                backdrop-filter: blur(14px);
+                box-shadow: 0 4px 24px rgba(20,30,60,.08);
+                padding: .75rem 3rem;
+            }
+
+            .hp-nav__brand {
+                display: flex;
+                align-items: center;
+                gap: .7rem;
+                color: var(--t1);
+                font-weight: 800;
+                font-size: 1.05rem;
+            }
+
+            .hp-nav__brand-icon {
+                width: 40px;
+                height: 40px;
+                border-radius: 11px;
+                background: linear-gradient(135deg, var(--orange), var(--orange-light));
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.1rem;
+                box-shadow: 0 4px 14px rgba(249,115,22,.4);
+            }
+
+            .hp-nav__cta {
+                display: flex;
+                align-items: center;
+                gap: .5rem;
+                padding: .62rem 1.5rem;
+                background: linear-gradient(135deg, var(--orange), #e06810);
+                color: #fff;
+                border-radius: 99px;
+                font-weight: 700;
+                font-size: .86rem;
+                box-shadow: 0 6px 20px rgba(249,115,22,.38);
+                transition: all .25s ease;
+            }
+
+                .hp-nav__cta:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 10px 26px rgba(249,115,22,.5);
+                    color: #fff;
+                }
+
+            /* ══════════════════════════════════════════════
+                                               ANNOUNCEMENT HERO — قهرمان اصلی صفحه
+                                               ══════════════════════════════════════════════ */
+            .ah-hero {
+                position: relative;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                background: linear-gradient(135deg, var(--hero-bg1) 0%, var(--hero-bg2) 55%, var(--hero-bg3) 100%);
+                padding: 7.5rem 1.5rem 4rem;
+            }
+
+            .ah-hero__bgimg {
+                position: absolute;
+                inset: 0;
+                background-image: url('/images/epc.png');
+                background-size: cover;
+                background-position: center 60%;
+                opacity: .5;
+                filter: saturate(1.08) contrast(1.02);
+            }
+
+            .ah-hero__grid {
+                position: absolute;
+                inset: 0;
+                background-image: linear-gradient(rgba(22,38,63,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(22,38,63,.06) 1px, transparent 1px);
+                background-size: 42px 42px;
+            }
+
+            .ah-hero__overlay {
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(180deg, rgba(253,233,208,.58) 0%, rgba(253,233,208,.1) 16%, rgba(219,234,254,.06) 42%, rgba(230,221,251,.12) 68%, rgba(255,255,255,.58) 100%);
+            }
+
+            .ah-orb {
+                position: absolute;
+                border-radius: 50%;
+                filter: blur(105px);
+                opacity: .7;
+                mix-blend-mode: multiply;
+                animation: ahFloat 12s ease-in-out infinite;
+            }
+
+            .ah-orb--1 {
+                width: 520px;
+                height: 520px;
+                background: radial-gradient(circle,#fb923c,transparent 70%);
+                top: -160px;
+                right: -120px;
+            }
+
+            .ah-orb--2 {
+                width: 460px;
+                height: 460px;
+                background: radial-gradient(circle,#38bdf8,transparent 70%);
+                bottom: -160px;
+                left: -110px;
+                animation-delay: -5s;
+                animation-duration: 15s;
+            }
+
+            .ah-orb--3 {
+                width: 300px;
+                height: 300px;
+                background: radial-gradient(circle,#a78bfa,transparent 70%);
+                top: 30%;
+                left: 6%;
+                opacity: .55;
+                animation-delay: -8s;
+            }
+
+            @@keyframes ahFloat {
+                0%, 100% {
+                    transform: translate(0,0) scale(1);
+                }
+
+                33% {
+                    transform: translate(28px,-32px) scale(1.05);
+                }
+
+                66% {
+                    transform: translate(-20px,22px) scale(.96);
+                }
+            }
+
+            /* ── سربرگ کوچک بالا (برند + خوشامد) ── */
+            .ah-topline {
+                position: relative;
+                z-index: 2;
+                text-align: center;
+                color: var(--hero-text);
+                margin-bottom: 1.6rem;
+                animation: ahFadeDown .7s cubic-bezier(.2,.8,.2,1) both;
+            }
+
+            @@keyframes ahFadeDown {
+                from {
+                    opacity: 0;
+                    transform: translateY(-16px);
+                }
+
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            .ah-topline__welcome {
+                font-size: .85rem;
+                font-weight: 500;
+                color: var(--hero-text-soft);
+                margin-bottom: .35rem;
+            }
+
+            .ah-topline__company {
+                font-size: 1.25rem;
+                font-weight: 800;
+                color: var(--hero-text);
+            }
+
+            /* ── نشان «اطلاعیه مهم» ── */
+            .ah-badge {
+                position: relative;
+                z-index: 2;
+                display: inline-flex;
+                align-items: center;
+                gap: .5rem;
+                padding: .5rem 1.3rem;
+                background: #fff;
+                border: 1px solid rgba(249,115,22,.28);
+                box-shadow: 0 6px 18px rgba(249,115,22,.12);
+                border-radius: 99px;
+                font-size: .82rem;
+                font-weight: 800;
+                color: #c2410c;
+                margin-bottom: 1.4rem;
+                animation: ahFadeDown .7s .1s cubic-bezier(.2,.8,.2,1) both, ahPulseBadge 2.6s ease-in-out infinite;
+            }
+
+            @@keyframes ahPulseBadge {
+                0%, 100% {
+                    box-shadow: 0 0 0 0 rgba(249,115,22,.35);
+                }
+
+                50% {
+                    box-shadow: 0 0 0 10px rgba(249,115,22,0);
+                }
+            }
+
+            .ah-badge__dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--orange);
+            }
+
+            /* ── قاب اصلی اطلاعیه (شیشه‌ای) ── */
+            .ah-stage {
+                position: relative;
+                z-index: 2;
+                width: 100%;
+                max-width: 880px;
+                animation: ahFadeUp .8s .15s cubic-bezier(.2,.8,.2,1) both;
+            }
+
+            @@keyframes ahFadeUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(34px) scale(.97);
+                }
+
+                to {
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                }
+            }
+
+            .ah-viewport {
+                position: relative;
+                overflow: hidden;
+                border-radius: 26px;
+                min-height: 260px;
+            }
+
+            .ah-card {
+                position: absolute;
+                inset: 0;
+                opacity: 0;
+                transform: translateY(18px) scale(.97);
+                transition: opacity .55s cubic-bezier(.4,0,.2,1), transform .55s cubic-bezier(.4,0,.2,1);
+                pointer-events: none;
+                border-radius: 26px;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                background: rgba(255,255,255,.72);
+                border: 1px solid var(--hero-border);
+                backdrop-filter: blur(22px);
+                -webkit-backdrop-filter: blur(22px);
+                box-shadow: 0 24px 60px rgba(20,30,60,.12);
+            }
+
+                .ah-card.active {
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                    pointer-events: auto;
+                    position: relative;
+                }
+
+            .ah-card__accent {
+                height: 4px;
+                width: 100%;
+                flex-shrink: 0;
+            }
+
+            .ah-card--info .ah-card__accent {
+                background: linear-gradient(90deg,#0ea5e9,#38bdf8);
+            }
+
+            .ah-card--warn .ah-card__accent {
+                background: linear-gradient(90deg,#f97316,#fbbf24);
+            }
+
+            .ah-card--success .ah-card__accent {
+                background: linear-gradient(90deg,#10b981,#34d399);
+            }
+
+            .ah-card--danger .ah-card__accent {
+                background: linear-gradient(90deg,#ef4444,#f87171);
+            }
+
+            .ah-card__body {
+                padding: 2rem 2.2rem 1.7rem;
+                display: flex;
+                flex-direction: column;
+                gap: .85rem;
+            }
+
+            .ah-card__head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: .8rem;
+                flex-wrap: wrap;
+            }
+
+            .ah-card__badge {
+                display: inline-flex;
+                align-items: center;
+                gap: .4rem;
+                padding: .35rem .95rem;
+                border-radius: 20px;
+                font-size: .72rem;
+                font-weight: 800;
+                flex-shrink: 0;
+            }
+
+            .ah-card--info .ah-card__badge {
+                background: rgba(14,165,233,.1);
+                color: #0284c7;
+                border: 1px solid rgba(14,165,233,.25);
+            }
+
+            .ah-card--warn .ah-card__badge {
+                background: rgba(249,115,22,.1);
+                color: #c2410c;
+                border: 1px solid rgba(249,115,22,.25);
+            }
+
+            .ah-card--success .ah-card__badge {
+                background: rgba(16,185,129,.1);
+                color: #047857;
+                border: 1px solid rgba(16,185,129,.25);
+            }
+
+            .ah-card--danger .ah-card__badge {
+                background: rgba(239,68,68,.1);
+                color: #b91c1c;
+                border: 1px solid rgba(239,68,68,.25);
+            }
+
+            .ah-card__date {
+                font-size: .74rem;
+                color: var(--hero-text-soft);
+            }
+
+            .ah-card__title {
+                font-size: 1.28rem;
+                font-weight: 800;
+                color: var(--hero-text);
+                line-height: 1.5;
+            }
+
+            .ah-card__text {
+                font-size: .9rem;
+                color: rgba(22,38,63,.72);
+                line-height: 2;
+                max-height: 6.4em;
+                overflow: hidden;
+            }
+
+            /* پیوست تصویر/PDF */
+            .ah-fss {
+                margin-top: .3rem;
+                border-radius: 16px;
+                overflow: hidden;
+                border: 1px solid var(--hero-border);
+                background: #f8fafc;
+            }
+
+            .ah-fss__img-wrap {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 230px;
+                background: #f1f5f9;
+            }
+
+                .ah-fss__img-wrap img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: contain;
+                    display: block;
+                }
+
+            .ah-fss__pdf-wrap {
+                position: relative;
+                background: #f1f5f9;
+            }
+
+            .ah-fss__pdf-iframe {
+                width: 100%;
+                height: 300px;
+                border: none;
+                display: block;
+            }
+
+            .ah-fss__caption {
+                display: flex;
+                align-items: center;
+                gap: .5rem;
+                padding: .55rem .85rem;
+                background: rgba(22,38,63,.03);
+                border-top: 1px solid var(--hero-border);
+            }
+
+            .ah-fss__cap-name {
+                flex: 1;
+                font-size: .78rem;
+                color: var(--hero-text-soft);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .ah-fss__cap-dl {
+                background: none;
+                border: none;
+                color: rgba(22,38,63,.4);
+                cursor: pointer;
+                font-size: .85rem;
+                transition: color .2s;
+            }
+
+                .ah-fss__cap-dl:hover {
+                    color: var(--hero-text);
+                }
+
+            .ah-card__deco {
+                position: absolute;
+                left: -14px;
+                bottom: -22px;
+                font-size: 7.5rem;
+                opacity: .045;
+                color: var(--hero-text);
+                pointer-events: none;
+                transform: rotate(-8deg);
+            }
+
+            /* ── کنترل‌های اسلایدر ── */
+            .ah-controls {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-top: 1.4rem;
+                position: relative;
+                z-index: 2;
+            }
+
+            .ah-dots {
+                display: flex;
+                align-items: center;
+                gap: .5rem;
+            }
+
+            .ah-dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 99px;
+                background: rgba(22,38,63,.16);
+                border: none;
+                cursor: pointer;
+                transition: all .22s;
+                padding: 0;
+            }
+
+                .ah-dot.active {
+                    width: 26px;
+                    background: var(--orange);
+                    box-shadow: 0 0 10px rgba(249,115,22,.4);
+                }
+
+            .ah-arrows {
+                display: flex;
+                gap: .55rem;
+            }
+
+            .ah-arrow {
+                width: 38px;
+                height: 38px;
+                border-radius: 11px;
+                background: #fff;
+                border: 1px solid var(--hero-border);
+                color: rgba(22,38,63,.6);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                font-size: .82rem;
+                box-shadow: 0 4px 14px rgba(20,30,60,.06);
+                transition: all .2s;
+            }
+
+                .ah-arrow:hover {
+                    background: rgba(249,115,22,.08);
+                    border-color: rgba(249,115,22,.3);
+                    color: var(--orange);
+                    transform: scale(1.06);
+                }
+
+            .ah-progress {
+                height: 2.5px;
+                background: rgba(22,38,63,.08);
+                border-radius: 99px;
+                overflow: hidden;
+                margin-top: 1rem;
+                position: relative;
+                z-index: 2;
+            }
+
+            .ah-progress__fill {
+                height: 100%;
+                background: linear-gradient(90deg,var(--orange),var(--orange-light));
+                width: 0%;
+                transition: width linear;
+                border-radius: 99px;
+            }
+
+            .ah-counter {
+                text-align: center;
+                margin-top: .7rem;
+                font-size: .72rem;
+                color: var(--hero-text-soft);
+                position: relative;
+                z-index: 2;
+            }
+
+            .ah-empty {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: .9rem;
+                padding: 4rem 1rem;
+                text-align: center;
+                background: rgba(255,255,255,.6);
+                border-radius: 26px;
+                border: 1px dashed var(--hero-border);
+                color: var(--hero-text-soft);
+            }
+
+                .ah-empty i {
+                    font-size: 1.8rem;
+                }
+
+            /* ── دکمه‌های زیر قاب اطلاعیه ── */
+            .ah-hero__actions {
+                position: relative;
+                z-index: 2;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 1rem;
+                flex-wrap: wrap;
+                margin-top: 2.2rem;
+                animation: ahFadeUp .8s .25s cubic-bezier(.2,.8,.2,1) both;
+            }
+
+            .hp-btn-primary {
+                display: inline-flex;
+                align-items: center;
+                gap: .55rem;
+                padding: .85rem 2rem;
+                background: linear-gradient(135deg, var(--orange), #e06810);
+                border-radius: 12px;
+                color: #fff;
+                font-weight: 700;
+                font-size: .88rem;
+                box-shadow: 0 10px 28px rgba(249,115,22,.4);
+                transition: all .25s ease;
+            }
+
+                .hp-btn-primary:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 16px 34px rgba(249,115,22,.5);
+                    color: #fff;
+                }
+
+            .hp-btn-ghost {
+                display: inline-flex;
+                align-items: center;
+                gap: .55rem;
+                padding: .85rem 2rem;
+                background: #fff;
+                border: 1.5px solid var(--hero-border);
+                border-radius: 12px;
+                color: var(--hero-text);
+                font-weight: 700;
+                font-size: .88rem;
+                box-shadow: 0 6px 18px rgba(20,30,60,.06);
+                transition: all .25s ease;
+            }
+
+                .hp-btn-ghost:hover {
+                    background: rgba(249,115,22,.06);
+                    border-color: rgba(249,115,22,.3);
+                    color: var(--orange);
+                    transform: translateY(-3px);
+                }
+
+            .ah-scroll-hint {
+                position: absolute;
+                bottom: 1.6rem;
+                left: 50%;
+                transform: translateX(-50%);
+                color: rgba(22,38,63,.3);
+                font-size: 1.2rem;
+                z-index: 2;
+                animation: ahBounce 1.8s ease-in-out infinite;
+            }
+
+            @@keyframes ahBounce {
+                0%, 100% {
+                    transform: translate(-50%,0);
+                }
+
+                50% {
+                    transform: translate(-50%,8px);
+                }
+            }
+
+            /* ══════════════════════════════════════════════
+                                               QUICK LINKS — نوار جمع‌وجور
+                                               ══════════════════════════════════════════════ */
+            .hp-section {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 4.4rem 1.6rem;
+            }
+
+            .hp-section-head {
+                text-align: center;
+                margin-bottom: 2.6rem;
+            }
+
+            .hp-section-kicker {
+                font-size: .78rem;
+                font-weight: 700;
+                color: var(--orange);
+                letter-spacing: .04em;
+                margin-bottom: .5rem;
+            }
+
+            .hp-section-title {
+                font-size: 1.5rem;
+                font-weight: 800;
+                color: var(--t1);
+                margin-bottom: .5rem;
+            }
+
+            .hp-links-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                gap: .9rem;
+            }
+
+            .hp-link-card {
+                position: relative;
+                background: var(--card-bg);
+                border: 1px solid var(--card-border);
+                border-radius: 16px;
+                padding: 1.1rem 1rem;
+                box-shadow: var(--shadow-md);
+                transition: all .3s cubic-bezier(.2,.8,.2,1);
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+
+                .hp-link-card::before {
+                    content: '';
+                    position: absolute;
+                    inset: 0;
+                    background: linear-gradient(135deg, var(--_c, var(--orange)) 0%, transparent 60%);
+                    opacity: 0;
+                    transition: opacity .3s ease;
+                }
+
+                .hp-link-card:hover {
+                    transform: translateY(-6px);
+                    box-shadow: var(--shadow-lg);
+                    border-color: transparent;
+                }
+
+                    .hp-link-card:hover::before {
+                        opacity: .06;
+                    }
+
+            .hp-link-card__icon {
+                width: 40px;
+                height: 40px;
+                border-radius: 11px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.05rem;
+                color: #fff;
+                margin-bottom: .7rem;
+                background: var(--_c, var(--orange));
+                box-shadow: 0 8px 18px -6px var(--_c, var(--orange));
+                transition: transform .3s ease;
+            }
+
+            .hp-link-card:hover .hp-link-card__icon {
+                transform: scale(1.1) rotate(-4deg);
+            }
+
+            .hp-link-card__title {
+                font-size: .86rem;
+                font-weight: 700;
+                color: var(--t1);
+            }
+
+            /* ══════════════════════════════════════════════
+                                               FOOTER
+                                               ══════════════════════════════════════════════ */
+            .hp-footer {
+                background: var(--navy-dark);
+                color: rgba(255,255,255,.65);
+                padding: 2.2rem 1.6rem;
+                text-align: center;
+                font-size: .8rem;
+            }
+
+                .hp-footer strong {
+                    color: var(--orange-light);
+                }
+
+            /* ── responsive ── */
+            @@media (max-width: 720px) {
+                .hp-nav, .hp-nav--solid {
+                    padding: .9rem 1.2rem;
+                }
+
+                .ah-hero {
+                    padding: 6.5rem 1rem 3rem;
+                }
+
+                .ah-card__body {
+                    padding: 1.5rem 1.3rem;
+                }
+
+                .ah-card__title {
+                    font-size: 1.05rem;
+                }
+
+                .hp-section {
+                    padding: 3.2rem 1.1rem;
+                }
+            }
+    </style>
+</head>
+<body>
+
+    <!-- ═══ NAVBAR ═══ -->
+    <nav class="hp-nav" id="hpNav">
+        <div class="hp-nav__brand">
+            <div class="hp-nav__brand-icon"><i class="fas fa-industry"></i></div>
+            <span>@Model.CompanyName</span>
+        </div>
+        <a asp-controller="Account" asp-action="Login" class="hp-nav__cta">
+            <i class="fas fa-sign-in-alt"></i>
+            <span>ورود به سامانه</span>
+        </a>
+    </nav>
+
+    <!-- ═══ ANNOUNCEMENT HERO — بخش اصلی و مهم‌ترین قسمت صفحه ═══ -->
+    <section class="ah-hero">
+        <div class="ah-hero__bgimg"></div>
+        <div class="ah-hero__grid"></div>
+        <div class="ah-hero__overlay"></div>
+        <div class="ah-orb ah-orb--1"></div>
+        <div class="ah-orb ah-orb--2"></div>
+        <div class="ah-orb ah-orb--3"></div>
+
+        <div class="ah-topline">
+            <div class="ah-topline__welcome">به درگاه دیجیتال خوش آمدید</div>
+            <div class="ah-topline__company">@Model.CompanyName</div>
+        </div>
+
+        @if (Model.Announcements != null && Model.Announcements.Any())
+        {
+            <span class="ah-badge">
+                <span class="ah-badge__dot"></span>
+                آخرین اطلاعیه‌های سازمان
+            </span>
+
+            <div class="ah-stage">
+                <div class="ah-viewport" id="ahViewport">
+                    @foreach (var (ann, idx) in Model.Announcements.Select((a, i) => (a, i)))
+                    {
+                        var tc = ann.Type switch { "warn" => "ah-card--warn", "success" => "ah-card--success", "danger" => "ah-card--danger", _ => "ah-card--info" };
+                        var ti = ann.Type switch { "warn" => "fa-exclamation-triangle", "success" => "fa-check-circle", "danger" => "fa-times-circle", _ => "fa-info-circle" };
+                        var tn = ann.Type switch { "warn" => "هشدار", "success" => "موفقیت", "danger" => "فوری", _ => "اطلاعیه" };
+                        var mediaFile = ann.Files.FirstOrDefault(f => f.IsImage || f.IsPdf);
+
+                        <div class="ah-card @tc @(idx == 0 ? "active" : "")">
+                            <div class="ah-card__accent"></div>
+                            <div class="ah-card__body">
+                                <div class="ah-card__head">
+                                    <span class="ah-card__badge"><i class="fas @ti"></i> @tn</span>
+                                    <span class="ah-card__date">@ann.Date</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(ann.Title))
+                                {
+                                    <div class="ah-card__title">@ann.Title</div>
+                                }
+                                <div class="ah-card__text">@ann.Body</div>
+
+                                @if (mediaFile != null)
+                                {
+                                    <div class="ah-fss">
+                                        @if (mediaFile.IsImage)
+                                        {
+                                            <div class="ah-fss__img-wrap">
+                                                <img src="@mediaFile.FileUrl" alt="@mediaFile.DisplayName"
+                                                     onerror="this.closest('.ah-fss__img-wrap').style.display='none'" />
+                                            </div>
+                                        }
+                                        else if (mediaFile.IsPdf)
+                                        {
+                                            <div class="ah-fss__pdf-wrap">
+                                                <iframe class="ah-fss__pdf-iframe" data-pdf-guid="@mediaFile.FileGuid" data-pdf-loaded="false" title="@mediaFile.DisplayName"></iframe>
+                                            </div>
+                                        }
+                                        <div class="ah-fss__caption">
+                                            <i class="fas @(mediaFile.IsImage ? "fa-image" : "fa-file-pdf")"></i>
+                                            <span class="ah-fss__cap-name">@mediaFile.DisplayName</span>
+                                            <button type="button" class="ah-fss__cap-dl"
+                                                    aria-label="دانلود" data-dl-url="/Account/FileProxy?guid=@mediaFile.FileGuid" data-dl-name="@mediaFile.DisplayName">
+                                                <i class="fas fa-download"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <i class="fas @ti ah-card__deco"></i>
+                        </div>
+                    }
+                </div>
+
+                <div class="ah-controls">
+                    <div class="ah-dots" id="ahDots">
+                        @for (int i = 0; i < Model.Announcements.Count; i++)
+                        {
+                            <button class="ah-dot @(i == 0 ? "active" : "")" data-idx="@i"></button>
+                        }
+                    </div>
+                    <div class="ah-arrows">
+                        <button class="ah-arrow" id="ahPrev"><i class="fas fa-chevron-right"></i></button>
+                        <button class="ah-arrow" id="ahNext"><i class="fas fa-chevron-left"></i></button>
+                    </div>
+                </div>
+                <div class="ah-progress"><div class="ah-progress__fill" id="ahProgressFill"></div></div>
+                @if (Model.Announcements.Count > 1)
+                {
+                    <div class="ah-counter" id="ahCounter">۱ از @Model.Announcements.Count</div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="ah-stage">
+                <div class="ah-empty">
+                    <i class="fas fa-bell-slash"></i>
+                    <p>در حال حاضر اطلاعیه‌ای برای نمایش وجود ندارد.</p>
+                </div>
+            </div>
+        }
+
+        <div class="ah-hero__actions">
+            <a asp-controller="Account" asp-action="Login" class="hp-btn-primary">
+                <i class="fas fa-fingerprint"></i> ورود به سامانه
+            </a>
+            <a href="#hpQuickLinks" class="hp-btn-ghost">
+                <i class="fas fa-compass"></i> دسترسی سریع
+            </a>
+        </div>
+
+        <div class="ah-scroll-hint"><i class="fas fa-chevron-down"></i></div>
+    </section>
+
+    <!-- ═══ QUICK LINKS ═══ -->
+    <section class="hp-section" id="hpQuickLinks">
+        <div class="hp-section-head">
+            <div class="hp-section-kicker">دسترسی سریع</div>
+            <h2 class="hp-section-title">مسیرهای پرکاربرد</h2>
+        </div>
+
+        <div class="hp-links-grid">
+            @foreach (var link in Model.QuickLinks)
+            {
+                @if (link.Mode == EPC.SSO.Quickstart.Home.HomeQuickLinkMode.InternalPage)
+                {
+                    <a class="hp-link-card" style="--_c:@link.AccentColor" href="@link.Url">
+                        <div class="hp-link-card__icon"><i class="fas @link.Icon"></i></div>
+                        <div class="hp-link-card__title">@link.Title</div>
+                    </a>
+                }
+                else
+                {
+                    var hasUrl = link.IsAvailable;
+                    <a class="hp-link-card" style="--_c:@link.AccentColor"
+                       href="@link.Url" target="@(hasUrl ? "_blank" : "_self")"
+                       rel="noopener noreferrer"
+                       onclick="@(hasUrl ? "" : "event.preventDefault();")">
+                        <div class="hp-link-card__icon"><i class="fas @link.Icon"></i></div>
+                        <div class="hp-link-card__title">@link.Title</div>
+                    </a>
+                }
+            }
+        </div>
+    </section>
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer class="hp-footer">
+        <div>فناوری اطلاعات و ارتباطات</div>
+    </footer>
+
+    <script>
+            (function () {
+                // قبل از اسلایدر (قبلاً بعد از اولین loadVisiblePdf مقداردهی می‌شد و PDF اسلاید اول بارگذاری نمی‌شد)
+                var _pdfCache = {};
+
+                // ── ناوبار شناور هنگام اسکرول ──
+                var nav = document.getElementById('hpNav');
+                window.addEventListener('scroll', function () {
+                    nav.classList.toggle('hp-nav--solid', window.scrollY > 40);
+                }, { passive: true });
+
+                // ── اسلایدر اطلاعیه‌ها (بخش Hero) ──
+                var cards = document.querySelectorAll('.ah-card');
+                var dots  = document.querySelectorAll('.ah-dot');
+                var prev  = document.getElementById('ahPrev');
+                var next  = document.getElementById('ahNext');
+                var fill  = document.getElementById('ahProgressFill');
+                var counter = document.getElementById('ahCounter');
+
+                var toPersianNum = function (n) { return String(n).replace(/\d/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'[d]; }); };
+
+                if (cards.length) {
+                    var c = 0, t = cards.length, MS = @Model.SlideIntervalMs, tmr;
+
+                    function go(i) {
+                        cards[c].classList.remove('active');
+                        if (dots[c]) dots[c].classList.remove('active');
+                        c = (i + t) % t;
+                        cards[c].classList.add('active');
+                        if (dots[c]) dots[c].classList.add('active');
+                        if (counter) counter.textContent = toPersianNum(c + 1) + ' از ' + toPersianNum(t);
+                        rp();
+                        loadVisiblePdf(cards[c]);
+                    }
+
+                    function rp() {
+                        if (!fill) return;
+                        fill.style.transition = 'none';
+                        fill.style.width = '0%';
+                        requestAnimationFrame(function () {
+                            requestAnimationFrame(function () {
+                                fill.style.transition = 'width ' + MS + 'ms linear';
+                                fill.style.width = '100%';
+                            });
+                        });
+                    }
+
+                    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                    function au() { clearInterval(tmr); if (reduceMotion || document.hidden) return; tmr = setInterval(function () { go(c + 1); }, MS); rp(); }
+                    document.addEventListener('visibilitychange', function () { document.hidden ? clearInterval(tmr) : au(); });
+
+                    if (prev) prev.addEventListener('click', function () { clearInterval(tmr); go(c - 1); au(); });
+                    if (next) next.addEventListener('click', function () { clearInterval(tmr); go(c + 1); au(); });
+                    dots.forEach(function (d) { d.addEventListener('click', function () { clearInterval(tmr); go(+d.dataset.idx); au(); }); });
+
+                    var vp = document.getElementById('ahViewport');
+                    if (vp) {
+                        vp.addEventListener('mouseenter', function () { clearInterval(tmr); });
+                        vp.addEventListener('mouseleave', function () { au(); });
+                    }
+
+                    au();
+                    loadVisiblePdf(cards[0]);
+                }
+
+                // ── لود PDF به‌صورت Blob ──
+                function loadPdf(iframe) {
+                    if (!iframe || iframe.dataset.pdfLoaded === 'true') return;
+                    var guid = iframe.dataset.pdfGuid;
+                    if (!guid) return;
+                    iframe.dataset.pdfLoaded = 'true';
+                    (async function () {
+                        try {
+                            var url = _pdfCache[guid];
+                            if (!url) {
+                                var resp = await fetch('/Account/FileProxy?guid=' + encodeURIComponent(guid));
+                                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                                var blob = await resp.blob();
+                                url = URL.createObjectURL(blob);
+                                _pdfCache[guid] = url;
+                            }
+                            iframe.src = url;
+                        } catch (e) { console.error('خطا در لود PDF:', e); iframe.dataset.pdfLoaded = 'false'; }
+                    })();
+                }
+                function loadVisiblePdf(cardEl) {
+                    var ifr = cardEl && cardEl.querySelector('.ah-fss__pdf-iframe[data-pdf-guid]');
+                    if (ifr) loadPdf(ifr);
+                }
+
+                // ── دانلود فایل ──
+                window.ahProxyDownload = async function (url, name) {
+                    try {
+                        var resp = await fetch(url);
+                        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                        var blob = await resp.blob();
+                        var a = document.createElement('a');
+                        var objectUrl = URL.createObjectURL(blob);
+                        a.href = objectUrl;
+                        a.download = name || 'file';
+                        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                        setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 5000);
+                    } catch (e) { alert('خطا در دانلود: ' + (e.message || 'نامشخص')); }
+                };
+
+                // نام فایل داخل onclick قرار نمی‌گیرد (XSS)؛ از data-* خوانده می‌شود
+                document.addEventListener('click', function (e) {
+                    var btn = e.target.closest && e.target.closest('[data-dl-url]');
+                    if (btn) window.ahProxyDownload(btn.getAttribute('data-dl-url'), btn.getAttribute('data-dl-name'));
+                });
+            })();
+    </script>
+</body>
+</html>

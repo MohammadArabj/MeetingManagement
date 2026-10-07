@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace EPC.SSO.Realtime;
 
@@ -79,6 +80,7 @@ public sealed class RealtimeController(
     IHubContext<PortalHub> hub,
     PortalCacheVersions cacheVersions,
     IConfiguration configuration,
+    IMemoryCache replayCache,
     ILogger<RealtimeController> logger) : ControllerBase
 {
     private static readonly TimeSpan MaxClockSkew = TimeSpan.FromMinutes(5);
@@ -127,7 +129,14 @@ public sealed class RealtimeController(
             return Unauthorized();
         }
 
-        foreach (var item in envelope.Items.Where(i => i.Users.Count > 0).Take(500))
+        // جلوگیری از ارسال دوباره‌ی همان درخواست امضاشده (Replay) در بازه‌ی مجاز زمان
+        var replayKey = "realtime:sig:" + Request.Headers["X-Realtime-Signature"].ToString();
+        if (replayCache.TryGetValue(replayKey, out _))
+            return Conflict();
+        replayCache.Set(replayKey, true, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = MaxClockSkew * 2 });
+
+        var items = envelope.Items ?? [];
+        foreach (var item in items.Where(i => i.Users is { Count: > 0 }).Take(500))
         {
             var notification = new PortalNotification(
                 source.Name,
@@ -137,14 +146,14 @@ public sealed class RealtimeController(
                 IsSafeLink(item.Link) ? item.Link : null,
                 item.OccurredAt ?? DateTime.Now);
 
-            var users = item.Users.Distinct().Take(1000).ToList();
+            var users = item.Users!.Distinct().Take(1000).ToList();
             foreach (var user in users) cacheVersions.Bump(user);
 
             await hub.Clients.Groups(users.Select(PortalHub.UserGroup).ToList())
                 .SendAsync(PortalHub.ClientMethod, notification, ct);
         }
 
-        return Ok(new { received = envelope.Items.Count });
+        return Ok(new { received = items.Count });
     }
 
     private bool IsValidSignature(string body, string secret)
@@ -152,6 +161,8 @@ public sealed class RealtimeController(
         var timestampRaw = Request.Headers["X-Realtime-Timestamp"].ToString();
         var signature = Request.Headers["X-Realtime-Signature"].ToString();
         if (!long.TryParse(timestampRaw, out var timestamp) || string.IsNullOrEmpty(signature)) return false;
+        // خارج از بازه‌ی DateTimeOffset استثنا می‌دهد (قبلاً 500 بدون احراز هویت)
+        if (timestamp < 0 || timestamp > 253_402_300_799) return false;
 
         var sentAt = DateTimeOffset.FromUnixTimeSeconds(timestamp);
         if ((DateTimeOffset.UtcNow - sentAt).Duration() > MaxClockSkew) return false;

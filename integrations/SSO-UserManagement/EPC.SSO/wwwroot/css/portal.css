@@ -1,0 +1,347 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   EPC Portal — Design System  (portal.css)
+   پالت رسمی سامانه‌ها (هم‌نام با site-base.css) + حالت تیره برای همه‌ی صفحات.
+   هر صفحه‌ی قدیمی که از متغیرهای site-base استفاده می‌کند، خودکار تیره می‌شود.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@font-face { font-family: 'Vazir'; src: url('/fonts/Vazir.woff') format('woff'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Vazir'; src: url('/fonts/Vazir-Bold.woff') format('woff'); font-weight: 700; font-display: swap; }
+@font-face {
+    font-family: 'Sahel';
+    src: url('/fonts/Sahel.woff') format('woff');
+    font-weight: 400;
+    font-display: swap;
+}
+
+:root {
+    /* ── پالت سازمانی (یکسان در همه‌ی صفحات) ── */
+    --navy: #1c2751;
+    --navy-dark: #141c3a;
+    --navy-light: #253163;
+    --orange: #f97316;
+    --orange-light: #fb923c;
+    --peach: #fed7aa;
+    --bg: #cbd5e1;
+    --bg-dark: #b8c5d6;
+    --white: #ffffff;
+    --card-bg: rgba(255,255,255,0.82);
+    --card-border: rgba(255,255,255,0.6);
+    --inner-bg: rgba(203,213,225,0.35);
+    --text-dark: #1c2751;
+    --text-mid: #4b5a7a;
+    --text-light: #7a8aa8;
+    --border: rgba(28,39,81,0.09);
+    --shadow-sm: 0 2px 8px rgba(28,39,81,0.08);
+    --shadow-md: 0 4px 16px rgba(28,39,81,0.1);
+    --shadow-lg: 0 8px 32px rgba(28,39,81,0.14);
+    --radius-sm: 9px;
+    --radius-md: 13px;
+    --radius-lg: 18px;
+    --header-h: 64px;
+
+    /* ── رنگ‌های کمکی وضعیت ── */
+    --blue: #0ea5e9;
+    --green: #10b981;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --violet: #8b5cf6;
+    --orange-dim: rgba(249,115,22,.12);
+    --orange-glow: rgba(249,115,22,.22);
+
+    /* ── سطوح مشتق ── */
+    --page-glow-1: rgba(249,115,22,.10);
+    --page-glow-2: rgba(37,49,99,.10);
+    --card-solid: #ffffff;
+    --inner-hover: rgba(255,255,255,.9);
+    --input-bg: rgba(255,255,255,.7);
+    --header-bg: linear-gradient(90deg, var(--navy-dark), var(--navy) 55%, var(--navy-light));
+    --scroll-thumb: rgba(28,39,81,.2);
+    --ease: cubic-bezier(.2,.8,.2,1);
+    --font: 'Sahel','Vazir', Tahoma, sans-serif;
+    color-scheme: light;
+}
+
+/* ── حالت تیره: همان هویت سرمه‌ای/نارنجی، عمیق‌تر ── */
+html[data-theme="dark"] {
+    --bg: #0d1330;
+    --bg-dark: #0a0f26;
+    --card-bg: rgba(28,39,81,0.62);
+    --card-border: rgba(148,163,214,0.12);
+    --inner-bg: rgba(10,15,38,0.45);
+    --text-dark: #e8ecf8;
+    --text-mid: #aeb8d4;
+    --text-light: #7884a6;
+    --border: rgba(148,163,214,0.12);
+    --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
+    --shadow-md: 0 6px 20px rgba(0,0,0,.4);
+    --shadow-lg: 0 14px 40px rgba(0,0,0,.55);
+    --peach: #5a3418;
+    --orange-dim: rgba(249,115,22,.16);
+    --page-glow-1: rgba(249,115,22,.08);
+    --page-glow-2: rgba(14,165,233,.07);
+    --card-solid: #18224a;
+    --inner-hover: rgba(37,49,99,.7);
+    --input-bg: rgba(10,15,38,.55);
+    --header-bg: linear-gradient(90deg, #0a0f26, #121a3d 55%, #18224a);
+    --scroll-thumb: rgba(174,184,212,.22);
+    /* در صفحات قدیمی ‎--white برای پس‌زمینه‌ی کارت‌ها استفاده شده است */
+    --white: #18224a;
+    color-scheme: dark;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body.portal { margin: 0; min-height: 100%; }
+body.portal {
+    font-family: var(--font);
+    background:
+        radial-gradient(1100px 520px at 100% -10%, var(--page-glow-1), transparent 60%),
+        radial-gradient(900px 500px at -10% 0%, var(--page-glow-2), transparent 60%),
+        var(--bg) !important;
+    background-attachment: fixed !important;
+    color: var(--text-dark);
+    font-size: 14px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color .3s var(--ease), color .3s var(--ease);
+}
+body.portal a { color: inherit; text-decoration: none; }
+body.portal ::selection { background: var(--orange); color: #fff; }
+body.portal :focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; border-radius: 6px; }
+body.portal ::-webkit-scrollbar { width: 8px; height: 8px; }
+body.portal ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+body.portal ::-webkit-scrollbar-track { background: transparent; }
+body.portal * { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+.p-container { width: 100%; max-width: 1440px; margin: 0 auto; padding-inline: clamp(12px, 2vw, 24px); }
+
+/* ── Header (سرمه‌ای، یکسان در همه‌ی صفحات) ──────────────────────────── */
+.p-header {
+    position: sticky; top: 0; z-index: 1030; height: var(--header-h);
+    background: var(--header-bg); color: #fff; box-shadow: 0 6px 20px -10px rgba(20,28,58,.6);
+}
+.p-header::after { content: ""; position: absolute; inset: auto 0 0 0; height: 2px; background: linear-gradient(90deg, transparent, var(--orange), transparent); }
+.p-header__inner { display: flex; align-items: center; gap: 14px; height: 100%; }
+.p-brand { display: flex; align-items: center; gap: 10px; color: #fff !important; white-space: nowrap; }
+.p-brand__logo { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; overflow: hidden; background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.p-brand__logo img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
+.p-brand__text small { display: block; font-size: 11px; color: rgba(255,255,255,.6); line-height: 1.2; }
+.p-brand__text span { font-size: 14px; font-weight: 700; line-height: 1.3; }
+.p-header__date { padding-inline-start: 14px; border-inline-start: 1px solid rgba(255,255,255,.14); font-size: 12px; line-height: 1.45; color: rgba(255,255,255,.65); }
+.p-header__date b { display: block; color: #fff; font-size: 13px; }
+.p-header__spacer { flex: 1; }
+
+.p-hbtn {
+    height: 40px; min-width: 40px; border-radius: 12px; border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.06); color: rgba(255,255,255,.88); display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 0 10px; cursor: pointer; font-family: var(--font); font-size: 13px; transition: all .2s var(--ease);
+}
+.p-hbtn:hover { background: rgba(255,255,255,.12); border-color: rgba(249,115,22,.6); color: #fff; }
+.p-theme-toggle .fa-sun, html[data-theme="dark"] .p-theme-toggle .fa-moon { display: none; }
+html[data-theme="dark"] .p-theme-toggle .fa-sun { display: inline-block; color: var(--orange-light); }
+
+.p-pos { position: relative; max-width: 280px; }
+.p-pos i:first-child { color: var(--orange-light); }
+.p-pos__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-pos select { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; font-family: var(--font); }
+.p-pos select option { color: #1c2751; }
+.p-avatar { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; background: linear-gradient(135deg, var(--orange), #c2410c); flex-shrink: 0; }
+.p-user { padding: 0 4px 0 12px; }
+.p-user__name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Bootstrap integration ────────────────────────────────────────────── */
+body.portal .dropdown-menu { background: var(--card-solid); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: 6px; min-width: 240px; color: var(--text-dark); }
+body.portal .dropdown-item { border-radius: var(--radius-sm); padding: 8px 12px; color: var(--text-mid); font-size: 13px; display: flex; gap: 10px; align-items: center; }
+body.portal .dropdown-item i { width: 18px; text-align: center; color: var(--text-light); }
+body.portal .dropdown-item:hover, body.portal .dropdown-item:focus { background: var(--orange-dim); color: var(--orange); }
+body.portal .dropdown-item:hover i { color: var(--orange); }
+body.portal .dropdown-divider { border-color: var(--border); }
+.p-dd-head { padding: 8px 12px 10px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.p-dd-head b { display: block; font-size: 14px; color: var(--text-dark); }
+.p-dd-head span { font-size: 12px; color: var(--text-light); }
+
+body.portal .modal-content { background: var(--card-solid); color: var(--text-dark); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
+body.portal .modal-header, body.portal .modal-footer { border-color: var(--border); }
+body.portal .form-control, body.portal .form-select { background: var(--input-bg); color: var(--text-dark); border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font); }
+body.portal .form-control:focus, body.portal .form-select:focus { border-color: var(--orange); box-shadow: 0 0 0 4px var(--orange-dim); background: var(--card-solid); color: var(--text-dark); }
+body.portal .form-control::placeholder { color: var(--text-light); }
+body.portal .table { color: var(--text-dark); --bs-table-bg: transparent; --bs-table-color: var(--text-dark); border-color: var(--border); }
+html[data-theme="dark"] body.portal .btn-close:not(.btn-close-white) { filter: invert(1) grayscale(1) brightness(2); }
+html[data-theme="dark"] body.portal .card { background: var(--card-bg); color: var(--text-dark); border-color: var(--border); }
+html[data-theme="dark"] body.portal .bg-white, html[data-theme="dark"] body.portal .bg-light { background: var(--card-bg) !important; }
+html[data-theme="dark"] body.portal .text-dark { color: var(--text-dark) !important; }
+html[data-theme="dark"] body.portal .text-muted { color: var(--text-light) !important; }
+
+/* ── Components ───────────────────────────────────────────────────────── */
+.p-card {
+    background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    padding: 18px; position: relative; display: flex; flex-direction: column; min-width: 0;
+}
+.p-card__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.p-card__title { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14.5px; margin: 0; color: var(--text-dark); }
+.p-card__icon { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; font-size: 14px; background: var(--orange-dim); color: var(--orange); }
+.p-card__icon--blue { background: rgba(14,165,233,.12); color: var(--blue); }
+.p-card__icon--green { background: rgba(16,185,129,.12); color: var(--green); }
+.p-card__icon--violet { background: rgba(139,92,246,.12); color: var(--violet); }
+.p-card__count { font-size: 11px; font-weight: 700; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 99px; display: inline-grid; place-items: center; background: var(--inner-bg); color: var(--text-mid); }
+.p-card__link { font-size: 12px; color: var(--orange) !important; font-weight: 700; display: inline-flex; gap: 6px; align-items: center; padding: 3px 10px; border-radius: 99px; background: var(--orange-dim); }
+.p-card__link:hover { background: var(--orange); color: #fff !important; }
+
+/* لیست داخل کارت با اسکرول مستقل */
+.p-scroll { overflow-y: auto; overscroll-behavior: contain; margin-inline: -6px; padding-inline: 6px; scroll-behavior: smooth;
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
+.p-scroll.is-end { mask-image: none; }
+
+.p-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--card-solid); color: var(--text-dark); font-family: var(--font); font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s var(--ease); }
+.p-btn:hover { border-color: var(--orange); color: var(--orange); }
+.p-btn--primary { background: linear-gradient(135deg, var(--orange), #ea580c); border-color: transparent; color: #fff; box-shadow: 0 8px 20px -10px rgba(249,115,22,.8); }
+.p-btn--primary:hover { color: #fff; filter: brightness(1.06); }
+.p-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+.p-badge { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 99px; font-size: 11px; font-weight: 700; line-height: 1.9; white-space: nowrap; }
+.p-empty { text-align: center; color: var(--text-light); padding: 22px 8px; font-size: 13px; }
+.p-empty i { display: block; font-size: 22px; margin-bottom: 8px; opacity: .55; }
+.p-skel { border-radius: var(--radius-sm); background: linear-gradient(90deg, var(--inner-bg) 25%, var(--inner-hover) 50%, var(--inner-bg) 75%); background-size: 200% 100%; animation: p-shimmer 1.4s infinite linear; }
+@keyframes p-shimmer { to { background-position: -200% 0; } }
+.p-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent; display: inline-block; animation: p-rot .7s linear infinite; vertical-align: middle; }
+@keyframes p-rot { to { transform: rotate(360deg); } }
+
+.p-toast { position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; z-index: 2000;
+    background: var(--navy); color: #fff; padding: 11px 20px; border-radius: var(--radius-md); box-shadow: var(--shadow-lg); font-size: 13px; transition: all .3s var(--ease); }
+.p-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+.p-footer { text-align: center; color: var(--text-light); font-size: 12px; padding: 18px 0 26px; }
+
+.p-imp-banner { background: linear-gradient(90deg, #f59e0b, var(--orange)); color: #fff; }
+.p-imp-banner .p-container { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 7px; font-size: 13px; }
+.p-imp-banner button { background: rgba(255,255,255,.2); color: #fff; border: 1px solid rgba(255,255,255,.4); border-radius: 9px; padding: 3px 12px; font-family: var(--font); cursor: pointer; }
+
+@media (max-width: 768px) {
+    .p-header__date, .p-user__name, .p-brand__text { display: none; }
+    .p-pos { max-width: 150px; }
+}
+
+/* ── هماهنگی اجزای مشترک قدیمی با پالت و حالت تیره ───────────────────── */
+.ann-detail-body-text { color: var(--text-mid) !important; }
+.ann-files-title, .ann-file-link { color: var(--text-dark) !important; }
+.ann-file-link { background: var(--inner-bg) !important; border-color: var(--border) !important; }
+.ann-file-link:hover { border-color: var(--orange) !important; color: var(--orange) !important; }
+.file-slideshow, .fss-viewport { background: var(--navy-dark) !important; }
+.fss-dot--active { background: var(--orange) !important; }
+html[data-theme="dark"] .ann-confirmed { color: #6ee7b7 !important; }
+html[data-theme="dark"] .fss-pdf-iframe-wrap { background: var(--navy-dark) !important; }
+
+/* هدرهای قدیمی صفحات دیگر (اگر هنوز از ‎.welcome-bar یا ‎.card استفاده کنند) */
+.welcome-bar { background: linear-gradient(135deg, var(--navy), var(--navy-light)) !important; }
+html[data-theme="dark"] .welcome-bar { background: linear-gradient(135deg, #121a3d, #1c2751) !important; border: 1px solid var(--border); }
+
+/* ── پل تم برای صفحات تفویض اختیار (متغیرهای محلی ‎--s / ‎--t / ‎--bd) ───────
+   انتخابگر html[data-theme] از ‎:root داخل صفحه قوی‌تر است، پس بدون تغییر آن صفحات اعمال می‌شود. */
+html[data-theme] {
+    --s: #ffffff;
+    --s2: #f4f6fb;
+    --s3: #eef1f7;
+    --bd: rgba(28,39,81,.10);
+    --bd2: rgba(28,39,81,.18);
+    --t1: #1c2751;
+    --t2: #4b5a7a;
+    --t3: #7a8aa8;
+    --t4: #a3aec6;
+    --c2: #253163;
+}
+html[data-theme="dark"] {
+    --s: #18224a;
+    --s2: rgba(10,15,38,.45);
+    --s3: #0d1330;
+    --bd: rgba(148,163,214,.13);
+    --bd2: rgba(148,163,214,.24);
+    --t1: #e8ecf8;
+    --t2: #aeb8d4;
+    --t3: #7884a6;
+    --t4: #5d6788;
+    --acc-lt: rgba(249,115,22,.14);
+    --acc-bd: rgba(249,115,22,.35);
+    --teal-lt: rgba(14,165,233,.14);
+    --green-lt: rgba(16,185,129,.14);
+    --red-lt: rgba(239,68,68,.14);
+    --purple-lt: rgba(139,92,246,.16);
+    --sh: 0 2px 10px rgba(0,0,0,.35);
+    --sh2: 0 10px 30px rgba(0,0,0,.5);
+}
+/* ورودی‌ها و جدول‌های عمومی صفحات قدیمی در حالت تیره */
+html[data-theme="dark"] body.portal input:not([type=checkbox]):not([type=radio]):not(.lg-input),
+html[data-theme="dark"] body.portal select,
+html[data-theme="dark"] body.portal textarea { background-color: var(--input-bg); color: var(--text-dark); border-color: var(--border); }
+html[data-theme="dark"] body.portal table { color: var(--text-dark); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   لایه‌ی بصری نسخه‌ی ۳ — پس‌زمینه‌ی مِش، هدر شفق، کارت‌های با لبه‌ی نوری
+   ═══════════════════════════════════════════════════════════════════════ */
+body.portal {
+    background:
+        radial-gradient(900px 520px at 100% -8%, rgba(249,115,22,.16), transparent 60%),
+        radial-gradient(800px 520px at -8% 18%, rgba(37,49,99,.16), transparent 60%),
+        radial-gradient(700px 500px at 60% 110%, rgba(14,165,233,.12), transparent 60%),
+        radial-gradient(rgba(28,39,81,.07) 1px, transparent 1.2px) 0 0 / 22px 22px,
+        var(--bg) !important;
+    background-attachment: fixed !important;
+}
+html[data-theme="dark"] body.portal {
+    background:
+        radial-gradient(900px 520px at 100% -8%, rgba(249,115,22,.12), transparent 60%),
+        radial-gradient(800px 520px at -8% 18%, rgba(56,72,160,.22), transparent 60%),
+        radial-gradient(700px 500px at 60% 110%, rgba(14,165,233,.1), transparent 60%),
+        radial-gradient(rgba(174,184,212,.06) 1px, transparent 1.2px) 0 0 / 22px 22px,
+        var(--bg) !important;
+    background-attachment: fixed !important;
+}
+
+/* هدر با درخشش نارنجی آرام */
+.p-header { overflow: visible; }
+.p-header::before { content: ""; position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+    background: radial-gradient(420px 120px at 18% -40%, rgba(249,115,22,.35), transparent 70%), radial-gradient(380px 120px at 85% 140%, rgba(14,165,233,.22), transparent 70%); }
+.p-header__inner { position: relative; }
+
+/* کارت شیشه‌ای با لبه‌ی نوری */
+.p-card { border: 0; box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, var(--shadow-md); }
+.p-card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+    background: linear-gradient(160deg, rgba(255,255,255,.95), rgba(255,255,255,.25) 40%, rgba(28,39,81,.10));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+html[data-theme="dark"] .p-card { box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, var(--shadow-md); }
+html[data-theme="dark"] .p-card::before { background: linear-gradient(160deg, rgba(174,184,212,.28), rgba(174,184,212,.06) 45%, rgba(249,115,22,.18)); }
+
+/* آیکون عنوان کارت: مربع گرد گرادیانی */
+.p-card__title { font-size: 15px; }
+.p-card__icon { color: #fff; background: linear-gradient(135deg, var(--orange-light), var(--orange)); box-shadow: 0 8px 16px -8px rgba(249,115,22,.9); }
+.p-card__icon--blue { color: #fff; background: linear-gradient(135deg, #38bdf8, #0284c7); box-shadow: 0 8px 16px -8px rgba(14,165,233,.9); }
+.p-card__icon--green { color: #fff; background: linear-gradient(135deg, #34d399, #059669); box-shadow: 0 8px 16px -8px rgba(16,185,129,.9); }
+.p-card__icon--violet { color: #fff; background: linear-gradient(135deg, #a78bfa, #7c3aed); box-shadow: 0 8px 16px -8px rgba(139,92,246,.9); }
+
+/* ═══ نام‌های Font Awesome 6 در markup؛ فایل آیکن فعلی Font Awesome 5 است و این‌ها خالی نمایش داده می‌شدند ═══ */
+.fa-clock-rotate-left::before { content: "\f1da"; } /* history */
+.fa-magnifying-glass::before { content: "\f002"; } /* search */
+.fa-circle-check::before { content: "\f058"; } /* check-circle */
+.fa-calendar-days::before { content: "\f073"; } /* calendar-alt */
+.fa-circle-question::before { content: "\f059"; } /* question-circle */
+.fa-triangle-exclamation::before { content: "\f071"; } /* exclamation-triangle */
+.fa-rotate::before { content: "\f2f1"; } /* sync-alt */
+.fa-location-dot::before { content: "\f3c5"; } /* map-marker-alt */
+.fa-earth-asia::before { content: "\f57e"; } /* globe-asia */
+.fa-list-check::before { content: "\f0ae"; } /* tasks */
+.fa-table-cells-large::before { content: "\f009"; } /* th-large */
+.fa-folder-tree::before { content: "\f07c"; } /* folder-open */
+.fa-gears::before { content: "\f085"; } /* cogs */
+.fa-arrow-right-from-bracket::before { content: "\f2f5"; } /* sign-out-alt */
+.fa-right-from-bracket::before { content: "\f2f5"; } /* sign-out-alt */
+.fa-xmark::before { content: "\f00d"; } /* times */
+.fa-shield-halved::before { content: "\f3ed"; } /* shield-alt */
+.fa-up-right-from-square::before { content: "\f35d"; } /* external-link-alt */
+.fa-mobile-screen::before { content: "\f3cd"; } /* mobile-alt */
+.fa-file-lines::before { content: "\f15c"; } /* file-alt */
+.fa-right-to-bracket::before { content: "\f2f6"; } /* sign-in-alt */
+.fa-rotate-left::before { content: "\f2ea"; } /* undo-alt */
+.fa-arrow-left-long::before { content: "\f30a"; } /* long-arrow-alt-left */
+.fa-refresh::before { content: "\f021"; } /* sync */
+.fa-sign-in::before { content: "\f2f6"; } /* sign-in-alt */

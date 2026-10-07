@@ -1,0 +1,38 @@
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="light">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@(ViewData["Title"] ?? "پورتال یکپارچه سازمانی")</title>
+    <partial name="_ThemeHead" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
+    <link rel="preload" href="/fonts/Sahel.woff" as="font" type="font/woff" crossorigin />
+    <link href="~/assets/css/saas/bootstrap-rtl.min.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/assets/css/saas/app.min.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/assets/css/icons.min.css" rel="stylesheet" asp-append-version="true" />
+    @* برای سازگاری با صفحات قدیمی (تفویض، تنظیمات، مستندات، دفترچه تلفن، آرشیو) *@
+    <link href="~/css/site-base.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/css/portal.css" rel="stylesheet" asp-append-version="true" />
+    @await RenderSectionAsync("style", false)
+</head>
+<body class="portal">
+    <input type="hidden" id="globalAntiForgery" name="__RequestVerificationToken"
+           value="@Antiforgery.GetAndStoreTokens(Context).RequestToken" />
+    <partial name="_Nav" />
+    @RenderBody()
+    <footer class="p-footer">فناوری اطلاعات و ارتباطات · @DateTime.Now.ToString("yyyy", new System.Globalization.CultureInfo("fa-IR"))</footer>
+    <div class="p-toast" id="pToast" role="status" aria-live="polite"></div>
+    @await RenderSectionAsync("modals", false)
+    <script src="~/assets/js/jquery.min.js" asp-append-version="true"></script>
+    <script src="~/assets/libs/jquery-validation/jquery.validate.min.js" asp-append-version="true"></script>
+    <script src="~/assets/libs/jquery-validation/jquery.validate.unobtrusive.min.js" asp-append-version="true"></script>
+    <script src="~/assets/js/vendor.min.js" asp-append-version="true"></script>
+    <script src="~/assets/js/app.min.js" asp-append-version="true"></script>
+    <script src="~/js/site-header.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("scripts", false)
+</body>
+</html>

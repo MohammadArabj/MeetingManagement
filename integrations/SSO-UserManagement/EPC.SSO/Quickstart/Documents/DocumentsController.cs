@@ -98,10 +98,9 @@ public class DocumentsController(KaajDocumentApiService kaajDocumentApiService) 
             ? $"inline; filename*=UTF-8''{encodedName}"
             : $"attachment; filename*=UTF-8''{encodedName}";
         Response.Headers["X-Content-Type-Options"] = "nosniff";
-        // محتوای مخزن اسناد هرگز نباید در مبدأ SSO اسکریپت اجرا کند
-        Response.Headers["Content-Security-Policy"] = contentType == "application/pdf"
-            ? "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; object-src 'self'"
-            : "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox";
+        // محتوای مخزن اسناد هرگز نباید در مبدأ SSO اسکریپت اجرا کند (PDF: نمایشگر مرورگر، بدون CSP)
+        if (contentType != "application/pdf")
+            Response.Headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox";
 
         var length = response.Content.Headers.ContentLength;
         if (length.HasValue) Response.ContentLength = length;

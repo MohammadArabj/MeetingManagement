@@ -236,6 +236,41 @@ index bbf1d2d..e137e95 100644
 -    public string Description { get; set; }
 +    public string Description { get; set; } = string.Empty;
  }
+diff --git a/EPC.SSO/EPC.SSO.csproj b/EPC.SSO/EPC.SSO.csproj
+index 44e3a78..31495b3 100644
+--- a/EPC.SSO/EPC.SSO.csproj
++++ b/EPC.SSO/EPC.SSO.csproj
+@@ -8,14 +8,6 @@
+ 
+   <ItemGroup>
+     <Content Remove="Views\Account\Login - Copy.cshtml" />
+-    <Content Remove="wwwroot\css\announcement-archive.css" />
+-    <Content Remove="wwwroot\css\dashboard.css" />
+-    <Content Remove="wwwroot\css\login-v2.css" />
+-    <Content Remove="wwwroot\css\phone-directory.css" />
+-    <Content Remove="wwwroot\css\portal.css" />
+-    <Content Remove="wwwroot\js\dashboard.js" />
+-    <Content Remove="wwwroot\js\login.js" />
+-    <Content Remove="wwwroot\js\site-header.js" />
+   </ItemGroup>
+ 
+   <ItemGroup>
+@@ -45,15 +37,4 @@
+     <Folder Include="wwwroot\pdf\" />
+   </ItemGroup>
+ 
+-  <ItemGroup>
+-    <None Include="wwwroot\css\announcement-archive.css" />
+-    <None Include="wwwroot\css\dashboard.css" />
+-    <None Include="wwwroot\css\login-v2.css" />
+-    <None Include="wwwroot\css\phone-directory.css" />
+-    <None Include="wwwroot\css\portal.css" />
+-    <None Include="wwwroot\js\dashboard.js" />
+-    <None Include="wwwroot\js\login.js" />
+-    <None Include="wwwroot\js\site-header.js" />
+-  </ItemGroup>
+-
+ </Project>
 diff --git a/EPC.SSO/Filters/ForcePasswordChangeFilter.cs b/EPC.SSO/Filters/ForcePasswordChangeFilter.cs
 index 0d0d050..bbb30a9 100644
 --- a/EPC.SSO/Filters/ForcePasswordChangeFilter.cs
@@ -827,8 +862,32 @@ index b489c16..b7fbe66 100644
              ssl.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
  
          return new SocketsHttpHandler
+diff --git a/EPC.SSO/Infrastructure/RateLimitPolicies.cs b/EPC.SSO/Infrastructure/RateLimitPolicies.cs
+index 3a9c70e..05c5ed8 100644
+--- a/EPC.SSO/Infrastructure/RateLimitPolicies.cs
++++ b/EPC.SSO/Infrastructure/RateLimitPolicies.cs
+@@ -7,6 +7,7 @@ public static class RateLimitPolicies
+ {
+     public const string Login = "login";
+     public const string ForgotPassword = "forgot-password";
++    public const string PublicDirectory = "public-directory";
+ 
+     public static IServiceCollection AddSsoRateLimiting(this IServiceCollection services)
+     {
+@@ -28,6 +29,11 @@ public static class RateLimitPolicies
+             options.AddPolicy(ForgotPassword, http => RateLimitPartition.GetFixedWindowLimiter(
+                 http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(15), QueueLimit = 0 }));
++
++            // دفترچه تلفن (بدون ورود): جستجو و عکس‌ها؛ برای یک صفحه با اسکرول کافی، برای سوءاستفاده کم
++            options.AddPolicy(PublicDirectory, http => RateLimitPartition.GetSlidingWindowLimiter(
++                http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
++                _ => new SlidingWindowRateLimiterOptions { PermitLimit = 600, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 6, QueueLimit = 0 }));
+         });
+ 
+         return services;
 diff --git a/EPC.SSO/Quickstart/Account/AccountController.cs b/EPC.SSO/Quickstart/Account/AccountController.cs
-index 2f6ed78..bf035b7 100644
+index 2f6ed78..cff0cda 100644
 --- a/EPC.SSO/Quickstart/Account/AccountController.cs
 +++ b/EPC.SSO/Quickstart/Account/AccountController.cs
 @@ -51,10 +51,10 @@ public class AccountController(
@@ -882,6 +941,15 @@ index 2f6ed78..bf035b7 100644
      }
  
      // ════════════════════════════════════════════════════════════════════════
+@@ -391,7 +409,7 @@ public class AccountController(
+             .Select(x => x.Mobile)
+             .FirstOrDefaultAsync();
+ 
+-        var (success, message) = await farzinService.ResetAndNotifyAsync(personnelCode, mobile ?? string.Empty);
++        var (success, message) = await farzinService.ResetAndNotifyAsync(personnelCode, mobile ?? string.Empty, HttpContext.RequestAborted);
+         return Json(new { success, message });
+     }
+ 
 @@ -460,6 +478,10 @@ public class AccountController(
              DisplayName = user.PersonnelCode,
              AdditionalClaims = claims
@@ -902,6 +970,41 @@ index 2f6ed78..bf035b7 100644
          HttpContext.Session.SetString(CaptchaSessionKey, text);
          return text;
      }
+@@ -562,10 +584,13 @@ public class AccountController(
+     {
+         Response.Headers[HeaderNames.CacheControl] = $"{(isPublic ? "public" : "private")}, max-age=604800, immutable";
+         Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
++        // فقط تصویر/PDF/ویدئو inline؛ بقیه (HTML، SVG و …) دانلود و در sandbox (جلوگیری از XSS روی مبدأ SSO)
++        var inline = AnnouncementFileCache.IsInlineSafe(file.ContentType);
+         Response.Headers[HeaderNames.ContentDisposition] =
+-            $"inline; filename*=UTF-8''{Uri.EscapeDataString(file.FileName)}";
++            $"{(inline ? "inline" : "attachment")}; filename*=UTF-8''{Uri.EscapeDataString(file.FileName)}";
++        AnnouncementFileCache.ApplySandbox(Response, AnnouncementFileCache.SafeContentType(file.ContentType));
+ 
+-        return PhysicalFile(file.PhysicalPath, file.ContentType, lastModified: null,
++        return PhysicalFile(file.PhysicalPath, AnnouncementFileCache.SafeContentType(file.ContentType), lastModified: null,
+             entityTag: new EntityTagHeaderValue(file.ETag), enableRangeProcessing: true);
+     }
+ 
+@@ -577,10 +602,16 @@ public class AccountController(
+             return StatusCode((int)upstream.StatusCode);
+ 
+         Response.StatusCode = (int)upstream.StatusCode;
+-        Response.ContentType = upstream.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
++        var upstreamType = upstream.Content.Headers.ContentType?.MediaType;
++        var inline = AnnouncementFileCache.IsInlineSafe(upstreamType);
++        Response.ContentType = AnnouncementFileCache.SafeContentType(upstreamType);
+         if (upstream.Content.Headers.ContentLength is { } length) Response.ContentLength = length;
+         if (upstream.Content.Headers.ContentRange is not null) Response.Headers[HeaderNames.ContentRange] = upstream.Content.Headers.ContentRange.ToString();
+-        if (upstream.Content.Headers.ContentDisposition is not null) Response.Headers[HeaderNames.ContentDisposition] = upstream.Content.Headers.ContentDisposition.ToString();
++        var upstreamName = upstream.Content.Headers.ContentDisposition?.FileNameStar ?? upstream.Content.Headers.ContentDisposition?.FileName?.Trim('"');
++        Response.Headers[HeaderNames.ContentDisposition] = string.IsNullOrWhiteSpace(upstreamName)
++            ? (inline ? "inline" : "attachment")
++            : $"{(inline ? "inline" : "attachment")}; filename*=UTF-8''{Uri.EscapeDataString(upstreamName)}";
++        AnnouncementFileCache.ApplySandbox(Response, Response.ContentType ?? string.Empty);
+         Response.Headers[HeaderNames.AcceptRanges] = "bytes";
+         Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
+ 
 diff --git a/EPC.SSO/Quickstart/Delegation/DelegationController.cs b/EPC.SSO/Quickstart/Delegation/DelegationController.cs
 index ba411df..78e0b0b 100644
 --- a/EPC.SSO/Quickstart/Delegation/DelegationController.cs
@@ -1548,8 +1651,26 @@ index ba411df..78e0b0b 100644
 -
 -
 +}
+diff --git a/EPC.SSO/Quickstart/Diagnostics/DiagnosticsController.cs b/EPC.SSO/Quickstart/Diagnostics/DiagnosticsController.cs
+index 7c88b10..ccebd00 100644
+--- a/EPC.SSO/Quickstart/Diagnostics/DiagnosticsController.cs
++++ b/EPC.SSO/Quickstart/Diagnostics/DiagnosticsController.cs
+@@ -14,8 +14,11 @@ namespace EPC.SSO.Quickstart.Diagnostics
+     {
+         public async Task<IActionResult> Index()
+         {
+-            var localAddresses = new string[] { "127.0.0.1", "::1", HttpContext.Connection.LocalIpAddress.ToString() };
+-            if (!localAddresses.Contains(HttpContext.Connection.RemoteIpAddress.ToString()))
++            // فقط از خود سرور و فقط وقتی صریحاً فعال شده باشد؛ پشت Reverse Proxy همه‌ی درخواست‌ها
++            // از 127.0.0.1 می‌آیند و بررسی IP به‌تنهایی کافی نیست.
++            var remote = HttpContext.Connection.RemoteIpAddress;
++            var enabled = HttpContext.RequestServices.GetRequiredService<IConfiguration>().GetValue("Diagnostics:Enabled", false);
++            if (!enabled || remote is null || !System.Net.IPAddress.IsLoopback(remote))
+             {
+                 return NotFound();
+             }
 diff --git a/EPC.SSO/Quickstart/Documents/DocumentsController.cs b/EPC.SSO/Quickstart/Documents/DocumentsController.cs
-index 5e46522..0abfa32 100644
+index 5e46522..903f364 100644
 --- a/EPC.SSO/Quickstart/Documents/DocumentsController.cs
 +++ b/EPC.SSO/Quickstart/Documents/DocumentsController.cs
 @@ -1,13 +1,25 @@
@@ -1604,7 +1725,7 @@ index 5e46522..0abfa32 100644
              .OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase)
              .Select(d => new
              {
-@@ -51,33 +65,53 @@ public class DocumentsController(KaajDocumentApiService kaajDocumentApiService)
+@@ -51,33 +65,52 @@ public class DocumentsController(KaajDocumentApiService kaajDocumentApiService)
          return Json(new { folders, documents });
      }
  
@@ -1655,10 +1776,9 @@ index 5e46522..0abfa32 100644
 +            ? $"inline; filename*=UTF-8''{encodedName}"
 +            : $"attachment; filename*=UTF-8''{encodedName}";
          Response.Headers["X-Content-Type-Options"] = "nosniff";
-+        // محتوای مخزن اسناد هرگز نباید در مبدأ SSO اسکریپت اجرا کند
-+        Response.Headers["Content-Security-Policy"] = contentType == "application/pdf"
-+            ? "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; object-src 'self'"
-+            : "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox";
++        // محتوای مخزن اسناد هرگز نباید در مبدأ SSO اسکریپت اجرا کند (PDF: نمایشگر مرورگر، بدون CSP)
++        if (contentType != "application/pdf")
++            Response.Headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox";
  
 -        return File(data, contentType);
 +        var length = response.Content.Headers.ContentLength;
@@ -2995,10 +3115,73 @@ index fb94d73..0f009ee 100644
 +    public Guid PositionGuid { get; set; }
 +}
 diff --git a/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs b/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs
-index 25463b5..0d3ed78 100644
+index 25463b5..afe9824 100644
 --- a/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs
 +++ b/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs
-@@ -111,6 +111,23 @@ public class PhoneDirectoryController(
+@@ -1,7 +1,9 @@
+ ﻿using EPC.SSO.Services;
+ using Microsoft.AspNetCore.Authorization;
+ using Microsoft.AspNetCore.DataProtection;
++using EPC.SSO.Infrastructure;
+ using Microsoft.AspNetCore.Mvc;
++using Microsoft.AspNetCore.RateLimiting;
+ using Microsoft.Extensions.Caching.Memory;
+ 
+ namespace EPC.SSO.Quickstart.PhoneDirectory;
+@@ -28,18 +30,21 @@ public class PhoneDirectoryController(
+     }
+ 
+     [HttpPost]
++    [EnableRateLimiting(RateLimitPolicies.PublicDirectory)]
+     public async Task<IActionResult> Search(
+         [FromForm] string? search,
+         [FromForm] int? type)
+     {
+         var results = await directoryService.SearchAsync(
+             search ?? string.Empty,
+-            type);
++            type,
++            HttpContext.RequestAborted);
+ 
+         return PartialView("_DirectoryResults", results);
+     }
+ 
+     [HttpPost]
++    [EnableRateLimiting(RateLimitPolicies.PublicDirectory)]
+     public async Task<IActionResult> SearchPaginated(
+         [FromForm] string? search,
+         [FromForm] int? type,
+@@ -53,7 +58,8 @@ public class PhoneDirectoryController(
+             search?.Trim() ?? string.Empty,
+             type,
+             page,
+-            pageSize);
++            pageSize,
++            HttpContext.RequestAborted);
+ 
+         // ارتباط با API برقرار نشده: به‌جای «نتیجه‌ی خالی»، خطا برمی‌گردانیم
+         // تا مرورگر خودکار چند بار دوباره تلاش کند.
+@@ -69,6 +75,7 @@ public class PhoneDirectoryController(
+     /// و باز کردن مستقیم آدرس در تب جدید جواب نمی‌دهد.
+     /// </summary>
+     [HttpGet]
++    [EnableRateLimiting(RateLimitPolicies.PublicDirectory)]
+     [ResponseCache(Duration = 3600, Location = ResponseCacheLocation.Client)]
+     public async Task<IActionResult> Photo(string? t, CancellationToken ct)
+     {
+@@ -98,8 +105,9 @@ public class PhoneDirectoryController(
+             var cacheEntryOptions = new MemoryCacheEntryOptions
+             {
+                 AbsoluteExpirationRelativeToNow = bytes is null ? TimeSpan.FromMinutes(5) : TimeSpan.FromHours(1),
+-                // Use bytes length when available; use 1 for "null" placeholder entries.
+-                Size = bytes?.Length ?? 1L
++                // همه‌ی entryهای کش مشترک Size=1 دارند (SizeLimit تعداد است نه بایت)؛ قبلاً Size=طول عکس بود
++                // و چند عکس کل ظرفیت کش را پر می‌کرد و کش داشبورد و تنظیمات همه‌ی کاربران خالی می‌شد.
++                Size = 1
+             };
+             cache.Set(cacheKey, bytes, cacheEntryOptions);
+         }
+@@ -111,6 +119,23 @@ public class PhoneDirectoryController(
          return File(bytes, "image/jpeg");
      }
  
@@ -3022,7 +3205,7 @@ index 25463b5..0d3ed78 100644
      private async Task<byte[]?> FetchPhotoAsync(string userName, CancellationToken ct)
      {
          var baseUrl = configuration["PhoneDirectory:ImageBaseUrl"]
-@@ -123,7 +140,7 @@ public class PhoneDirectoryController(
+@@ -123,7 +148,7 @@ public class PhoneDirectoryController(
              return null;
  
          // عکس کوچک (۹۶ پیکسل): برای نمایش کافی است و برای ذخیره کم‌ارزش
@@ -3031,12 +3214,108 @@ index 25463b5..0d3ed78 100644
  
          try
          {
+@@ -136,8 +161,9 @@ public class PhoneDirectoryController(
+ 
+             return await response.Content.ReadAsByteArrayAsync(ct);
+         }
+-        catch (Exception ex) when (ex is not OperationCanceledException)
++        catch (Exception ex) when (!ct.IsCancellationRequested)
+         {
++            // Timeout کلاینت هم TaskCanceledException است؛ قبلاً از catch عبور می‌کرد و 500 می‌داد
+             logger.LogWarning(ex, "دریافت عکس دفترچه تلفن ناموفق بود");
+             return null;
+         }
+diff --git a/EPC.SSO/Quickstart/Setting/SettingController.cs b/EPC.SSO/Quickstart/Setting/SettingController.cs
+index 2a75b15..1e26a2b 100644
+--- a/EPC.SSO/Quickstart/Setting/SettingController.cs
++++ b/EPC.SSO/Quickstart/Setting/SettingController.cs
+@@ -2,7 +2,9 @@
+ using Epc.Dapper;
+ using EPC.SSO.SettingModels;
+ using Microsoft.AspNetCore.Authorization;
++using EPC.SSO.Services;
+ using Microsoft.AspNetCore.Mvc;
++using Microsoft.Extensions.Caching.Memory;
+ using UserManagement.Infrastructure.Persistence;
+ 
+ namespace EPC.SSO.Quickstart.Settings;
+@@ -12,7 +14,8 @@ namespace EPC.SSO.Quickstart.Settings;
+ [RequireSuperAdmin]
+ public class SettingsController(
+     ISettingService settingService,
+-    BaseDapperRepository repository) : Controller
++    BaseDapperRepository repository,
++    IMemoryCache cache) : Controller
+ {
+     // ══════════════════════════════════════════════════════════════════════════
+     //  INDEX
+@@ -47,8 +50,10 @@ public class SettingsController(
+         }
+ 
+         SaveBySettingName(BuildItems<SecuritySettingViewModel>(model));
++        CachedSettingService.Invalidate<SecuritySettingViewModel>(cache);
+ 
+-        TempData["SettingsSuccess"] = "تنظیمات امنیتی با موفقیت ذخیره شد.";
++        // TokenExpiryTime فقط هنگام شروع برنامه روی Clientهای IdentityServer اعمال می‌شود
++        TempData["SettingsSuccess"] = "تنظیمات امنیتی با موفقیت ذخیره شد. تغییر مدت اعتبار توکن پس از راه‌اندازی مجدد سامانه اعمال می‌شود.";
+         return RedirectToAction(nameof(Index));
+     }
+ 
+@@ -67,6 +72,7 @@ public class SettingsController(
+         }
+ 
+         SaveBySettingName(BuildItems<AnnouncementSettingViewModel>(model));
++        CachedSettingService.Invalidate<AnnouncementSettingViewModel>(cache);
+ 
+         TempData["SettingsSuccess"] = "تنظیمات اطلاعیه‌ها با موفقیت ذخیره شد.";
+         return RedirectToAction(nameof(Index));
+@@ -111,32 +117,31 @@ public class SettingsController(
+     {
+         foreach (var item in items)
+         {
+-            var value = item.FieldType == "bit" ? item.Value : $"'{item.Value}'";
+-
+-            var sql = $"""
++            // پارامتری (قبلاً مقدار و نام داخل رشته‌ی SQL قرار می‌گرفت؛ مقدار bool هم کوئری نامعتبر می‌ساخت)
++            const string sql = """
+                 IF EXISTS (
+                     SELECT 1
+                     FROM   SettingDetails sd
+                     JOIN   Settings s ON s.Id = sd.SettingId
+-                    WHERE  s.Name = '{item.SettingName}'
++                    WHERE  s.Name = @Name
+                 )
+                 BEGIN
+                     UPDATE sd
+-                    SET    sd.Value = {value}
++                    SET    sd.Value = @Value
+                     FROM   SettingDetails sd
+                     JOIN   Settings s ON s.Id = sd.SettingId
+-                    WHERE  s.Name = '{item.SettingName}'
++                    WHERE  s.Name = @Name
+                 END
+                 ELSE
+                 BEGIN
+                     INSERT INTO SettingDetails (SettingId, Value)
+-                    SELECT s.Id, {value}
++                    SELECT s.Id, @Value
+                     FROM   Settings s
+-                    WHERE  s.Name = '{item.SettingName}'
++                    WHERE  s.Name = @Name
+                 END
+                 """;
+ 
+-            repository.Execute(sql);
++            repository.Execute(sql, new { Name = item.SettingName, Value = item.Value });
+         }
+     }
+ }
 diff --git a/EPC.SSO/Realtime/PortalRealtime.cs b/EPC.SSO/Realtime/PortalRealtime.cs
 new file mode 100644
-index 0000000..a4df42c
+index 0000000..4c47321
 --- /dev/null
 +++ b/EPC.SSO/Realtime/PortalRealtime.cs
-@@ -0,0 +1,170 @@
+@@ -0,0 +1,181 @@
 +﻿using System.Collections.Concurrent;
 +using System.Security.Claims;
 +using System.Security.Cryptography;
@@ -3046,6 +3325,7 @@ index 0000000..a4df42c
 +using Microsoft.AspNetCore.Authorization;
 +using Microsoft.AspNetCore.Mvc;
 +using Microsoft.AspNetCore.SignalR;
++using Microsoft.Extensions.Caching.Memory;
 +
 +namespace EPC.SSO.Realtime;
 +
@@ -3118,6 +3398,7 @@ index 0000000..a4df42c
 +    IHubContext<PortalHub> hub,
 +    PortalCacheVersions cacheVersions,
 +    IConfiguration configuration,
++    IMemoryCache replayCache,
 +    ILogger<RealtimeController> logger) : ControllerBase
 +{
 +    private static readonly TimeSpan MaxClockSkew = TimeSpan.FromMinutes(5);
@@ -3166,7 +3447,14 @@ index 0000000..a4df42c
 +            return Unauthorized();
 +        }
 +
-+        foreach (var item in envelope.Items.Where(i => i.Users.Count > 0).Take(500))
++        // جلوگیری از ارسال دوباره‌ی همان درخواست امضاشده (Replay) در بازه‌ی مجاز زمان
++        var replayKey = "realtime:sig:" + Request.Headers["X-Realtime-Signature"].ToString();
++        if (replayCache.TryGetValue(replayKey, out _))
++            return Conflict();
++        replayCache.Set(replayKey, true, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = MaxClockSkew * 2 });
++
++        var items = envelope.Items ?? [];
++        foreach (var item in items.Where(i => i.Users is { Count: > 0 }).Take(500))
 +        {
 +            var notification = new PortalNotification(
 +                source.Name,
@@ -3176,14 +3464,14 @@ index 0000000..a4df42c
 +                IsSafeLink(item.Link) ? item.Link : null,
 +                item.OccurredAt ?? DateTime.Now);
 +
-+            var users = item.Users.Distinct().Take(1000).ToList();
++            var users = item.Users!.Distinct().Take(1000).ToList();
 +            foreach (var user in users) cacheVersions.Bump(user);
 +
 +            await hub.Clients.Groups(users.Select(PortalHub.UserGroup).ToList())
 +                .SendAsync(PortalHub.ClientMethod, notification, ct);
 +        }
 +
-+        return Ok(new { received = envelope.Items.Count });
++        return Ok(new { received = items.Count });
 +    }
 +
 +    private bool IsValidSignature(string body, string secret)
@@ -3191,6 +3479,8 @@ index 0000000..a4df42c
 +        var timestampRaw = Request.Headers["X-Realtime-Timestamp"].ToString();
 +        var signature = Request.Headers["X-Realtime-Signature"].ToString();
 +        if (!long.TryParse(timestampRaw, out var timestamp) || string.IsNullOrEmpty(signature)) return false;
++        // خارج از بازه‌ی DateTimeOffset استثنا می‌دهد (قبلاً 500 بدون احراز هویت)
++        if (timestamp < 0 || timestamp > 253_402_300_799) return false;
 +
 +        var sentAt = DateTimeOffset.FromUnixTimeSeconds(timestamp);
 +        if ((DateTimeOffset.UtcNow - sentAt).Duration() > MaxClockSkew) return false;
@@ -3207,6 +3497,83 @@ index 0000000..a4df42c
 +    private static string Truncate(string? value, int max) =>
 +        string.IsNullOrEmpty(value) ? string.Empty : value.Length <= max ? value : value[..max];
 +}
+diff --git a/EPC.SSO/Services/AnnouncementFileCache.cs b/EPC.SSO/Services/AnnouncementFileCache.cs
+index 0827709..58d47e3 100644
+--- a/EPC.SSO/Services/AnnouncementFileCache.cs
++++ b/EPC.SSO/Services/AnnouncementFileCache.cs
+@@ -49,6 +49,34 @@ public sealed class AnnouncementFileCache
+ 
+     public long MaxFileBytes => _maxFileBytes;
+ 
++    /// <summary>
++    /// نوع‌هایی که می‌توانند inline (روی مبدأ SSO و حتی بدون ورود) نمایش داده شوند.
++    /// HTML/SVG/XML و هر نوع دیگری اسکریپت اجرا می‌کند یا ناشناخته است و فقط به صورت دانلود سرو می‌شود.
++    /// </summary>
++    private static readonly HashSet<string> InlineTypes = new(StringComparer.OrdinalIgnoreCase)
++    {
++        "image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp",
++        "application/pdf",
++        "video/mp4", "video/webm", "video/ogg",
++        "audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav"
++    };
++
++    public static bool IsInlineSafe(string? contentType) =>
++        !string.IsNullOrWhiteSpace(contentType) && InlineTypes.Contains(contentType.Split(';')[0].Trim());
++
++    /// <summary>
++    /// CSP برای پاسخ فایل (به جز PDF که نمایشگر مرورگر با CSP سخت‌گیرانه گاهی نمایش نمی‌دهد و اسکریپتش
++    /// هم روی مبدأ سایت اجرا نمی‌شود).
++    /// </summary>
++    public static void ApplySandbox(HttpResponse response, string contentType)
++    {
++        if (string.Equals(contentType, "application/pdf", StringComparison.OrdinalIgnoreCase)) return;
++        response.Headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox";
++    }
++
++    public static string SafeContentType(string? contentType) =>
++        IsInlineSafe(contentType) ? contentType!.Split(';')[0].Trim() : "application/octet-stream";
++
+     public bool TryGet(Guid guid, out CachedFile? file)
+     {
+         if (_index.TryGetValue(guid, out var cached) && File.Exists(cached.PhysicalPath))
+@@ -90,17 +118,34 @@ public sealed class AnnouncementFileCache
+             var dataPath = DataPath(guid);
+             var tempPath = dataPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+ 
++            // حجم واقعی هم کنترل می‌شود (به FileSize اعلام‌شده اعتماد نمی‌کنیم)
++            var tooLarge = false;
+             await using (var source = await response.Content.ReadAsStreamAsync(timeout.Token))
+             await using (var target = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+             {
+-                await source.CopyToAsync(target, timeout.Token);
++                var buffer = new byte[81920];
++                long total = 0;
++                int read;
++                while ((read = await source.ReadAsync(buffer, timeout.Token)) > 0)
++                {
++                    total += read;
++                    if (total > _maxFileBytes) { tooLarge = true; break; }
++                    await target.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
++                }
++            }
++
++            if (tooLarge)
++            {
++                File.Delete(tempPath);
++                _logger.LogWarning("[FileCache] {Guid} بزرگ‌تر از سقف کش است", guid);
++                return null;
+             }
+ 
+             File.Move(tempPath, dataPath, overwrite: true);
+ 
+-            var contentType = !string.IsNullOrWhiteSpace(meta.ContentType)
++            var contentType = SafeContentType(!string.IsNullOrWhiteSpace(meta.ContentType)
+                 ? meta.ContentType
+-                : response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
++                : response.Content.Headers.ContentType?.MediaType);
+             var fileName = !string.IsNullOrWhiteSpace(meta.OriginalFileName) ? meta.OriginalFileName! : meta.FileName;
+             var length = new FileInfo(dataPath).Length;
+ 
 diff --git a/EPC.SSO/Services/DashboardDataService.cs b/EPC.SSO/Services/DashboardDataService.cs
 new file mode 100644
 index 0000000..fd7d684
@@ -3323,6 +3690,82 @@ index 0000000..fd7d684
 +        });
 +    }
 +}
+diff --git a/EPC.SSO/Services/ExternalApiClientService.cs b/EPC.SSO/Services/ExternalApiClientService.cs
+index e296923..a0e9369 100644
+--- a/EPC.SSO/Services/ExternalApiClientService.cs
++++ b/EPC.SSO/Services/ExternalApiClientService.cs
+@@ -32,6 +32,10 @@ public sealed class S2STokenProvider(
+ {
+     private readonly ConcurrentDictionary<string, (string Token, DateTime ExpiresUtc)> _tokens = new();
+     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
++    // بعد از شکست، چند ثانیه دوباره تلاش نمی‌شود؛ وگرنه هنگام قطعی IdentityServer هر درخواست
++    // پشت قفل منتظر یک تلاش ۱۰ ثانیه‌ای می‌ماند و درخواست‌ها روی هم انباشته می‌شدند.
++    private readonly ConcurrentDictionary<string, DateTime> _failedUntil = new();
++    private static readonly TimeSpan FailureBackoff = TimeSpan.FromSeconds(15);
+     private readonly ConcurrentDictionary<string, (SystemIntegrationViewModel Info, DateTime ExpiresUtc)> _clientInfo = new();
+     private readonly SemaphoreSlim _discoveryLock = new(1, 1);
+ 
+@@ -43,6 +47,8 @@ public sealed class S2STokenProvider(
+         var key = $"{apiName}:{cfg.SystemId}:{cfg.ScopeId}";
+         if (_tokens.TryGetValue(key, out var cached) && cached.ExpiresUtc > DateTime.UtcNow)
+             return cached.Token;
++        if (_failedUntil.TryGetValue(key, out var until) && until > DateTime.UtcNow)
++            return null;
+ 
+         var gate = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+         await gate.WaitAsync(cancellationToken);
+@@ -50,6 +56,31 @@ public sealed class S2STokenProvider(
+         {
+             if (_tokens.TryGetValue(key, out cached) && cached.ExpiresUtc > DateTime.UtcNow)
+                 return cached.Token;
++            if (_failedUntil.TryGetValue(key, out until) && until > DateTime.UtcNow)
++                return null;
++
++            var token = await RequestTokenAsync(apiName, cfg, key, cancellationToken);
++            if (token is null)
++                _failedUntil[key] = DateTime.UtcNow.Add(FailureBackoff);
++            else
++                _failedUntil.TryRemove(key, out _);
++            return token;
++        }
++        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
++        {
++            logger.LogError(ex, "[{ApiName}] دریافت توکن s2s ناموفق", apiName);
++            _failedUntil[key] = DateTime.UtcNow.Add(FailureBackoff);
++            return null;
++        }
++        finally
++        {
++            gate.Release();
++        }
++    }
++
++    private async Task<string?> RequestTokenAsync(string apiName, ExternalApiConfiguration cfg, string key, CancellationToken cancellationToken)
++    {
++        {
+ 
+             var info = await GetClientInfoAsync(apiName, cfg);
+             if (info is null || string.IsNullOrWhiteSpace(info.ClientId) || string.IsNullOrWhiteSpace(info.Secret))
+@@ -86,14 +117,14 @@ public sealed class S2STokenProvider(
+             _tokens[key] = (response.AccessToken, DateTime.UtcNow.AddSeconds(lifetime));
+             return response.AccessToken;
+         }
+-        finally
+-        {
+-            gate.Release();
+-        }
+     }
+ 
+     public void Invalidate(string apiName, ExternalApiConfiguration cfg)
+-        => _tokens.TryRemove($"{apiName}:{cfg.SystemId}:{cfg.ScopeId}", out _);
++    {
++        var key = $"{apiName}:{cfg.SystemId}:{cfg.ScopeId}";
++        _tokens.TryRemove(key, out _);
++        _failedUntil.TryRemove(key, out _);
++    }
+ 
+     public async Task<string> GetSystemUrlAsync(int systemId)
+     {
 diff --git a/EPC.SSO/Services/ExternalApiWarmupService.cs b/EPC.SSO/Services/ExternalApiWarmupService.cs
 index 74fe3f5..a7f2caa 100644
 --- a/EPC.SSO/Services/ExternalApiWarmupService.cs
@@ -3370,6 +3813,108 @@ index 74fe3f5..a7f2caa 100644
      private async Task PingSqlAsync(string name, string? connectionString, CancellationToken ct)
      {
          if (string.IsNullOrWhiteSpace(connectionString)) return;
+diff --git a/EPC.SSO/Services/FarzinApiService.cs b/EPC.SSO/Services/FarzinApiService.cs
+index 619efd0..7b7595d 100644
+--- a/EPC.SSO/Services/FarzinApiService.cs
++++ b/EPC.SSO/Services/FarzinApiService.cs
+@@ -1,45 +1,67 @@
+-﻿using System.Data;
++﻿using System.Security.Cryptography;
+ 
+ namespace EPC.SSO.Services;
+ 
+-public class FarzinApiService(IHttpClientFactory httpClientFactory, IConfiguration configuration)
++/// <summary>
++/// بازنشانی رمز فرزین و ارسال رمز جدید با پیامک.
++///  • اگر شماره همراه ثبت نشده باشد، رمز اصلاً بازنشانی نمی‌شود (قبلاً رمز عوض می‌شد و پیامک به "" می‌رفت
++///    و کاربر از فرزین بیرون می‌ماند).
++///  • رمز با RandomNumberGenerator ساخته می‌شود (System.Random قابل پیش‌بینی است).
++///  • خطای شبکه/Timeout به پیام مناسب تبدیل می‌شود (قبلاً 500).
++///  • پیامک با کلاینت SmsClient و قرارداد سرویس پیامک (Number) ارسال می‌شود؛ Phone هم برای سازگاری فرستاده می‌شود.
++/// </summary>
++public class FarzinApiService(IHttpClientFactory httpClientFactory, IConfiguration configuration, ILogger<FarzinApiService> logger)
+ {
+-    private readonly string _farzinBase =
+-        configuration["ExternalApis:FarzinApi:BaseUrl"]!;
+-    private readonly string _smsBase =
+-        configuration["ExternalApis:SmsApi:BaseUrl"]!;
++    private const string PasswordChars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#";
+ 
+-    /// <summary>رمز رندوم می‌سازه، به فرزین ریست می‌کنه، پیامک می‌فرسته</summary>
++    private readonly string _farzinBase = configuration["ExternalApis:FarzinApi:BaseUrl"] ?? string.Empty;
++    private readonly string _smsBase = configuration["ExternalApis:SmsApi:BaseUrl"] ?? string.Empty;
++
++    /// <summary>رمز رندوم می‌سازد، در فرزین بازنشانی می‌کند و پیامک می‌فرستد</summary>
+     public async Task<(bool success, string message)> ResetAndNotifyAsync(
+-        string personnelCode, string phone)
++        string personnelCode, string phone, CancellationToken cancellationToken = default)
+     {
+-        var password = GeneratePassword();
+-        var client = httpClientFactory.CreateClient("FarzinClient");
++        if (string.IsNullOrWhiteSpace(phone))
++            return (false, "شماره همراه شما ثبت نشده است؛ لطفاً با راهبر سیستم تماس بگیرید.");
++        if (string.IsNullOrWhiteSpace(_farzinBase) || string.IsNullOrWhiteSpace(_smsBase))
++            return (false, "سرویس بازنشانی رمز فرزین تنظیم نشده است.");
++
++        var password = RandomNumberGenerator.GetString(PasswordChars, 10);
+ 
+-        // ─── ۱. ریست رمز فرزین ──────────────────────────────────────
+-        var resetResp = await client.PostAsJsonAsync(
+-            $"{_farzinBase}/api/AuthApi/ResetPassword",
+-            new { UserName = personnelCode, Password = password });
++        // ─── ۱. بازنشانی رمز فرزین ──────────────────────────────────────
++        try
++        {
++            var farzin = httpClientFactory.CreateClient(Infrastructure.HttpClientSetup.FarzinClient);
++            using var resetResp = await farzin.PostAsJsonAsync(
++                $"{_farzinBase.TrimEnd('/')}/api/AuthApi/ResetPassword",
++                new { UserName = personnelCode, Password = password }, cancellationToken);
+ 
+-        if (!resetResp.IsSuccessStatusCode)
+-            return (false, "خطا در بازنشانی رمز فرزین");
++            if (!resetResp.IsSuccessStatusCode)
++                return (false, "خطا در بازنشانی رمز فرزین");
++        }
++        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
++        {
++            logger.LogError(ex, "[Farzin] بازنشانی رمز {PersonnelCode} ناموفق بود", personnelCode);
++            return (false, "ارتباط با سامانه فرزین برقرار نشد");
++        }
+ 
+         // ─── ۲. ارسال پیامک ──────────────────────────────────────────
+-        var smsResp = await client.PostAsJsonAsync(
+-            $"{_smsBase}/api/SmsApi/SendSmsPost",
+-            new { Phone = phone, Text = $"رمز جدید فرزین شما: {password}" });
++        try
++        {
++            var sms = httpClientFactory.CreateClient(Infrastructure.HttpClientSetup.SmsClient);
++            using var smsResp = await sms.PostAsJsonAsync(
++                $"{_smsBase.TrimEnd('/')}/api/SmsApi/SendSmsPost",
++                new { Number = phone, Phone = phone, Text = $"رمز جدید فرزین شما: {password}" }, cancellationToken);
+ 
+-        if (!smsResp.IsSuccessStatusCode)
++            if (!smsResp.IsSuccessStatusCode)
++                return (false, "رمز بازنشانی شد اما ارسال پیامک با خطا مواجه شد");
++        }
++        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
++        {
++            logger.LogError(ex, "[Farzin] ارسال پیامک رمز {PersonnelCode} ناموفق بود", personnelCode);
+             return (false, "رمز بازنشانی شد اما ارسال پیامک با خطا مواجه شد");
++        }
+ 
+         return (true, "رمز فرزین با موفقیت بازنشانی شد و پیامک ارسال گردید");
+     }
+-
+-    private static string GeneratePassword(int length = 10)
+-    {
+-        const string chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#";
+-        var rng = new Random();
+-        return new string(
+-            Enumerable.Repeat(chars, length).Select(s => s[rng.Next(s.Length)]).ToArray());
+-    }
+-}
+\ No newline at end of file
++}
 diff --git a/EPC.SSO/Services/KaajDocumentApiService.cs b/EPC.SSO/Services/KaajDocumentApiService.cs
 index 777de67..71f921b 100644
 --- a/EPC.SSO/Services/KaajDocumentApiService.cs
@@ -3618,6 +4163,20 @@ index 777de67..71f921b 100644
      }
  
      private static string ExtractNameFromPath(string path)
+diff --git a/EPC.SSO/Services/LoginAnnouncementStore.cs b/EPC.SSO/Services/LoginAnnouncementStore.cs
+index 8337e9f..15263c0 100644
+--- a/EPC.SSO/Services/LoginAnnouncementStore.cs
++++ b/EPC.SSO/Services/LoginAnnouncementStore.cs
+@@ -161,7 +161,8 @@ public sealed class LoginAnnouncementRefreshService(
+                 return;
+             }
+ 
+-            var metaMap = (metas ?? []).ToDictionary(m => m.Guid);
++            // FileManagement ممکن است یک فایل را دو بار برگرداند؛ ToDictionary خطا می‌داد و به‌روزرسانی متوقف می‌شد
++            var metaMap = (metas ?? []).GroupBy(m => m.Guid).ToDictionary(g => g.Key, g => g.First());
+ 
+             var items = dtos.Select(d => new LoginAnnouncementItem
+             {
 diff --git a/EPC.SSO/Services/OtherProgramService.cs b/EPC.SSO/Services/OtherProgramService.cs
 index 8b531f6..b34572e 100644
 --- a/EPC.SSO/Services/OtherProgramService.cs
@@ -3669,6 +4228,73 @@ index 8b531f6..b34572e 100644
      }
  
      /// آماده‌سازی اجرا: نوع را از DB تشخیص می‌دهد (نه از کلاینت)، برای SSO بلیط می‌سازد و ذخیره می‌کند.
+diff --git a/EPC.SSO/Services/PhoneDirectoryApiService.cs b/EPC.SSO/Services/PhoneDirectoryApiService.cs
+index 5daffd0..0bda796 100644
+--- a/EPC.SSO/Services/PhoneDirectoryApiService.cs
++++ b/EPC.SSO/Services/PhoneDirectoryApiService.cs
+@@ -29,7 +29,9 @@ public class PhoneDirectoryApiService(
+     /// فراخوانی API با تلاش مجدد. Ok=false یعنی واقعاً ارتباط/پاسخ ناموفق بوده
+     /// (نه اینکه نتیجه‌ی جستجو خالی باشد).
+     /// </summary>
+-    private async Task<(bool Ok, TData? Data)> PostWithRetryAsync<TData>(string endpoint, object payload)
++    /// فقط خطای ارتباط (پاسخ null) دوباره تلاش می‌شود؛ پاسخ IsSuccess=false نتیجه‌ی واقعی سرویس است.
++    /// با قطع اتصال کاربر (cancellationToken) فراخوانی‌ها هم لغو می‌شوند.
++    private async Task<(bool Ok, TData? Data)> PostWithRetryAsync<TData>(string endpoint, object payload, CancellationToken cancellationToken)
+         where TData : class
+     {
+         var apiConfig = GetApiConfig();
+@@ -38,26 +40,32 @@ public class PhoneDirectoryApiService(
+         {
+             var result = await externalApiClientService.PostAsync<
+                 object,
+-                PhoneDirectoryApiResult<TData>>(ApiName, apiConfig, endpoint, payload);
++                PhoneDirectoryApiResult<TData>>(ApiName, apiConfig, endpoint, payload, cancellationToken);
+ 
+             if (result is { IsSuccess: true })
+                 return (true, result.Data);
+ 
++            if (result is not null)
++            {
++                logger.LogWarning("[{ApiName}] {Endpoint} پاسخ ناموفق برگرداند", ApiName, endpoint);
++                return (false, null);
++            }
++
+             logger.LogWarning("[{ApiName}] {Endpoint} ناموفق بود (تلاش {Attempt} از {Max})",
+                 ApiName, endpoint, attempt, MaxAttempts);
+ 
+             if (attempt < MaxAttempts)
+-                await Task.Delay(RetryDelay);
++                await Task.Delay(RetryDelay, cancellationToken);
+         }
+ 
+         return (false, null);
+     }
+ 
+-    public async Task<List<PhoneDirectoryPublicModel>> SearchAsync(string searchTerm, int? type = null)
++    public async Task<List<PhoneDirectoryPublicModel>> SearchAsync(string searchTerm, int? type = null, CancellationToken cancellationToken = default)
+     {
+         var (ok, data) = await PostWithRetryAsync<List<PhoneDirectoryPublicModel>>(
+             "/api/PhoneDirectory/Search",
+-            new { Search = searchTerm, Type = type });
++            new { Search = searchTerm, Type = type }, cancellationToken);
+ 
+         return ok ? data ?? [] : [];
+     }
+@@ -66,11 +74,12 @@ public class PhoneDirectoryApiService(
+         string searchTerm,
+         int? type,
+         int page,
+-        int pageSize)
++        int pageSize,
++        CancellationToken cancellationToken = default)
+     {
+         var (ok, data) = await PostWithRetryAsync<PhoneDirectoryPaginatedResult>(
+             "/api/PhoneDirectory/SearchPaginated",
+-            new { Search = searchTerm, Type = type, Page = page, PageSize = pageSize });
++            new { Search = searchTerm, Type = type, Page = page, PageSize = pageSize }, cancellationToken);
+ 
+         if (!ok)
+         {
 diff --git a/EPC.SSO/Services/SuggestionService.cs b/EPC.SSO/Services/SuggestionService.cs
 index 278945c..eee74ad 100644
 --- a/EPC.SSO/Services/SuggestionService.cs
@@ -4104,11 +4730,72 @@ index fd939d6..980b6a6 100644
      </script>
  }
 \ No newline at end of file
+diff --git a/EPC.SSO/Views/Grants/AnnouncementArchive.cshtml b/EPC.SSO/Views/Grants/AnnouncementArchive.cshtml
+index e7585bb..15f75d6 100644
+--- a/EPC.SSO/Views/Grants/AnnouncementArchive.cshtml
++++ b/EPC.SSO/Views/Grants/AnnouncementArchive.cshtml
+@@ -7,9 +7,9 @@
+ 
+ 
+ @section style {
+-    <link href="~/css/jalali-calendar.css" rel="stylesheet" />
+-    <link href="~/css/announcement-modal.css" rel="stylesheet" />
+-    <link href="~/css/announcement-archive.css" rel="stylesheet" />
++    <link href="~/css/jalali-calendar.css" rel="stylesheet" asp-append-version="true" />
++    <link href="~/css/announcement-modal.css" rel="stylesheet" asp-append-version="true" />
++    <link href="~/css/announcement-archive.css" rel="stylesheet" asp-append-version="true" />
+ }
+ 
+ <main>
+@@ -100,7 +100,7 @@
+ </div>
+ 
+ @section scripts {
+-    <script src="~/js/jalali-picker.js"></script>
+-    <script src="~/js/announcement-common.js"></script>
+-    <script src="~/js/announcement-archive.js"></script>
++    <script src="~/js/jalali-picker.js" asp-append-version="true"></script>
++    <script src="~/js/announcement-common.js" asp-append-version="true"></script>
++    <script src="~/js/announcement-archive.js" asp-append-version="true"></script>
+ }
+\ No newline at end of file
 diff --git a/EPC.SSO/Views/Grants/Index.cshtml b/EPC.SSO/Views/Grants/Index.cshtml
-index 9a76af2..12ede6a 100644
+index 9a76af2..d1847ff 100644
 --- a/EPC.SSO/Views/Grants/Index.cshtml
 +++ b/EPC.SSO/Views/Grants/Index.cshtml
-@@ -209,5 +209,7 @@
+@@ -13,7 +13,8 @@
+     <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
+ }
+ 
+-<main class="p-container db" data-personnel-code="@Model.PersonnelCode">
++<main class="p-container db" data-personnel-code="@Model.PersonnelCode"
++      data-cache-scope="@(User.FindFirst("ActivatedPosition")?.Value):@(User.FindFirst("DelegationId")?.Value):@(User.FindFirst("ImpersonatedBy")?.Value)">
+     <div class="db-grid">
+         @* ═══════════ ستون اصلی ═══════════ *@
+         <div class="db-col">
+@@ -32,9 +33,9 @@
+ 
+                 <div class="db-toolbar">
+                     <div class="db-tabs" role="tablist">
+-                        <button class="db-tab is-active" role="tab" data-tab="web"><i class="fa fa-globe"></i> تحت وب <span class="db-tab__n">@grants.Count</span></button>
+-                        <button class="db-tab" role="tab" data-tab="win" id="tabWin" hidden><i class="fa fa-desktop"></i> ویندوزی <span class="db-tab__n" id="countWin">0</span></button>
+-                        <button class="db-tab" role="tab" data-tab="other" id="tabOther" hidden><i class="fa fa-layer-group"></i> سایر <span class="db-tab__n" id="countOther">0</span></button>
++                        <button type="button" class="db-tab is-active" role="tab" aria-selected="true" data-tab="web"><i class="fa fa-globe"></i> تحت وب <span class="db-tab__n">@grants.Count</span></button>
++                        <button type="button" class="db-tab" role="tab" aria-selected="false" data-tab="win" id="tabWin" hidden><i class="fa fa-desktop"></i> ویندوزی <span class="db-tab__n" id="countWin">0</span></button>
++                        <button type="button" class="db-tab" role="tab" aria-selected="false" data-tab="other" id="tabOther" hidden><i class="fa fa-layer-group"></i> سایر <span class="db-tab__n" id="countOther">0</span></button>
+                     </div>
+                     <label class="db-search">
+                         <i class="fa fa-magnifying-glass"></i>
+@@ -193,7 +194,7 @@
+ 
+     <div class="db-force" id="forceReadOverlay" role="dialog" aria-modal="true" aria-labelledby="forceTitle">
+         <div class="db-force__card">
+-            <div class="db-force__head"><small id="forceStep"></small><h3 id="forceTitle"></h3></div>
++            <div class="db-force__head"><small id="forceStep"></small><h3 id="forceTitle" tabindex="-1"></h3></div>
+             <div class="db-force__body" id="forceBody"></div>
+             <div class="db-force__foot">
+                 <div class="db-force__steps" id="forceSteps"></div>
+@@ -209,5 +210,7 @@
      <script src="~/js/jalali-picker.js" asp-append-version="true"></script>
      <script src="~/js/page-tour.js" asp-append-version="true"></script>
      <script src="~/js/announcement-common.js" asp-append-version="true"></script>
@@ -4116,6 +4803,125 @@ index 9a76af2..12ede6a 100644
      <script src="~/js/dashboard.js" asp-append-version="true"></script>
 +    <script src="~/js/portal-realtime.js" asp-append-version="true"></script>
  }
+diff --git a/EPC.SSO/Views/Home/Index.cshtml b/EPC.SSO/Views/Home/Index.cshtml
+index 903565d..cfcf065 100644
+--- a/EPC.SSO/Views/Home/Index.cshtml
++++ b/EPC.SSO/Views/Home/Index.cshtml
+@@ -12,10 +12,10 @@
+     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+     <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
+     <link rel="manifest" href="/favicon/site.webmanifest">
+-    <link href="~/assets/css/saas/bootstrap-rtl.min.css" rel="stylesheet" />
+-    <link href="~/assets/css/saas/app.min.css" rel="stylesheet" />
+-    <link href="~/assets/css/icons.min.css" rel="stylesheet" />
+-    <link href="~/assets/css/saas/custom.css" rel="stylesheet" />
++    <link href="~/assets/css/saas/bootstrap-rtl.min.css" rel="stylesheet" asp-append-version="true" />
++    <link href="~/assets/css/saas/app.min.css" rel="stylesheet" asp-append-version="true" />
++    <link href="~/assets/css/icons.min.css" rel="stylesheet" asp-append-version="true" />
++    <link href="~/assets/css/saas/custom.css" rel="stylesheet" asp-append-version="true" />
+     <style>
+             :root {
+                 --navy: #131b3a;
+@@ -904,7 +904,7 @@
+                                             <i class="fas @(mediaFile.IsImage ? "fa-image" : "fa-file-pdf")"></i>
+                                             <span class="ah-fss__cap-name">@mediaFile.DisplayName</span>
+                                             <button type="button" class="ah-fss__cap-dl"
+-                                                    onclick="ahProxyDownload('/Account/FileProxy?guid=@mediaFile.FileGuid','@mediaFile.DisplayName')">
++                                                    aria-label="دانلود" data-dl-url="/Account/FileProxy?guid=@mediaFile.FileGuid" data-dl-name="@mediaFile.DisplayName">
+                                                 <i class="fas fa-download"></i>
+                                             </button>
+                                         </div>
+@@ -996,11 +996,14 @@
+ 
+     <script>
+             (function () {
++                // قبل از اسلایدر (قبلاً بعد از اولین loadVisiblePdf مقداردهی می‌شد و PDF اسلاید اول بارگذاری نمی‌شد)
++                var _pdfCache = {};
++
+                 // ── ناوبار شناور هنگام اسکرول ──
+                 var nav = document.getElementById('hpNav');
+                 window.addEventListener('scroll', function () {
+                     nav.classList.toggle('hp-nav--solid', window.scrollY > 40);
+-                });
++                }, { passive: true });
+ 
+                 // ── اسلایدر اطلاعیه‌ها (بخش Hero) ──
+                 var cards = document.querySelectorAll('.ah-card');
+@@ -1038,7 +1041,9 @@
+                         });
+                     }
+ 
+-                    function au() { clearInterval(tmr); tmr = setInterval(function () { go(c + 1); }, MS); rp(); }
++                    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
++                    function au() { clearInterval(tmr); if (reduceMotion || document.hidden) return; tmr = setInterval(function () { go(c + 1); }, MS); rp(); }
++                    document.addEventListener('visibilitychange', function () { document.hidden ? clearInterval(tmr) : au(); });
+ 
+                     if (prev) prev.addEventListener('click', function () { clearInterval(tmr); go(c - 1); au(); });
+                     if (next) next.addEventListener('click', function () { clearInterval(tmr); go(c + 1); au(); });
+@@ -1055,7 +1060,6 @@
+                 }
+ 
+                 // ── لود PDF به‌صورت Blob ──
+-                var _pdfCache = {};
+                 function loadPdf(iframe) {
+                     if (!iframe || iframe.dataset.pdfLoaded === 'true') return;
+                     var guid = iframe.dataset.pdfGuid;
+@@ -1065,7 +1069,7 @@
+                         try {
+                             var url = _pdfCache[guid];
+                             if (!url) {
+-                                var resp = await fetch('/Account/FileProxy?guid=' + guid);
++                                var resp = await fetch('/Account/FileProxy?guid=' + encodeURIComponent(guid));
+                                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                                 var blob = await resp.blob();
+                                 url = URL.createObjectURL(blob);
+@@ -1087,11 +1091,19 @@
+                         if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                         var blob = await resp.blob();
+                         var a = document.createElement('a');
+-                        a.href = URL.createObjectURL(blob);
++                        var objectUrl = URL.createObjectURL(blob);
++                        a.href = objectUrl;
+                         a.download = name || 'file';
+                         document.body.appendChild(a); a.click(); document.body.removeChild(a);
++                        setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 5000);
+                     } catch (e) { alert('خطا در دانلود: ' + (e.message || 'نامشخص')); }
+                 };
++
++                // نام فایل داخل onclick قرار نمی‌گیرد (XSS)؛ از data-* خوانده می‌شود
++                document.addEventListener('click', function (e) {
++                    var btn = e.target.closest && e.target.closest('[data-dl-url]');
++                    if (btn) window.ahProxyDownload(btn.getAttribute('data-dl-url'), btn.getAttribute('data-dl-name'));
++                });
+             })();
+     </script>
+ </body>
+diff --git a/EPC.SSO/Views/Shared/_Layout.cshtml b/EPC.SSO/Views/Shared/_Layout.cshtml
+index 5e3cffa..a78ac90 100644
+--- a/EPC.SSO/Views/Shared/_Layout.cshtml
++++ b/EPC.SSO/Views/Shared/_Layout.cshtml
+@@ -10,7 +10,7 @@
+     <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png" />
+     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+     <link rel="manifest" href="/favicon/site.webmanifest" />
+-    <link rel="preload" href="/fonts/Vazir.woff" as="font" type="font/woff" crossorigin />
++    <link rel="preload" href="/fonts/Sahel.woff" as="font" type="font/woff" crossorigin />
+     <link href="~/assets/css/saas/bootstrap-rtl.min.css" rel="stylesheet" asp-append-version="true" />
+     <link href="~/assets/css/saas/app.min.css" rel="stylesheet" asp-append-version="true" />
+     <link href="~/assets/css/icons.min.css" rel="stylesheet" asp-append-version="true" />
+diff --git a/EPC.SSO/Views/Shared/_LoginLayout.cshtml b/EPC.SSO/Views/Shared/_LoginLayout.cshtml
+index c0c72f1..88e3a6d 100644
+--- a/EPC.SSO/Views/Shared/_LoginLayout.cshtml
++++ b/EPC.SSO/Views/Shared/_LoginLayout.cshtml
+@@ -9,7 +9,7 @@
+     <partial name="_ThemeHead" />
+     <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png" />
+     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+-    <link rel="preload" href="/fonts/Vazir.woff" as="font" type="font/woff" crossorigin />
++    <link rel="preload" href="/fonts/Sahel.woff" as="font" type="font/woff" crossorigin />
+     <link href="~/assets/css/icons.min.css" rel="stylesheet" asp-append-version="true" />
+     <link href="~/css/portal.css" rel="stylesheet" asp-append-version="true" />
+     @await RenderSectionAsync("style", false)
 diff --git a/EPC.SSO/wwwroot/css/login-v2.css b/EPC.SSO/wwwroot/css/login-v2.css
 index 42af830..48a6db1 100644
 --- a/EPC.SSO/wwwroot/css/login-v2.css
@@ -4128,11 +4934,243 @@ index 42af830..48a6db1 100644
  .lg-captcha__code { flex: 1; height: 50px; border-radius: 14px; display: grid; place-items: center; user-select: none; font: 700 21px/1 'Courier New', monospace; letter-spacing: 8px;
      color: var(--t1); border: 1.5px dashed var(--acc2); background: repeating-linear-gradient(45deg, var(--hero-bg1), var(--hero-bg1) 8px, rgba(251,146,60,.18) 8px, rgba(251,146,60,.18) 16px); }
  html[data-theme="dark"] .lg-captcha__code { background: repeating-linear-gradient(45deg, #2a1b10, #2a1b10 8px, #3a2414 8px, #3a2414 16px); }
+diff --git a/EPC.SSO/wwwroot/css/portal.css b/EPC.SSO/wwwroot/css/portal.css
+index 4ec7e40..ace0188 100644
+--- a/EPC.SSO/wwwroot/css/portal.css
++++ b/EPC.SSO/wwwroot/css/portal.css
+@@ -318,3 +318,30 @@ html[data-theme="dark"] .p-card::before { background: linear-gradient(160deg, rg
+ .p-card__icon--blue { color: #fff; background: linear-gradient(135deg, #38bdf8, #0284c7); box-shadow: 0 8px 16px -8px rgba(14,165,233,.9); }
+ .p-card__icon--green { color: #fff; background: linear-gradient(135deg, #34d399, #059669); box-shadow: 0 8px 16px -8px rgba(16,185,129,.9); }
+ .p-card__icon--violet { color: #fff; background: linear-gradient(135deg, #a78bfa, #7c3aed); box-shadow: 0 8px 16px -8px rgba(139,92,246,.9); }
++
++/* ═══ نام‌های Font Awesome 6 در markup؛ فایل آیکن فعلی Font Awesome 5 است و این‌ها خالی نمایش داده می‌شدند ═══ */
++.fa-clock-rotate-left::before { content: "\f1da"; } /* history */
++.fa-magnifying-glass::before { content: "\f002"; } /* search */
++.fa-circle-check::before { content: "\f058"; } /* check-circle */
++.fa-calendar-days::before { content: "\f073"; } /* calendar-alt */
++.fa-circle-question::before { content: "\f059"; } /* question-circle */
++.fa-triangle-exclamation::before { content: "\f071"; } /* exclamation-triangle */
++.fa-rotate::before { content: "\f2f1"; } /* sync-alt */
++.fa-location-dot::before { content: "\f3c5"; } /* map-marker-alt */
++.fa-earth-asia::before { content: "\f57e"; } /* globe-asia */
++.fa-list-check::before { content: "\f0ae"; } /* tasks */
++.fa-table-cells-large::before { content: "\f009"; } /* th-large */
++.fa-folder-tree::before { content: "\f07c"; } /* folder-open */
++.fa-gears::before { content: "\f085"; } /* cogs */
++.fa-arrow-right-from-bracket::before { content: "\f2f5"; } /* sign-out-alt */
++.fa-right-from-bracket::before { content: "\f2f5"; } /* sign-out-alt */
++.fa-xmark::before { content: "\f00d"; } /* times */
++.fa-shield-halved::before { content: "\f3ed"; } /* shield-alt */
++.fa-up-right-from-square::before { content: "\f35d"; } /* external-link-alt */
++.fa-mobile-screen::before { content: "\f3cd"; } /* mobile-alt */
++.fa-file-lines::before { content: "\f15c"; } /* file-alt */
++.fa-right-to-bracket::before { content: "\f2f6"; } /* sign-in-alt */
++.fa-rotate-left::before { content: "\f2ea"; } /* undo-alt */
++.fa-arrow-left-long::before { content: "\f30a"; } /* long-arrow-alt-left */
++.fa-refresh::before { content: "\f021"; } /* sync */
++.fa-sign-in::before { content: "\f2f6"; } /* sign-in-alt */
+diff --git a/EPC.SSO/wwwroot/css/site-base.css b/EPC.SSO/wwwroot/css/site-base.css
+index a8cae1a..cd84cbc 100644
+--- a/EPC.SSO/wwwroot/css/site-base.css
++++ b/EPC.SSO/wwwroot/css/site-base.css
+@@ -1,14 +1,6 @@
+ ﻿
+-@font-face {
+-    font-family: 'Vazir';
+-    src: url('/fonts/Vazir.eot');
+-    src: url('/fonts/vazir.eot?#iefix') format('embedded-opentype'), url('/fonts/vazir.woff') format('woff'), url('/fonts/vazir.ttf') format('truetype');
+-}
+-
+-@font-face {
+-    font-family: 'Vazir-Bold';
+-    src: url('/fonts/Vazir-Bold.eot?#iefix') format('embedded-opentype'), url('/fonts/Vazir-Bold.woff') format('woff'), url('/fonts/Vazir-Bold.ttf') format('truetype');
+-}
++/* فونت‌ها در portal.css تعریف شده‌اند (با font-display: swap). نام قدیمی Vazir-Bold برای سازگاری: */
++@font-face { font-family: 'Vazir-Bold'; src: url('/fonts/Vazir-Bold.woff') format('woff'); font-display: swap; }
+ :root {
+     --navy: #1c2751;
+     --navy-dark: #141c3a;
+diff --git a/EPC.SSO/wwwroot/js/announcement-archive.js b/EPC.SSO/wwwroot/js/announcement-archive.js
+index a65bf4d..de629cc 100644
+--- a/EPC.SSO/wwwroot/js/announcement-archive.js
++++ b/EPC.SSO/wwwroot/js/announcement-archive.js
+@@ -35,7 +35,7 @@ function renderArchiveList(items, ct) {
+         if (a.priority === 3) pri = `<span class="ann-badge" style="background:#fef2f2;color:#dc2626">فوری</span>`;
+         else if (a.priority === 2) pri = `<span class="ann-badge" style="background:#fef3c7;color:#b45309">مهم</span>`;
+         return `
+-        <div class="ann-item${unread ? ' ann-item--unread' : ''}" onclick="openAnnouncementDetail('${a.guid}')">
++        <div class="ann-item${unread ? ' ann-item--unread' : ''}" role="button" tabindex="0" data-ann-guid="${escAttr(a.guid)}">
+             <div class="ann-dot" style="background:${cfg.color}"></div>
+             <div class="ann-content">
+                 <div class="ann-title" title="${escAttr(a.title)}">${escHtml(a.title)}</div>
+@@ -59,7 +59,7 @@ function renderPagination(total, page, pageSize) {
+     if (totalPages <= 1) { ct.innerHTML = ''; return; }
+ 
+     const btn = (p, label, active, disabled) =>
+-        `<button type="button" class="arch-page-btn${active ? ' arch-page-btn--active' : ''}" ${disabled ? 'disabled' : ''} onclick="loadArchivePage(${p})">${label}</button>`;
++        `<button type="button" class="arch-page-btn${active ? ' arch-page-btn--active' : ''}" ${disabled ? 'disabled' : ''} data-page="${p}"${active ? ' aria-current="page"' : ''}>${label}</button>`;
+ 
+     let html = btn(page - 1, '<i class="fa fa-chevron-right"></i>', false, page === 1);
+ 
+@@ -79,9 +79,13 @@ function renderPagination(total, page, pageSize) {
+     ct.innerHTML = html;
+ }
+ 
++let _archiveSeq = 0;
++
+ async function loadArchivePage(page) {
+     if (page < 1) return;
+     _curPage = page;
++    // درخواست‌های قدیمی‌تر (مثلاً هنگام تایپ) نتیجه‌ی جدیدتر را بازنویسی نمی‌کنند
++    const seq = ++_archiveSeq;
+     const ct = document.getElementById('archiveList');
+     ct.innerHTML = Array(5).fill('<div class="ann-skeleton"></div>').join('');
+ 
+@@ -93,14 +97,33 @@ async function loadArchivePage(page) {
+ 
+         const url = `/Grants/GetAnnouncementsArchive?page=${page}&pageSize=${PAGE_SIZE}&title=${encodeURIComponent(title)}&fromDate=${fromStr}&toDate=${toStr}`;
+         const r = await fetch(url);
++        if (seq !== _archiveSeq) return;
+         if (!r.ok) throw new Error();
+         const res = await r.json();
++        if (seq !== _archiveSeq) return;
+         renderArchiveList(res.items, ct);
+         renderPagination(res.total, res.page, res.pageSize);
+         window.scrollTo({ top: 0, behavior: 'smooth' });
+     } catch {
++        if (seq !== _archiveSeq) return;
+         ct.innerHTML = `<div class="placeholder-note"><i class="fa fa-triangle-exclamation"></i><span>خطا در بارگذاری اطلاعیه‌ها</span></div>`;
+     }
+ }
+ 
+-document.addEventListener('DOMContentLoaded', () => loadArchivePage(1));
+\ No newline at end of file
++document.addEventListener('DOMContentLoaded', () => {
++    loadArchivePage(1);
++
++    const list = document.getElementById('archiveList');
++    const openItem = e => {
++        const item = e.target.closest('[data-ann-guid]');
++        if (item) openAnnouncementDetail(item.dataset.annGuid);
++    };
++    list?.addEventListener('click', openItem);
++    list?.addEventListener('keydown', e => {
++        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openItem(e); }
++    });
++    document.getElementById('archPagination')?.addEventListener('click', e => {
++        const b = e.target.closest('button[data-page]');
++        if (b && !b.disabled) loadArchivePage(Number(b.dataset.page));
++    });
++});
+\ No newline at end of file
+diff --git a/EPC.SSO/wwwroot/js/announcement-common.js b/EPC.SSO/wwwroot/js/announcement-common.js
+index c6ee269..e0cb896 100644
+--- a/EPC.SSO/wwwroot/js/announcement-common.js
++++ b/EPC.SSO/wwwroot/js/announcement-common.js
+@@ -1,6 +1,8 @@
+ ﻿const escHtml = s => String(s ?? '')
+-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+-const escAttr = s => String(s ?? '').replace(/"/g, '&quot;');
++    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
++// داده‌ی سرور هرگز داخل onclick قرار نمی‌گیرد (entity ها قبل از اجرای JS decode می‌شوند = XSS با نام فایل)؛
++// فقط در data-* و با listener مرکزی پایین همین فایل خوانده می‌شود.
++const escAttr = escHtml;
+ 
+ const formatSize = bytes => {
+     if (!bytes || bytes === 0) return '';
+@@ -56,7 +58,7 @@ function buildFileSlideshowHtml(files) {
+         media.forEach((f, i) => {
+             const isActive = i === 0;
+             const proxyUrl = `/Grants/FileProxy?guid=${encodeURIComponent(f.fileGuid)}`;
+-            const dlUrl = `/Grants/FileProxy?guid=${escAttr(f.fileGuid)}`;
++            const dlUrl = proxyUrl;
+             html += `<div class="fss-slide${isActive ? ' fss-slide--active' : ''}" data-idx="${i}">`;
+             if (f.isImage) {
+                 html += `<div class="fss-media--image"><img src="${escAttr(f.fileUrl)}" alt="${escAttr(f.displayName)}"
+@@ -70,8 +72,8 @@ function buildFileSlideshowHtml(files) {
+                 <i class="fa ${f.isImage ? 'fa-image' : 'fa-file-pdf'} fss-caption__icon" ${f.isPdf ? 'style="color:#f87171"' : ''}></i>
+                 <span class="fss-caption__name">${escHtml(f.displayName)}</span>
+                 ${f.fileSize ? `<span class="fss-caption__size">${formatSize(f.fileSize)}</span>` : ''}
+-                ${f.isPdf ? `<button type="button" class="fss-caption__open" title="نمایش کامل در تب جدید" onclick="window.open('${dlUrl}','_blank','noopener,noreferrer')">↗</button>` : ''}
+-                <button type="button" class="fss-caption__dl" title="دانلود" onclick="proxyDownload('${dlUrl}','${escAttr(f.displayName)}',event)">
++                ${f.isPdf ? `<button type="button" class="fss-caption__open" title="نمایش کامل در تب جدید" aria-label="نمایش کامل در تب جدید" data-open-url="${escAttr(dlUrl)}">↗</button>` : ''}
++                <button type="button" class="fss-caption__dl" title="دانلود" aria-label="دانلود" data-dl-url="${escAttr(dlUrl)}" data-dl-name="${escAttr(f.displayName)}">
+                     <i class="fa fa-download"></i></button>
+             </div>`;
+             html += `</div>`;
+@@ -97,7 +99,7 @@ function buildFileSlideshowHtml(files) {
+             <div class="ann-files-title"><i class="fa fa-paperclip"></i> پیوست‌ها</div>`;
+         other.forEach(f => {
+             html += `<button type="button" class="ann-file-link"
+-                onclick="proxyDownload('/Grants/FileProxy?guid=${escAttr(f.fileGuid)}','${escAttr(f.displayName)}',event)">
++                data-dl-url="${escAttr('/Grants/FileProxy?guid=' + encodeURIComponent(f.fileGuid))}" data-dl-name="${escAttr(f.displayName)}">
+                 <i class="fa ${getFileIcon(f.contentType)} file-icon"></i>
+                 <span class="file-name">${escHtml(f.displayName)}</span>
+                 <span class="file-size">${formatSize(f.fileSize)}</span>
+@@ -110,9 +112,27 @@ function buildFileSlideshowHtml(files) {
+ }
+ 
+ function _activatePdf() {
++    // اسلایدشوهایی که دیگر در صفحه نیستند حذف می‌شوند (قبلاً _m با هر بار باز شدن مودال بزرگ‌تر می‌شد)
++    Object.keys(FssReg._m).forEach(id => { if (!document.getElementById(id)) delete FssReg._m[id]; });
+     (window.__pdfSS || []).forEach(({ ssId, total }) => FssReg.add(ssId, total));
+     delete window.__pdfSS;
+ }
++
++// دانلود/باز کردن پیوست‌ها (به جای onclick داخل HTML)
++document.addEventListener('click', e => {
++    const dl = e.target.closest?.('[data-dl-url]');
++    if (dl) {
++        e.preventDefault();
++        e.stopPropagation();
++        proxyDownload(dl.dataset.dlUrl, dl.dataset.dlName, { currentTarget: dl });
++        return;
++    }
++    const open = e.target.closest?.('[data-open-url]');
++    if (open && open.dataset.openUrl.startsWith('/')) {
++        e.preventDefault();
++        window.open(open.dataset.openUrl, '_blank', 'noopener,noreferrer');
++    }
++});
+ function setHtml(el, html) { el.innerHTML = html; _activatePdf(); }
+ 
+ async function proxyDownload(proxyUrl, fileName, evt) {
+@@ -149,12 +169,19 @@ async function openAnnouncementDetail(guid) {
+     els.footer.style.display = 'none';
+     els.mark.classList.add('d-none');
+ 
+-    new bootstrap.Modal(document.getElementById('annDetailModal')).show();
++    // یک نمونه برای مودال (قبلاً هر کلیک یک نمونه‌ی جدید می‌ساخت؛ listener و backdrop روی هم انباشته می‌شد)
++    bootstrap.Modal.getOrCreateInstance(document.getElementById('annDetailModal')).show();
++
++    // اگر کاربر سریع اطلاعیه‌ی دیگری را باز کند، پاسخ قبلی نادیده گرفته می‌شود
++    const requestId = (openAnnouncementDetail._seq = (openAnnouncementDetail._seq || 0) + 1);
++    const isStale = () => requestId !== openAnnouncementDetail._seq;
+ 
+     try {
+-        const resp = await fetch(`/Grants/GetAnnouncementDetail?guid=${guid}`);
++        const resp = await fetch(`/Grants/GetAnnouncementDetail?guid=${encodeURIComponent(guid)}`);
++        if (isStale()) return;
+         if (!resp.ok) throw new Error();
+         const res = await resp.json();
++        if (isStale()) return;
+         if (!res.success) { els.body.innerHTML = '<p class="text-danger">خطا در بارگذاری.</p>'; return; }
+ 
+         const d = res.data;
+@@ -177,6 +204,6 @@ async function openAnnouncementDetail(guid) {
+             els.mark.classList.remove('d-none');
+         }
+     } catch {
+-        els.body.innerHTML = '<p class="text-danger">خطا در ارتباط با سرور.</p>';
++        if (!isStale()) els.body.innerHTML = '<p class="text-danger">خطا در ارتباط با سرور.</p>';
+     }
+ }
+\ No newline at end of file
 diff --git a/EPC.SSO/wwwroot/js/dashboard.js b/EPC.SSO/wwwroot/js/dashboard.js
-index 8f009e3..df91c31 100644
+index 8f009e3..49e3a5a 100644
 --- a/EPC.SSO/wwwroot/js/dashboard.js
 +++ b/EPC.SSO/wwwroot/js/dashboard.js
-@@ -2,7 +2,7 @@
+@@ -2,18 +2,22 @@
     EPC Portal — Dashboard  (dashboard.js)
     وابستگی‌ها: site-header.js، announcement-common.js (escHtml/escAttr/ANN_TYPE/openAnnouncementDetail)،
                 jalali-picker.js، page-tour.js، bootstrap (vendor.min.js)
@@ -4141,7 +5179,70 @@ index 8f009e3..df91c31 100644
     ═══════════════════════════════════════════════════════════════════════ */
  (function () {
      'use strict';
-@@ -183,7 +183,7 @@
+ 
+     const $ = (s, r = document) => r.querySelector(s);
+     const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+-    const fa = n => String(n ?? '').replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
++    // اعداد فارسی + Escape (خروجی fa مستقیم در innerHTML قرار می‌گیرد)
++    const fa = n => escHtml(String(n ?? '').replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]));
+     const csrf = () => window.getCsrfToken?.() || $('input[name="__RequestVerificationToken"]')?.value || '';
+     const toast = m => window.showToast?.(m);
+     const PALETTE = ['#f97316', '#0ea5e9', '#10b981', '#8b5cf6', '#ef4444', '#14b8a6', '#f59e0b', '#6366f1', '#ec4899', '#22c55e'];
+-    const personnelCode = $('main[data-personnel-code]')?.dataset.personnelCode || '';
++    const main = $('main[data-personnel-code]');
++    const personnelCode = main?.dataset.personnelCode || '';
++    // کش به تفکیک کاربر + سمت/تفویض فعال (قبلاً بعد از تغییر سمت، داده‌ی سمت قبلی نمایش داده می‌شد)
++    const cacheScope = `${personnelCode}:${main?.dataset.cacheScope || ''}`;
+ 
+     const getJson = async (url, opts) => {
+         const r = await fetch(url, { credentials: 'same-origin', ...opts });
+@@ -21,7 +25,8 @@
+         return r.json();
+     };
+     const empty = (icon, text) => `<div class="p-empty"><i class="fa ${icon}"></i>${text}</div>`;
+-    const errorBox = text => `<div class="p-empty"><i class="fa fa-triangle-exclamation"></i>${text}<br><button type="button" class="db-retry" data-retry><i class="fa fa-rotate"></i> تلاش دوباره</button></div>`;
++    /** retry: کلید ویجت (فقط همان ویجت دوباره خوانده می‌شود) یا 'force' برای اطلاعیه‌ی اجباری جاری */
++    const errorBox = (text, retry = '') => `<div class="p-empty"><i class="fa fa-triangle-exclamation"></i>${text}<br><button type="button" class="db-retry" data-retry="${escAttr(retry)}"><i class="fa fa-rotate"></i> تلاش دوباره</button></div>`;
+ 
+     /** شمارنده‌ی کنار عنوان کارت؛ hideZero برای «خوانده‌نشده» که صفر بودنش نیاز به نمایش ندارد */
+     function setCount(sel, n, hideZero = false) {
+@@ -124,7 +129,10 @@
+ 
+     function setTab(tab) {
+         activeTab = tab;
+-        $$('.db-tab').forEach(t => t.classList.toggle('is-active', t.dataset.tab === tab));
++        $$('.db-tab').forEach(t => {
++            t.classList.toggle('is-active', t.dataset.tab === tab);
++            t.setAttribute('aria-selected', String(t.dataset.tab === tab));
++        });
+         $$('.db-pane').forEach(p => p.hidden = p.dataset.pane !== tab);
+         filterApps();
+     }
+@@ -153,12 +161,12 @@
+         $('#tabWin').hidden = false;
+         $('#countWin').textContent = list.length;
+         $('#windowsAppsGrid').innerHTML = list.map((a, i) => `
+-            <div class="db-app" tabindex="0" role="button" data-kind="win" data-id="win:${a.id}" data-url="${escAttr(a.launchUrl)}"
++            <div class="db-app" tabindex="0" role="button" data-kind="win" data-id="win:${escAttr(a.id)}" data-url="${escAttr(a.launchUrl)}"
+                  data-name="${escAttr(a.name)}" data-desc="${escAttr(a.description)}" title="${escAttr(a.description)}"
+                  style="--_c:${PALETTE[(i + 3) % PALETTE.length]};animation-delay:${Math.min(i, 20) * 18}ms">
+                 <button type="button" class="db-app__pin" aria-label="سنجاق"><i class="fa fa-star"></i></button>
+                 <span class="db-app__icon">${a.id
+-                    ? `<img src="/Grants/AppIcon/${a.id}" alt="" loading="lazy" onerror="this.outerHTML='<i class=&quot;fa fa-desktop&quot;></i>'">`
++                    ? `<img src="/Grants/AppIcon/${encodeURIComponent(a.id)}" alt="" loading="lazy" data-fallback-icon="fa-desktop">`
+                     : '<i class="fa fa-desktop"></i>'}</span>
+                 <span class="db-app__name">${escHtml(a.name)}</span>
+             </div>`).join('');
+@@ -170,7 +178,7 @@
+         $('#tabOther').hidden = false;
+         $('#countOther').textContent = list.length;
+         $('#otherProgramsGrid').innerHTML = list.map((p, i) => `
+-        <div class="db-app" tabindex="0" role="button" data-kind="other" data-id="other:${p.id}" data-pid="${p.id}"
++        <div class="db-app" tabindex="0" role="button" data-kind="other" data-id="other:${escAttr(p.id)}" data-pid="${escAttr(p.id)}"
+              data-name="${escAttr(p.name)}" data-iswin="${p.kind === 2}" title="${escAttr(p.name)}"
+              style="--_c:${PALETTE[(i + 6) % PALETTE.length]};animation-delay:${Math.min(i, 20) * 18}ms">
+             <button type="button" class="db-app__pin" aria-label="سنجاق"><i class="fa fa-star"></i></button>
+@@ -183,13 +191,13 @@
      const MEETING_STATUS = {
          1: { label: 'پیش رو', color: '#0ea5e9' },
          2: { label: 'برگزار شده', color: '#10b981' },
@@ -4150,12 +5251,284 @@ index 8f009e3..df91c31 100644
      };
  
      function renderMeetings(list) {
-@@ -489,20 +489,59 @@
+         const ct = $('#meetingContainer');
+         setCount('#countMeetings', list ? list.length : null);
+-        if (!list) return ct.innerHTML = errorBox('جلسات در دسترس نیست');
++        if (!list) return ct.innerHTML = errorBox('جلسات در دسترس نیست', 'meetings');
+         if (!list.length) return ct.innerHTML = empty('fa-mug-hot', 'جلسه‌ای در ۴ روز آینده ندارید');
  
-     document.addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(); });
+         ct.innerHTML = list.map(m => {
+@@ -197,10 +205,10 @@
+             const [datePart, timePart] = String(m.date || '').split(' - ');
+             const [, mo, d] = (datePart || '').split('/');
+             const st = MEETING_STATUS[m.status] || MEETING_STATUS[1];
+-            const url = m.baseUrl ? `${m.baseUrl}/#/meetings/details/${m.guid}` : '';
++            const url = m.baseUrl ? `${m.baseUrl}/#/meetings/details/${encodeURIComponent(m.guid)}` : '';
+             return `
+-            <div class="db-meet" tabindex="0" data-href="${escAttr(url)}">
+-                <div class="db-meet__date"><b>${fa(+d || '')}</b><span>${typeof MONTH_NAMES_FA !== 'undefined' && mo ? MONTH_NAMES_FA[+mo - 1] || '' : ''}</span></div>
++            <div class="db-meet" tabindex="0" role="link" data-href="${escAttr(url)}">
++                <div class="db-meet__date"><b>${fa(+d || '')}</b><span>${typeof MONTH_NAMES_FA !== 'undefined' && mo ? escHtml(MONTH_NAMES_FA[+mo - 1] || '') : ''}</span></div>
+                 <div class="db-meet__body">
+                     <div class="db-meet__title" title="${escAttr(m.title)}">${escHtml(m.title)}</div>
+                     <div class="db-meet__meta">
+@@ -219,7 +227,7 @@
+ 
+     function renderAnnouncements(list) {
+         const ct = $('#announceContainer');
+-        if (!list) { setCount('#countUnread', null, true); return ct.innerHTML = errorBox('اطلاعیه‌ها در دسترس نیست'); }
++        if (!list) { setCount('#countUnread', null, true); return ct.innerHTML = errorBox('اطلاعیه‌ها در دسترس نیست', 'announcements'); }
+         const unread = list.filter(a => !a.isRead).length;
+         setCount('#countUnread', unread, true);
+         if (!list.length) return ct.innerHTML = empty('fa-bell-slash', 'اطلاعیه‌ای وجود ندارد');
+@@ -229,7 +237,7 @@
+             const pri = a.priority === 3 ? '<span class="p-badge" style="background:#ef44441f;color:#ef4444">فوری</span>'
+                 : a.priority === 2 ? '<span class="p-badge" style="background:#f59e0b1f;color:#d97706">مهم</span>' : '';
+             return `
+-            <div class="db-ann ${a.isRead ? '' : 'db-ann--unread'}" tabindex="0" data-guid="${a.guid}">
++            <div class="db-ann ${a.isRead ? '' : 'db-ann--unread'}" tabindex="0" role="button" data-guid="${escAttr(a.guid)}">
+                 <span class="db-ann__dot" style="background:${cfg.color}"></span>
+                 <div style="min-width:0">
+                     <div class="db-ann__title">${escHtml(a.title)}</div>
+@@ -252,7 +260,7 @@
+     function renderSurveys(list) {
+         const ct = $('#surveyContainer');
+         setCount('#countSurveys', list ? list.length : null);
+-        if (!list) return ct.innerHTML = errorBox('نظرسنجی‌ها در دسترس نیست');
++        if (!list) return ct.innerHTML = errorBox('نظرسنجی‌ها در دسترس نیست', 'surveys');
+         if (!list.length) return ct.innerHTML = empty('fa-circle-check', 'نظرسنجی فعالی برای شما وجود ندارد');
+ 
+         ct.innerHTML = list.map(s => {
+@@ -261,9 +269,9 @@
+                 ? '<span class="p-badge" style="background:#f973161f;color:#ea580c">جدید</span>'
+                 : '<span class="p-badge" style="background:#0ea5e91f;color:#0284c7">ناتمام</span>';
+             return `
+-            <div class="db-survey" tabindex="0" data-href="${escAttr(`${s.surveyBaseUrl}/#/survey/take/${s.guid}`)}">
++            <div class="db-survey" tabindex="0" role="link" data-href="${escAttr(`${s.surveyBaseUrl}/#/survey/take/${encodeURIComponent(s.guid)}`)}">
+                 <div class="db-survey__head"><div class="db-survey__title">${escHtml(s.title)}</div>${badge}</div>
+-                <div class="db-survey__bar"><span style="width:${pct}%"></span></div>
++                <div class="db-survey__bar"><span style="width:${Number(pct) || 0}%"></span></div>
+                 <div class="db-survey__meta">
+                     <span><i class="fa fa-list-check"></i> ${fa(s.totalQuestions)} سؤال</span>
+                     ${s.daysRemaining > 0 ? `<span><i class="fa fa-hourglass-half"></i> ${fa(s.daysRemaining)} روز مانده</span>` : ''}
+@@ -289,7 +297,7 @@
+             <div class="db-sugg__slide ${i === 0 ? 'is-active' : ''}">
+                 <span class="db-sugg__rank">رتبه ${fa(i + 1)}</span>
+                 ${s.imageUrl
+-                    ? `<img class="db-sugg__avatar" src="${escAttr(s.imageUrl)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;db-sugg__avatar&quot;>${escAttr(initial(s.lfName))}</div>'">`
++                    ? `<img class="db-sugg__avatar" src="${escAttr(s.imageUrl)}" alt="" loading="lazy" data-fallback-text="${escAttr(initial(s.lfName))}">`
+                     : `<div class="db-sugg__avatar">${escHtml(initial(s.lfName))}</div>`}
+                 <div class="db-sugg__name">${escHtml(s.lfName || 'بدون نام')}</div>
+                 ${s.officeName ? `<div class="db-sugg__meta">${escHtml(s.officeName)}</div>` : ''}
+@@ -306,7 +314,14 @@
+             Sugg.cur = (i + Sugg.n) % Sugg.n;
+             slides[Sugg.cur]?.classList.add('is-active'); dots[Sugg.cur]?.classList.add('is-active');
+         };
+-        const auto = () => { clearInterval(Sugg.timer); if (Sugg.n > 1) Sugg.timer = setInterval(() => go(Sugg.cur + 1), 4500); };
++        // اسلاید خودکار: در تب پنهان، هنگام فوکوس کیبورد و با «کاهش حرکت» متوقف است
++        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
++        const auto = () => {
++            clearInterval(Sugg.timer);
++            if (Sugg.n > 1 && !reduceMotion && !document.hidden && !ct.contains(document.activeElement))
++                Sugg.timer = setInterval(() => go(Sugg.cur + 1), 4500);
++        };
++        Sugg.auto = auto;
+         ct.onclick = e => {
+             const step = e.target.closest('[data-sugg]'); const dot = e.target.closest('[data-sugg-go]');
+             if (step) go(Sugg.cur + +step.dataset.sugg);
+@@ -314,8 +329,27 @@
+         };
+         ct.onmouseenter = () => clearInterval(Sugg.timer);
+         ct.onmouseleave = auto;
++        ct.onfocusin = () => clearInterval(Sugg.timer);
++        ct.onfocusout = () => setTimeout(auto, 0);
+         auto();
+     }
++    document.addEventListener('visibilitychange', () => document.hidden ? clearInterval(Sugg.timer) : Sugg.auto?.());
++
++    // تصویر جایگزین (به جای onerror داخل HTML)؛ رویداد error حباب نمی‌زند، پس در capture گرفته می‌شود
++    document.addEventListener('error', e => {
++        const img = e.target;
++        if (!(img instanceof HTMLImageElement)) return;
++        if (img.dataset.fallbackIcon) {
++            const i = document.createElement('i');
++            i.className = 'fa ' + img.dataset.fallbackIcon;
++            img.replaceWith(i);
++        } else if (img.dataset.fallbackText !== undefined) {
++            const d = document.createElement('div');
++            d.className = img.className;
++            d.textContent = img.dataset.fallbackText;
++            img.replaceWith(d);
++        }
++    }, true);
+ 
+     // ═══ Force read (اطلاعیه‌های نیازمند تأیید) ═════════════════════════════
+     const Force = { items: [], idx: 0 };
+@@ -336,23 +370,42 @@
+         $('#forceTitle').textContent = it.title;
+         $('#forceSteps').innerHTML = Force.items.map((x, k) => `<span class="${x.ok ? 'is-ok' : k === i ? 'is-cur' : ''}"></span>`).join('');
+         const body = $('#forceBody');
++        const confirmBtn = $('#forceConfirm');
++        // تا متن اطلاعیه نمایش داده نشده، «مطالعه کردم» غیرفعال است
++        if (confirmBtn) confirmBtn.disabled = true;
+         if (!it.loaded) {
+             body.innerHTML = '<div class="p-skel" style="height:120px"></div>';
+             try {
+-                const res = await getJson(`/Grants/GetAnnouncementDetail?guid=${it.guid}`);
++                const res = await getJson(`/Grants/GetAnnouncementDetail?guid=${encodeURIComponent(it.guid)}`);
+                 if (res?.success) { it.data = res.data; it.loaded = true; }
+             } catch { }
+         }
+-        if (!it.data) { body.innerHTML = errorBox('بارگذاری جزئیات ممکن نشد'); return; }
++        if (Force.idx !== i) return;
++        if (!it.data) { body.innerHTML = errorBox('بارگذاری جزئیات ممکن نشد', 'force'); return; }
++        if (confirmBtn) confirmBtn.disabled = false;
+         let html = `<div>${escHtml(it.data.body)}</div>`;
+         if (it.data.files?.length && typeof buildFileSlideshowHtml === 'function') html += buildFileSlideshowHtml(it.data.files);
+         typeof setHtml === 'function' ? setHtml(body, html) : (body.innerHTML = html);
+         body.scrollTop = 0;
++        $('#forceTitle')?.focus?.();
+     }
+ 
++    // فوکوس داخل پنجره‌ی اجباری می‌ماند (کاربر کیبورد/صفحه‌خوان پشت آن گیر نمی‌کند)
++    document.addEventListener('keydown', e => {
++        const overlay = $('#forceReadOverlay');
++        if (e.key !== 'Tab' || !overlay?.classList.contains('is-open')) return;
++        const focusables = $$('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"]), iframe', overlay)
++            .filter(el => el.offsetParent !== null);
++        if (!focusables.length) return;
++        const first = focusables[0], last = focusables[focusables.length - 1];
++        if (!overlay.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
++        else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
++        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
++    });
++
+     $('#forceConfirm')?.addEventListener('click', async e => {
+         const btn = e.currentTarget, it = Force.items[Force.idx];
+-        if (!it) return;
++        if (!it || !it.data) return;
+         const orig = btn.innerHTML;
+         btn.disabled = true; btn.innerHTML = '<span class="p-spin"></span> در حال ثبت...';
+         try {
+@@ -363,7 +416,7 @@
+             });
+             if (!r.ok) throw new Error();
+             it.ok = true;
+-            $(`.db-ann[data-guid="${it.guid}"]`)?.classList.remove('db-ann--unread');
++            $(`.db-ann[data-guid="${CSS.escape(String(it.guid))}"]`)?.classList.remove('db-ann--unread');
+             const next = Force.items.findIndex(x => !x.ok);
+             if (next === -1) {
+                 $('#forceReadOverlay').classList.remove('is-open');
+@@ -376,20 +429,23 @@
+ 
+     // ═══ Sessions modal ══════════════════════════════════════════════════
+     let sessPicker = null;
++    let sessSeq = 0;
+     async function loadSessions() {
+         const tbody = $('#sessionTableBody');
++        const seq = ++sessSeq;
+         tbody.innerHTML = '<tr><td colspan="3" class="sess-empty-row"><span class="p-spin"></span></td></tr>';
+         try {
+             const { from, to } = sessPicker.getRange();
+-            const q = `fromDate=${from ? jalaaliToStr(from) : ''}&toDate=${to ? jalaaliToStr(to) : ''}`;
++            const q = `fromDate=${from ? encodeURIComponent(jalaaliToStr(from)) : ''}&toDate=${to ? encodeURIComponent(jalaaliToStr(to)) : ''}`;
+             const res = await getJson(`/Grants/GetSessions?${q}`);
++            if (seq !== sessSeq) return; // نتیجه‌ی بازه‌ی قدیمی‌تر
+             const items = res.items || [];
+             tbody.innerHTML = items.length
+                 ? items.map(s => `<tr><td>${escHtml(s.created)}</td>
+                     <td>${s.isSuccessful ? '<span class="p-badge" style="background:#10b9811f;color:#059669">موفق</span>' : '<span class="p-badge" style="background:#ef44441f;color:#dc2626">ناموفق</span>'}</td>
+                     <td dir="ltr" style="text-align:right">${escHtml(s.clientIpAddress)}</td></tr>`).join('')
+                 : '<tr><td colspan="3" class="sess-empty-row">در این بازه سابقه‌ای یافت نشد</td></tr>';
+-        } catch { tbody.innerHTML = '<tr><td colspan="3" class="sess-empty-row">خطا در بارگذاری</td></tr>'; }
++        } catch { if (seq === sessSeq) tbody.innerHTML = '<tr><td colspan="3" class="sess-empty-row">خطا در بارگذاری</td></tr>'; }
+     }
+     function setPreset(days, chip) {
+         const today = jalaaliToday();
+@@ -411,12 +467,15 @@
+     $$('.sess-preset-chip').forEach(c => c.addEventListener('click', () => setPreset(+c.dataset.days, c)));
+ 
+     // ═══ User profiles (impersonation) ═══════════════════════════════════
+-    const UP = { page: 1, search: '', loading: false, hasMore: true, items: [] };
++    const UP = { page: 1, search: '', loading: false, hasMore: true, items: [], seq: 0 };
+     async function loadUsers(append) {
+         const body = $('#upBody');
++        // هر جستجوی جدید شماره‌ی تازه می‌گیرد؛ پاسخ جستجوی قبلی نتیجه‌ی جدید را بازنویسی نمی‌کند
++        const seq = append ? UP.seq : ++UP.seq;
+         UP.loading = true;
+         try {
+             const res = await getJson(`/Grants/GetUsersForProfile?search=${encodeURIComponent(UP.search)}&page=${UP.page}&pageSize=20`);
++            if (seq !== UP.seq) return;
+             UP.hasMore = !!res.hasMore;
+             UP.items = append ? UP.items.concat(res.items) : res.items;
+             if (!UP.items.length) { body.innerHTML = empty('fa-user-slash', 'کاربری یافت نشد'); return; }
+@@ -428,10 +487,16 @@
+                         <div class="db-up__meta"><span>${fa(u.personnelCode)}</span>${u.mainPosition ? `<span>· ${escHtml(u.mainPosition)}</span>` : ''}
+                         ${u.isSuperAdmin ? '<span class="p-badge" style="background:#ef44441f;color:#dc2626">سوپرادمین</span>' : ''}</div>
+                     </div>
+-                    <button type="button" class="p-btn" data-imp="${u.guid}">ورود <i class="fa fa-arrow-left"></i></button>
++                    <button type="button" class="p-btn" data-imp="${escAttr(u.guid)}">ورود <i class="fa fa-arrow-left"></i></button>
+                 </div>`).join('') + (UP.hasMore ? '<div class="p-empty"><span class="p-spin"></span></div>' : '');
+-        } catch { body.innerHTML = errorBox('خطا در بارگذاری کاربران'); }
+-        finally { UP.loading = false; }
++        } catch { if (seq === UP.seq) body.innerHTML = errorBox('خطا در بارگذاری کاربران', 'users'); }
++        finally {
++            if (seq === UP.seq) {
++                UP.loading = false;
++                // اگر صفحه‌ی اول کادر را پر نکرد، رویداد scroll هرگز رخ نمی‌دهد؛ صفحه‌ی بعد همین‌جا خوانده می‌شود
++                if (UP.hasMore && body.scrollHeight <= body.clientHeight + 60 && UP.items.length) { UP.page++; loadUsers(true); }
++            }
++        }
+     }
+     const resetUsers = () => { UP.page = 1; UP.items = []; UP.hasMore = true; $('#upBody').innerHTML = '<div class="p-skel" style="height:56px;margin:8px"></div>'.repeat(4); loadUsers(false); };
+     $('#btnProfiles')?.addEventListener('click', () => { bootstrap.Modal.getOrCreateInstance($('#userProfileModal')).show(); resetUsers(); });
+@@ -478,31 +543,99 @@
+     // ═══ Load all ════════════════════════════════════════════════════════
+     applyPins($('#systemsGrid'));
+ 
+-    // نور دنبال‌کننده‌ی ماوس روی کاشی‌ها
++    // نور دنبال‌کننده‌ی ماوس روی کاشی‌ها (حداکثر یک بار در هر فریم)
++    let glowFrame = 0, glowEvent = null;
+     document.addEventListener('pointermove', e => {
+-        const card = e.target.closest?.('.db-app');
+-        if (!card) return;
+-        const r = card.getBoundingClientRect();
+-        card.style.setProperty('--mx', `${e.clientX - r.left}px`);
+-        card.style.setProperty('--my', `${e.clientY - r.top}px`);
++        glowEvent = e;
++        if (glowFrame) return;
++        glowFrame = requestAnimationFrame(() => {
++            glowFrame = 0;
++            const ev = glowEvent;
++            const card = ev?.target.closest?.('.db-app');
++            if (!card) return;
++            const r = card.getBoundingClientRect();
++            card.style.setProperty('--mx', `${ev.clientX - r.left}px`);
++            card.style.setProperty('--my', `${ev.clientY - r.top}px`);
++        });
+     }, { passive: true });
+ 
+-    document.addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(); });
++    // Enter/Space روی کارت‌های جلسه، اطلاعیه و نظرسنجی (قبلاً فقط کاشی سامانه‌ها با کیبورد باز می‌شد)
++    document.addEventListener('keydown', e => {
++        if (e.key !== 'Enter' && e.key !== ' ') return;
++        const card = e.target.closest?.('.db-meet, .db-ann, .db-survey');
++        if (card && card === e.target) { e.preventDefault(); card.click(); }
++    });
  
 -    load();
 -    async function load() {
++    // «تلاش دوباره» فقط همان بخش را دوباره می‌خواند
++    document.addEventListener('click', e => {
++        const btn = e.target.closest('[data-retry]');
++        if (!btn) return;
++        const key = btn.dataset.retry;
++        if (key === 'force') { const it = Force.items[Force.idx]; if (it) { it.loaded = false; showForce(Force.idx); } return; }
++        if (key === 'users') { resetUsers(); return; }
++        const widget = WIDGETS.find(w => w.key === key);
++        widget ? loadWidget(widget) : load();
++    });
++
 +    // با رسیدن اعلان لحظه‌ای سامانه جلسات (portal-realtime.js)، فقط ویجت جلسات دوباره خوانده می‌شود
 +    let meetingsReloadTimer;
 +    window.addEventListener('portal:notification', e => {
@@ -4172,7 +5545,13 @@ index 8f009e3..df91c31 100644
 +        • هر ویجت درخواست مستقل دارد و به محض رسیدن پاسخش به‌روز می‌شود؛ قبلاً کل داشبورد منتظر کندترین API
 +          (تا ۱۰ ثانیه) می‌ماند.
 +        • خطای یک ویجت فقط همان ویجت را «تلاش دوباره» نشان می‌دهد و داده‌ی قبلی (اگر بود) حفظ می‌شود. */
-+    const CACHE_PREFIX = `epc-dash:${personnelCode}:`;
++    const CACHE_PREFIX = `epc-dash:${cacheScope}:`;
++    // کش سمت‌های دیگر همین کاربر در این تب پاک می‌شود
++    try {
++        Object.keys(sessionStorage)
++            .filter(k => k.startsWith('epc-dash:') && !k.startsWith(CACHE_PREFIX))
++            .forEach(k => sessionStorage.removeItem(k));
++    } catch { /* حالت خصوصی */ }
 +    const readCache = key => { try { return JSON.parse(sessionStorage.getItem(CACHE_PREFIX + key) || 'null'); } catch { return null; } };
 +    const writeCache = (key, value) => { try { sessionStorage.setItem(CACHE_PREFIX + key, JSON.stringify(value)); } catch { /* حجم/حالت خصوصی */ } };
 +
@@ -4363,10 +5742,19 @@ index 980b1f2..2a139d5 100644
  
      return { init, openFolder, goToCrumb, openDocument, download, filter };
 diff --git a/EPC.SSO/wwwroot/js/login.js b/EPC.SSO/wwwroot/js/login.js
-index bb039a7..27080c2 100644
+index bb039a7..4362857 100644
 --- a/EPC.SSO/wwwroot/js/login.js
 +++ b/EPC.SSO/wwwroot/js/login.js
-@@ -67,7 +67,7 @@
+@@ -3,6 +3,8 @@
+    ═══════════════════════════════════════════════════════════════════════ */
+ (function () {
+     'use strict';
++    // صفحه‌ی ورود = پایان نشست قبلی؛ داده‌ی کش‌شده‌ی داشبورد در این تب پاک می‌شود
++    try { Object.keys(sessionStorage).filter(k => k.startsWith('epc-dash:')).forEach(k => sessionStorage.removeItem(k)); } catch { }
+     const $ = (s, r = document) => r.querySelector(s);
+     const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+     const fa = n => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
+@@ -67,7 +69,7 @@
          try {
              const r = await fetch('/Account/RefreshCaptcha', { credentials: 'same-origin', cache: 'no-store' });
              const d = await r.json();
@@ -4375,12 +5763,25 @@ index bb039a7..27080c2 100644
              const inp = $('#EnteredCaptcha');
              inp.value = ''; inp.focus();
          } catch { }
+diff --git a/EPC.SSO/wwwroot/js/page-tour.js b/EPC.SSO/wwwroot/js/page-tour.js
+index 2556c0e..d096c30 100644
+--- a/EPC.SSO/wwwroot/js/page-tour.js
++++ b/EPC.SSO/wwwroot/js/page-tour.js
+@@ -241,7 +241,7 @@ const PageTour = (function () {
+         window.addEventListener('resize', onScrollOrResize);
+         document.addEventListener('keydown', onKeydown);
+ 
+-        if (opts.storageKey) localStorage.setItem(opts.storageKey, '1');
++        if (opts.storageKey) { try { localStorage.setItem(opts.storageKey, '1'); } catch { /* ذخیره‌سازی مسدود */ } }
+         document.getElementById('pageTourFab')?.classList.remove('pt-fab--pulse');
+ 
+         showStep();
 diff --git a/EPC.SSO/wwwroot/js/portal-realtime.js b/EPC.SSO/wwwroot/js/portal-realtime.js
 new file mode 100644
-index 0000000..e8be301
+index 0000000..3c30b1d
 --- /dev/null
 +++ b/EPC.SSO/wwwroot/js/portal-realtime.js
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,56 @@
 +/* ════════════════════════════════════════════════════════════════════════
 +   اعلان‌های لحظه‌ای پرتال (SignalR: /hubs/portal)
 +   ─────────────────────────────────────────────────────────────────────────
@@ -4391,6 +5792,8 @@ index 0000000..e8be301
 +(function () {
 +    'use strict';
 +    if (!window.signalR) return;
++
++    const isHttp = link => { try { return ['http:', 'https:'].includes(new URL(link).protocol); } catch { return false; } };
 +
 +    function show(n) {
 +        const text = n.title ? `${n.title}: ${n.message || ''}` : (n.message || '');
@@ -4403,7 +5806,7 @@ index 0000000..e8be301
 +        // اعلان مرورگر (فقط اگر کاربر قبلاً اجازه داده باشد و صفحه در پس‌زمینه است)
 +        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
 +            const notification = new Notification(n.title || 'پرتال', { body: n.message || '', dir: 'rtl', lang: 'fa' });
-+            if (n.link) notification.onclick = () => window.open(n.link, '_blank', 'noopener');
++            if (isHttp(n.link)) notification.onclick = () => window.open(n.link, '_blank', 'noopener');
 +        }
 +    }
 +
@@ -4418,11 +5821,15 @@ index 0000000..e8be301
 +        window.dispatchEvent(new CustomEvent('portal:notification', { detail: n }));
 +    });
 +
++    let stopped = false;
 +    async function start(delay = 0) {
++        if (stopped) return;
 +        if (delay) await new Promise(r => setTimeout(r, delay));
 +        try {
 +            await connection.start();
-+        } catch {
++        } catch (e) {
++            // نشست منقضی شده: تلاش دوباره بی‌فایده است (با ورود مجدد صفحه دوباره بارگذاری می‌شود)
++            if (e?.statusCode === 401 || e?.statusCode === 403) { stopped = true; return; }
 +            // سرور در دسترس نیست؛ با تأخیر بیشتر دوباره تلاش می‌شود (حداکثر هر ۲ دقیقه)
 +            start(Math.min((delay || 2000) * 2, 120000));
 +        }
@@ -4440,6 +5847,37 @@ index 0000000..849396c
 +var t,e;t=self,e=()=>(()=>{var t={d:(e,s)=>{for(var i in s)t.o(s,i)&&!t.o(e,i)&&Object.defineProperty(e,i,{enumerable:!0,get:s[i]})}};t.g=function(){if("object"==typeof globalThis)return globalThis;try{return this||new Function("return this")()}catch(t){if("object"==typeof window)return window}}(),t.o=(t,e)=>Object.prototype.hasOwnProperty.call(t,e),t.r=t=>{"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(t,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(t,"t",{value:!0})};var e,s={};t.r(s),t.d(s,{AbortError:()=>r,DefaultHttpClient:()=>H,HttpClient:()=>d,HttpError:()=>i,HttpResponse:()=>u,HttpTransportType:()=>F,HubConnection:()=>q,HubConnectionBuilder:()=>tt,HubConnectionState:()=>A,JsonHubProtocol:()=>Y,LogLevel:()=>e,MessageType:()=>x,NullLogger:()=>f,Subject:()=>U,TimeoutError:()=>n,TransferFormat:()=>B,VERSION:()=>p});class i extends Error{constructor(t,e){const s=new.target.prototype;super(`${t}: Status code '${e}'`),this.statusCode=e,this.__proto__=s}}class n extends Error{constructor(t="A timeout occurred."){const e=new.target.prototype;super(t),this.__proto__=e}}class r extends Error{constructor(t="An abort occurred."){const e=new.target.prototype;super(t),this.__proto__=e}}class o extends Error{constructor(t,e){const s=new.target.prototype;super(t),this.transport=e,this.errorType="UnsupportedTransportError",this.__proto__=s}}class h extends Error{constructor(t,e){const s=new.target.prototype;super(t),this.transport=e,this.errorType="DisabledTransportError",this.__proto__=s}}class c extends Error{constructor(t,e){const s=new.target.prototype;super(t),this.transport=e,this.errorType="FailedToStartTransportError",this.__proto__=s}}class a extends Error{constructor(t){const e=new.target.prototype;super(t),this.errorType="FailedToNegotiateWithServerError",this.__proto__=e}}class l extends Error{constructor(t,e){const s=new.target.prototype;super(t),this.innerErrors=e,this.__proto__=s}}class u{constructor(t,e,s){this.statusCode=t,this.statusText=e,this.content=s}}class d{get(t,e){return this.send({...e,method:"GET",url:t})}post(t,e){return this.send({...e,method:"POST",url:t})}delete(t,e){return this.send({...e,method:"DELETE",url:t})}getCookieString(t){return""}}!function(t){t[t.Trace=0]="Trace",t[t.Debug=1]="Debug",t[t.Information=2]="Information",t[t.Warning=3]="Warning",t[t.Error=4]="Error",t[t.Critical=5]="Critical",t[t.None=6]="None"}(e||(e={}));class f{constructor(){}log(t,e){}}f.instance=new f;const p="8.0.29";class w{static isRequired(t,e){if(null==t)throw new Error(`The '${e}' argument is required.`)}static isNotEmpty(t,e){if(!t||t.match(/^\s*$/))throw new Error(`The '${e}' argument should not be empty.`)}static isIn(t,e,s){if(!(t in e))throw new Error(`Unknown ${s} value: ${t}.`)}}class g{static get isBrowser(){return!g.isNode&&"object"==typeof window&&"object"==typeof window.document}static get isWebWorker(){return!g.isNode&&"object"==typeof self&&"importScripts"in self}static get isReactNative(){return!g.isNode&&"object"==typeof window&&void 0===window.document}static get isNode(){return"undefined"!=typeof process&&process.release&&"node"===process.release.name}}function m(t,e){let s="";return y(t)?(s=`Binary data of length ${t.byteLength}`,e&&(s+=`. Content: '${function(t){const e=new Uint8Array(t);let s="";return e.forEach(t=>{s+=`0x${t<16?"0":""}${t.toString(16)} `}),s.substr(0,s.length-1)}(t)}'`)):"string"==typeof t&&(s=`String data of length ${t.length}`,e&&(s+=`. Content: '${t}'`)),s}function y(t){return t&&"undefined"!=typeof ArrayBuffer&&(t instanceof ArrayBuffer||t.constructor&&"ArrayBuffer"===t.constructor.name)}async function b(t,s,i,n,r,o){const h={},[c,a]=$();h[c]=a,t.log(e.Trace,`(${s} transport) sending data. ${m(r,o.logMessageContent)}.`);const l=y(r)?"arraybuffer":"text",u=await i.post(n,{content:r,headers:{...h,...o.headers},responseType:l,timeout:o.timeout,withCredentials:o.withCredentials});t.log(e.Trace,`(${s} transport) request complete. Response status: ${u.statusCode}.`)}class v{constructor(t,e){this.i=t,this.h=e}dispose(){const t=this.i.observers.indexOf(this.h);t>-1&&this.i.observers.splice(t,1),0===this.i.observers.length&&this.i.cancelCallback&&this.i.cancelCallback().catch(t=>{})}}class E{constructor(t){this.l=t,this.out=console}log(t,s){if(t>=this.l){const i=`[${(new Date).toISOString()}] ${e[t]}: ${s}`;switch(t){case e.Critical:case e.Error:this.out.error(i);break;case e.Warning:this.out.warn(i);break;case e.Information:this.out.info(i);break;default:this.out.log(i)}}}}function $(){let t="X-SignalR-User-Agent";return g.isNode&&(t="User-Agent"),[t,C(p,S(),g.isNode?"NodeJS":"Browser",k())]}function C(t,e,s,i){let n="Microsoft SignalR/";const r=t.split(".");return n+=`${r[0]}.${r[1]}`,n+=` (${t}; `,n+=e&&""!==e?`${e}; `:"Unknown OS; ",n+=`${s}`,n+=i?`; ${i}`:"; Unknown Runtime Version",n+=")",n}function S(){if(!g.isNode)return"";switch(process.platform){case"win32":return"Windows NT";case"darwin":return"macOS";case"linux":return"Linux";default:return process.platform}}function k(){if(g.isNode)return process.versions.node}function P(t){return t.stack?t.stack:t.message?t.message:`${t}`}class T extends d{constructor(e){if(super(),this.u=e,"undefined"==typeof fetch||g.isNode){const t=require;this.p=new(t("tough-cookie").CookieJar),"undefined"==typeof fetch?this.m=t("node-fetch"):this.m=fetch,this.m=t("fetch-cookie")(this.m,this.p)}else this.m=fetch.bind(function(){if("undefined"!=typeof globalThis)return globalThis;if("undefined"!=typeof self)return self;if("undefined"!=typeof window)return window;if(void 0!==t.g)return t.g;throw new Error("could not find global")}());if("undefined"==typeof AbortController){const t=require;this.v=t("abort-controller")}else this.v=AbortController}async send(t){if(t.abortSignal&&t.abortSignal.aborted)throw new r;if(!t.method)throw new Error("No method defined.");if(!t.url)throw new Error("No url defined.");const s=new this.v;let o;t.abortSignal&&(t.abortSignal.onabort=()=>{s.abort(),o=new r});let h,c=null;if(t.timeout){const i=t.timeout;c=setTimeout(()=>{s.abort(),this.u.log(e.Warning,"Timeout from HTTP request."),o=new n},i)}""===t.content&&(t.content=void 0),t.content&&(t.headers=t.headers||{},y(t.content)?t.headers["Content-Type"]="application/octet-stream":t.headers["Content-Type"]="text/plain;charset=UTF-8");try{h=await this.m(t.url,{body:t.content,cache:"no-cache",credentials:!0===t.withCredentials?"include":"same-origin",headers:{"X-Requested-With":"XMLHttpRequest",...t.headers},method:t.method,mode:"cors",redirect:"follow",signal:s.signal})}catch(t){if(o)throw o;throw this.u.log(e.Warning,`Error from HTTP request. ${t}.`),t}finally{c&&clearTimeout(c),t.abortSignal&&(t.abortSignal.onabort=null)}if(!h.ok){const t=await I(h,"text");throw new i(t||h.statusText,h.status)}const a=I(h,t.responseType),l=await a;return new u(h.status,h.statusText,l)}getCookieString(t){let e="";return g.isNode&&this.p&&this.p.getCookies(t,(t,s)=>e=s.join("; ")),e}}function I(t,e){let s;switch(e){case"arraybuffer":s=t.arrayBuffer();break;case"text":default:s=t.text();break;case"blob":case"document":case"json":throw new Error(`${e} is not supported.`)}return s}class _ extends d{constructor(t){super(),this.u=t}send(t){return t.abortSignal&&t.abortSignal.aborted?Promise.reject(new r):t.method?t.url?new Promise((s,o)=>{const h=new XMLHttpRequest;h.open(t.method,t.url,!0),h.withCredentials=void 0===t.withCredentials||t.withCredentials,h.setRequestHeader("X-Requested-With","XMLHttpRequest"),""===t.content&&(t.content=void 0),t.content&&(y(t.content)?h.setRequestHeader("Content-Type","application/octet-stream"):h.setRequestHeader("Content-Type","text/plain;charset=UTF-8"));const c=t.headers;c&&Object.keys(c).forEach(t=>{h.setRequestHeader(t,c[t])}),t.responseType&&(h.responseType=t.responseType),t.abortSignal&&(t.abortSignal.onabort=()=>{h.abort(),o(new r)}),t.timeout&&(h.timeout=t.timeout),h.onload=()=>{t.abortSignal&&(t.abortSignal.onabort=null),h.status>=200&&h.status<300?s(new u(h.status,h.statusText,h.response||h.responseText)):o(new i(h.response||h.responseText||h.statusText,h.status))},h.onerror=()=>{this.u.log(e.Warning,`Error from HTTP request. ${h.status}: ${h.statusText}.`),o(new i(h.statusText,h.status))},h.ontimeout=()=>{this.u.log(e.Warning,"Timeout from HTTP request."),o(new n)},h.send(t.content)}):Promise.reject(new Error("No url defined.")):Promise.reject(new Error("No method defined."))}}class H extends d{constructor(t){if(super(),"undefined"!=typeof fetch||g.isNode)this.$=new T(t);else{if("undefined"==typeof XMLHttpRequest)throw new Error("No usable HttpClient found.");this.$=new _(t)}}send(t){return t.abortSignal&&t.abortSignal.aborted?Promise.reject(new r):t.method?t.url?this.$.send(t):Promise.reject(new Error("No url defined.")):Promise.reject(new Error("No method defined."))}getCookieString(t){return this.$.getCookieString(t)}}class D{static write(t){return`${t}${D.RecordSeparator}`}static parse(t){if(t[t.length-1]!==D.RecordSeparator)throw new Error("Message is incomplete.");const e=t.split(D.RecordSeparator);return e.pop(),e}}D.RecordSeparatorCode=30,D.RecordSeparator=String.fromCharCode(D.RecordSeparatorCode);class R{writeHandshakeRequest(t){return D.write(JSON.stringify(t))}parseHandshakeResponse(t){let e,s;if(y(t)){const i=new Uint8Array(t),n=i.indexOf(D.RecordSeparatorCode);if(-1===n)throw new Error("Message is incomplete.");const r=n+1;e=String.fromCharCode.apply(null,Array.prototype.slice.call(i.slice(0,r))),s=i.byteLength>r?i.slice(r).buffer:null}else{const i=t,n=i.indexOf(D.RecordSeparator);if(-1===n)throw new Error("Message is incomplete.");const r=n+1;e=i.substring(0,r),s=i.length>r?i.substring(r):null}const i=D.parse(e),n=JSON.parse(i[0]);if(n.type)throw new Error("Expected a handshake response from the server.");return[s,n]}}var x,A;!function(t){t[t.Invocation=1]="Invocation",t[t.StreamItem=2]="StreamItem",t[t.Completion=3]="Completion",t[t.StreamInvocation=4]="StreamInvocation",t[t.CancelInvocation=5]="CancelInvocation",t[t.Ping=6]="Ping",t[t.Close=7]="Close",t[t.Ack=8]="Ack",t[t.Sequence=9]="Sequence"}(x||(x={}));class U{constructor(){this.observers=[]}next(t){for(const e of this.observers)e.next(t)}error(t){for(const e of this.observers)e.error&&e.error(t)}complete(){for(const t of this.observers)t.complete&&t.complete()}subscribe(t){return this.observers.push(t),new v(this,t)}}class L{constructor(t,e,s){this.C=1e5,this.S=[],this.k=0,this.P=!1,this.T=1,this.I=0,this._=0,this.H=!1,this.D=t,this.R=e,this.C=s}async A(t){const e=this.D.writeMessage(t);let s=Promise.resolve();if(this.U(t)){this.k++;let t=()=>{},i=()=>{};y(e)?this._+=e.byteLength:this._+=e.length,this._>=this.C&&(s=new Promise((e,s)=>{t=e,i=s})),this.S.push(new N(e,this.k,t,i))}try{this.H||await this.R.send(e)}catch{this.L()}await s}N(t){let e=-1;for(let s=0;s<this.S.length;s++){const i=this.S[s];if(i.q<=t.sequenceId)e=s,y(i.M)?this._-=i.M.byteLength:this._-=i.M.length,i.j();else{if(!(this._<this.C))break;i.j()}}-1!==e&&(this.S=this.S.slice(e+1))}W(t){if(this.P)return t.type===x.Sequence&&(this.P=!1,!0);if(!this.U(t))return!0;const e=this.T;return this.T++,e<=this.I?(e===this.I&&this.O(),!1):(this.I=e,this.O(),!0)}F(t){t.sequenceId>this.T?this.R.stop(new Error("Sequence ID greater than amount of messages we've received.")):this.T=t.sequenceId}L(){this.H=!0,this.P=!0}async B(){const t=0!==this.S.length?this.S[0].q:this.k+1;await this.R.send(this.D.writeMessage({type:x.Sequence,sequenceId:t}));const e=this.S;for(const t of e)await this.R.send(t.M);this.H=!1}X(t){null!=t||(t=new Error("Unable to reconnect to server."));for(const e of this.S)e.J(t)}U(t){switch(t.type){case x.Invocation:case x.StreamItem:case x.Completion:case x.StreamInvocation:case x.CancelInvocation:return!0;case x.Close:case x.Sequence:case x.Ping:case x.Ack:return!1}}O(){void 0===this.V&&(this.V=setTimeout(async()=>{try{this.H||await this.R.send(this.D.writeMessage({type:x.Ack,sequenceId:this.I}))}catch{}clearTimeout(this.V),this.V=void 0},1e3))}}class N{constructor(t,e,s,i){this.M=t,this.q=e,this.j=s,this.J=i}}!function(t){t.Disconnected="Disconnected",t.Connecting="Connecting",t.Connected="Connected",t.Disconnecting="Disconnecting",t.Reconnecting="Reconnecting"}(A||(A={}));class q{static create(t,e,s,i,n,r,o){return new q(t,e,s,i,n,r,o)}constructor(t,s,i,n,r,o,h){this.K=0,this.G=()=>{this.u.log(e.Warning,"The page is being frozen, this will likely lead to the connection being closed and messages being lost. For more information see the docs at https://learn.microsoft.com/aspnet/core/signalr/javascript-client#bsleep")},w.isRequired(t,"connection"),w.isRequired(s,"logger"),w.isRequired(i,"protocol"),this.serverTimeoutInMilliseconds=null!=r?r:3e4,this.keepAliveIntervalInMilliseconds=null!=o?o:15e3,this.Y=null!=h?h:1e5,this.u=s,this.D=i,this.connection=t,this.Z=n,this.tt=new R,this.connection.onreceive=t=>this.et(t),this.connection.onclose=t=>this.st(t),this.it={},this.nt={},this.rt=[],this.ot=[],this.ht=[],this.ct=0,this.lt=!1,this.ut=A.Disconnected,this.dt=!1,this.ft=this.D.writeMessage({type:x.Ping})}get state(){return this.ut}get connectionId(){return this.connection&&this.connection.connectionId||null}get baseUrl(){return this.connection.baseUrl||""}set baseUrl(t){if(this.ut!==A.Disconnected&&this.ut!==A.Reconnecting)throw new Error("The HubConnection must be in the Disconnected or Reconnecting state to change the url.");if(!t)throw new Error("The HubConnection url must be a valid url.");this.connection.baseUrl=t}start(){return this.wt=this.gt(),this.wt}async gt(){if(this.ut!==A.Disconnected)return Promise.reject(new Error("Cannot start a HubConnection that is not in the 'Disconnected' state."));this.ut=A.Connecting,this.u.log(e.Debug,"Starting HubConnection.");try{await this.yt(),g.isBrowser&&window.document.addEventListener("freeze",this.G),this.ut=A.Connected,this.dt=!0,this.u.log(e.Debug,"HubConnection connected successfully.")}catch(t){return this.ut=A.Disconnected,this.u.log(e.Debug,`HubConnection failed to start successfully because of error '${t}'.`),Promise.reject(t)}}async yt(){this.bt=void 0,this.lt=!1;const t=new Promise((t,e)=>{this.vt=t,this.Et=e});await this.connection.start(this.D.transferFormat);try{let s=this.D.version;this.connection.features.reconnect||(s=1);const i={protocol:this.D.name,version:s};if(this.u.log(e.Debug,"Sending handshake request."),await this.$t(this.tt.writeHandshakeRequest(i)),this.u.log(e.Information,`Using HubProtocol '${this.D.name}'.`),this.Ct(),this.St(),this.kt(),await t,this.bt)throw this.bt;!!this.connection.features.reconnect&&(this.Pt=new L(this.D,this.connection,this.Y),this.connection.features.disconnected=this.Pt.L.bind(this.Pt),this.connection.features.resend=()=>{if(this.Pt)return this.Pt.B()}),this.connection.features.inherentKeepAlive||await this.$t(this.ft)}catch(t){throw this.u.log(e.Debug,`Hub handshake failed with error '${t}' during start(). Stopping HubConnection.`),this.Ct(),this.Tt(),await this.connection.stop(t),t}}async stop(){const t=this.wt;this.connection.features.reconnect=!1,this.It=this._t(),await this.It;try{await t}catch(t){}}_t(t){if(this.ut===A.Disconnected)return this.u.log(e.Debug,`Call to HubConnection.stop(${t}) ignored because it is already in the disconnected state.`),Promise.resolve();if(this.ut===A.Disconnecting)return this.u.log(e.Debug,`Call to HttpConnection.stop(${t}) ignored because the connection is already in the disconnecting state.`),this.It;const s=this.ut;return this.ut=A.Disconnecting,this.u.log(e.Debug,"Stopping HubConnection."),this.Ht?(this.u.log(e.Debug,"Connection stopped during reconnect delay. Done reconnecting."),clearTimeout(this.Ht),this.Ht=void 0,this.Dt(),Promise.resolve()):(s===A.Connected&&this.Rt(),this.Ct(),this.Tt(),this.bt=t||new r("The connection was stopped before the hub handshake could complete."),this.connection.stop(t))}async Rt(){try{await this.xt(this.At())}catch{}}stream(t,...e){const[s,i]=this.Ut(e),n=this.Lt(t,e,i);let r;const o=new U;return o.cancelCallback=()=>{const t=this.Nt(n.invocationId);return delete this.it[n.invocationId],r.then(()=>this.xt(t))},this.it[n.invocationId]=(t,e)=>{e?o.error(e):t&&(t.type===x.Completion?t.error?o.error(new Error(t.error)):o.complete():o.next(t.item))},r=this.xt(n).catch(t=>{o.error(t),delete this.it[n.invocationId]}),this.qt(s,r),o}$t(t){return this.kt(),this.connection.send(t)}xt(t){return this.Pt?this.Pt.A(t):this.$t(this.D.writeMessage(t))}send(t,...e){const[s,i]=this.Ut(e),n=this.xt(this.Mt(t,e,!0,i));return this.qt(s,n),n}invoke(t,...e){const[s,i]=this.Ut(e),n=this.Mt(t,e,!1,i);return new Promise((t,e)=>{this.it[n.invocationId]=(s,i)=>{i?e(i):s&&(s.type===x.Completion?s.error?e(new Error(s.error)):t(s.result):e(new Error(`Unexpected message type: ${s.type}`)))};const i=this.xt(n).catch(t=>{e(t),delete this.it[n.invocationId]});this.qt(s,i)})}on(t,e){t&&e&&(t=t.toLowerCase(),this.nt[t]||(this.nt[t]=[]),-1===this.nt[t].indexOf(e)&&this.nt[t].push(e))}off(t,e){if(!t)return;t=t.toLowerCase();const s=this.nt[t];if(s)if(e){const i=s.indexOf(e);-1!==i&&(s.splice(i,1),0===s.length&&delete this.nt[t])}else delete this.nt[t]}onclose(t){t&&this.rt.push(t)}onreconnecting(t){t&&this.ot.push(t)}onreconnected(t){t&&this.ht.push(t)}et(t){if(this.Ct(),this.lt||(t=this.jt(t),this.lt=!0),t){const s=this.D.parseMessages(t,this.u);for(const t of s)if(!this.Pt||this.Pt.W(t))switch(t.type){case x.Invocation:this.Wt(t).catch(t=>{this.u.log(e.Error,`Invoke client method threw error: ${P(t)}`)});break;case x.StreamItem:case x.Completion:{const s=this.it[t.invocationId];if(s){t.type===x.Completion&&delete this.it[t.invocationId];try{s(t)}catch(t){this.u.log(e.Error,`Stream callback threw error: ${P(t)}`)}}break}case x.Ping:break;case x.Close:{this.u.log(e.Information,"Close message received from server.");const s=t.error?new Error("Server returned an error on close: "+t.error):void 0;!0===t.allowReconnect?this.connection.stop(s):this.It=this._t(s);break}case x.Ack:this.Pt&&this.Pt.N(t);break;case x.Sequence:this.Pt&&this.Pt.F(t);break;default:this.u.log(e.Warning,`Invalid message type: ${t.type}.`)}}this.St()}jt(t){let s,i;try{[i,s]=this.tt.parseHandshakeResponse(t)}catch(t){const s="Error parsing handshake response: "+t;this.u.log(e.Error,s);const i=new Error(s);throw this.Et(i),i}if(s.error){const t="Server returned handshake error: "+s.error;this.u.log(e.Error,t);const i=new Error(t);throw this.Et(i),i}return this.u.log(e.Debug,"Server handshake complete."),this.vt(),i}kt(){this.connection.features.inherentKeepAlive||(this.K=(new Date).getTime()+this.keepAliveIntervalInMilliseconds,this.Tt())}St(){if(!(this.connection.features&&this.connection.features.inherentKeepAlive||(this.Ot=setTimeout(()=>this.serverTimeout(),this.serverTimeoutInMilliseconds),void 0!==this.Ft))){let t=this.K-(new Date).getTime();t<0&&(t=0),this.Ft=setTimeout(async()=>{if(this.ut===A.Connected)try{await this.$t(this.ft)}catch{this.Tt()}},t)}}serverTimeout(){this.connection.stop(new Error("Server timeout elapsed without receiving a message from the server."))}async Wt(t){const s=t.target.toLowerCase(),i=this.nt[s];if(!i)return this.u.log(e.Warning,`No client method with the name '${s}' found.`),void(t.invocationId&&(this.u.log(e.Warning,`No result given for '${s}' method and invocation ID '${t.invocationId}'.`),await this.xt(this.Bt(t.invocationId,"Client didn't provide a result.",null))));const n=i.slice(),r=!!t.invocationId;let o,h,c;for(const i of n)try{const n=o;o=await i.apply(this,t.arguments),r&&o&&n&&(this.u.log(e.Error,`Multiple results provided for '${s}'. Sending error to server.`),c=this.Bt(t.invocationId,"Client provided multiple results.",null)),h=void 0}catch(t){h=t,this.u.log(e.Error,`A callback for the method '${s}' threw error '${t}'.`)}c?await this.xt(c):r?(h?c=this.Bt(t.invocationId,`${h}`,null):void 0!==o?c=this.Bt(t.invocationId,null,o):(this.u.log(e.Warning,`No result given for '${s}' method and invocation ID '${t.invocationId}'.`),c=this.Bt(t.invocationId,"Client didn't provide a result.",null)),await this.xt(c)):o&&this.u.log(e.Error,`Result given for '${s}' method but server is not expecting a result.`)}st(t){this.u.log(e.Debug,`HubConnection.connectionClosed(${t}) called while in state ${this.ut}.`),this.bt=this.bt||t||new r("The underlying connection was closed before the hub handshake could complete."),this.vt&&this.vt(),this.Xt(t||new Error("Invocation canceled due to the underlying connection being closed.")),this.Ct(),this.Tt(),this.ut===A.Disconnecting?this.Dt(t):this.ut===A.Connected&&this.Z?this.Jt(t):this.ut===A.Connected&&this.Dt(t)}Dt(t){if(this.dt){this.ut=A.Disconnected,this.dt=!1,this.Pt&&(this.Pt.X(null!=t?t:new Error("Connection closed.")),this.Pt=void 0),g.isBrowser&&window.document.removeEventListener("freeze",this.G);try{this.rt.forEach(e=>e.apply(this,[t]))}catch(s){this.u.log(e.Error,`An onclose callback called with error '${t}' threw error '${s}'.`)}}}async Jt(t){const s=Date.now();let i=0,n=void 0!==t?t:new Error("Attempting to reconnect due to a unknown error."),r=this.zt(i++,0,n);if(null===r)return this.u.log(e.Debug,"Connection not reconnecting because the IRetryPolicy returned null on the first reconnect attempt."),void this.Dt(t);if(this.ut=A.Reconnecting,t?this.u.log(e.Information,`Connection reconnecting because of error '${t}'.`):this.u.log(e.Information,"Connection reconnecting."),0!==this.ot.length){try{this.ot.forEach(e=>e.apply(this,[t]))}catch(s){this.u.log(e.Error,`An onreconnecting callback called with error '${t}' threw error '${s}'.`)}if(this.ut!==A.Reconnecting)return void this.u.log(e.Debug,"Connection left the reconnecting state in onreconnecting callback. Done reconnecting.")}for(;null!==r;){if(this.u.log(e.Information,`Reconnect attempt number ${i} will start in ${r} ms.`),await new Promise(t=>{this.Ht=setTimeout(t,r)}),this.Ht=void 0,this.ut!==A.Reconnecting)return void this.u.log(e.Debug,"Connection left the reconnecting state during reconnect delay. Done reconnecting.");try{if(await this.yt(),this.ut=A.Connected,this.u.log(e.Information,"HubConnection reconnected successfully."),0!==this.ht.length)try{this.ht.forEach(t=>t.apply(this,[this.connection.connectionId]))}catch(t){this.u.log(e.Error,`An onreconnected callback called with connectionId '${this.connection.connectionId}; threw error '${t}'.`)}return}catch(t){if(this.u.log(e.Information,`Reconnect attempt failed because of error '${t}'.`),this.ut!==A.Reconnecting)return this.u.log(e.Debug,`Connection moved to the '${this.ut}' from the reconnecting state during reconnect attempt. Done reconnecting.`),void(this.ut===A.Disconnecting&&this.Dt());n=t instanceof Error?t:new Error(t.toString()),r=this.zt(i++,Date.now()-s,n)}}this.u.log(e.Information,`Reconnect retries have been exhausted after ${Date.now()-s} ms and ${i} failed attempts. Connection disconnecting.`),this.Dt()}zt(t,s,i){try{return this.Z.nextRetryDelayInMilliseconds({elapsedMilliseconds:s,previousRetryCount:t,retryReason:i})}catch(i){return this.u.log(e.Error,`IRetryPolicy.nextRetryDelayInMilliseconds(${t}, ${s}) threw error '${i}'.`),null}}Xt(t){const s=this.it;this.it={},Object.keys(s).forEach(i=>{const n=s[i];try{n(null,t)}catch(s){this.u.log(e.Error,`Stream 'error' callback called with '${t}' threw error: ${P(s)}`)}})}Tt(){this.Ft&&(clearTimeout(this.Ft),this.Ft=void 0)}Ct(){this.Ot&&clearTimeout(this.Ot)}Mt(t,e,s,i){if(s)return 0!==i.length?{arguments:e,streamIds:i,target:t,type:x.Invocation}:{arguments:e,target:t,type:x.Invocation};{const s=this.ct;return this.ct++,0!==i.length?{arguments:e,invocationId:s.toString(),streamIds:i,target:t,type:x.Invocation}:{arguments:e,invocationId:s.toString(),target:t,type:x.Invocation}}}qt(t,e){if(0!==t.length){e||(e=Promise.resolve());for(const s in t)t[s].subscribe({complete:()=>{e=e.then(()=>this.xt(this.Bt(s)))},error:t=>{let i;i=t instanceof Error?t.message:t&&t.toString?t.toString():"Unknown error",e=e.then(()=>this.xt(this.Bt(s,i)))},next:t=>{e=e.then(()=>this.xt(this.Vt(s,t)))}})}}Ut(t){const e=[],s=[];for(let i=0;i<t.length;i++){const n=t[i];if(this.Kt(n)){const r=this.ct;this.ct++,e[r]=n,s.push(r.toString()),t.splice(i,1)}}return[e,s]}Kt(t){return t&&t.subscribe&&"function"==typeof t.subscribe}Lt(t,e,s){const i=this.ct;return this.ct++,0!==s.length?{arguments:e,invocationId:i.toString(),streamIds:s,target:t,type:x.StreamInvocation}:{arguments:e,invocationId:i.toString(),target:t,type:x.StreamInvocation}}Nt(t){return{invocationId:t,type:x.CancelInvocation}}Vt(t,e){return{invocationId:t,item:e,type:x.StreamItem}}Bt(t,e,s){return e?{error:e,invocationId:t,type:x.Completion}:{invocationId:t,result:s,type:x.Completion}}At(){return{type:x.Close}}}const M=[0,2e3,1e4,3e4,null];class j{constructor(t){this.Gt=void 0!==t?[...t,null]:M}nextRetryDelayInMilliseconds(t){return this.Gt[t.previousRetryCount]}}class W{}W.Authorization="Authorization",W.Cookie="Cookie";class O extends d{constructor(t,e){super(),this.Qt=t,this.Yt=e}async send(t){let e=!0;this.Yt&&(!this.Zt||t.url&&t.url.indexOf("/negotiate?")>0)&&(e=!1,this.Zt=await this.Yt()),this.te(t);const s=await this.Qt.send(t);return e&&401===s.statusCode&&this.Yt?(this.Zt=await this.Yt(),this.te(t),await this.Qt.send(t)):s}te(t){t.headers||(t.headers={}),this.Zt?t.headers[W.Authorization]=`Bearer ${this.Zt}`:this.Yt&&t.headers[W.Authorization]&&delete t.headers[W.Authorization]}getCookieString(t){return this.Qt.getCookieString(t)}}var F,B;!function(t){t[t.None=0]="None",t[t.WebSockets=1]="WebSockets",t[t.ServerSentEvents=2]="ServerSentEvents",t[t.LongPolling=4]="LongPolling"}(F||(F={})),function(t){t[t.Text=1]="Text",t[t.Binary=2]="Binary"}(B||(B={}));class X{constructor(){this.ee=!1,this.onabort=null}abort(){this.ee||(this.ee=!0,this.onabort&&this.onabort())}get signal(){return this}get aborted(){return this.ee}}class J{get pollAborted(){return this.se.aborted}constructor(t,e,s){this.$=t,this.u=e,this.se=new X,this.ie=s,this.ne=!1,this.onreceive=null,this.onclose=null}async connect(t,s){if(w.isRequired(t,"url"),w.isRequired(s,"transferFormat"),w.isIn(s,B,"transferFormat"),this.re=t,this.u.log(e.Trace,"(LongPolling transport) Connecting."),s===B.Binary&&"undefined"!=typeof XMLHttpRequest&&"string"!=typeof(new XMLHttpRequest).responseType)throw new Error("Binary protocols over XmlHttpRequest not implementing advanced features are not supported.");const[n,r]=$(),o={[n]:r,...this.ie.headers},h={abortSignal:this.se.signal,headers:o,timeout:1e5,withCredentials:this.ie.withCredentials};s===B.Binary&&(h.responseType="arraybuffer");const c=`${t}&_=${Date.now()}`;this.u.log(e.Trace,`(LongPolling transport) polling: ${c}.`);const a=await this.$.get(c,h);200!==a.statusCode?(this.u.log(e.Error,`(LongPolling transport) Unexpected response code: ${a.statusCode}.`),this.oe=new i(a.statusText||"",a.statusCode),this.ne=!1):this.ne=!0,this.he=this.ce(this.re,h)}async ce(t,s){try{for(;this.ne;)try{const n=`${t}&_=${Date.now()}`;this.u.log(e.Trace,`(LongPolling transport) polling: ${n}.`);const r=await this.$.get(n,s);204===r.statusCode?(this.u.log(e.Information,"(LongPolling transport) Poll terminated by server."),this.ne=!1):200!==r.statusCode?(this.u.log(e.Error,`(LongPolling transport) Unexpected response code: ${r.statusCode}.`),this.oe=new i(r.statusText||"",r.statusCode),this.ne=!1):r.content?(this.u.log(e.Trace,`(LongPolling transport) data received. ${m(r.content,this.ie.logMessageContent)}.`),this.onreceive&&this.onreceive(r.content)):this.u.log(e.Trace,"(LongPolling transport) Poll timed out, reissuing.")}catch(t){this.ne?t instanceof n?this.u.log(e.Trace,"(LongPolling transport) Poll timed out, reissuing."):(this.oe=t,this.ne=!1):this.u.log(e.Trace,`(LongPolling transport) Poll errored after shutdown: ${t.message}`)}}finally{this.u.log(e.Trace,"(LongPolling transport) Polling complete."),this.pollAborted||this.ae()}}async send(t){return this.ne?b(this.u,"LongPolling",this.$,this.re,t,this.ie):Promise.reject(new Error("Cannot send until the transport is connected"))}async stop(){this.u.log(e.Trace,"(LongPolling transport) Stopping polling."),this.ne=!1,this.se.abort();try{await this.he,this.u.log(e.Trace,`(LongPolling transport) sending DELETE request to ${this.re}.`);const t={},[s,n]=$();t[s]=n;const r={headers:{...t,...this.ie.headers},timeout:this.ie.timeout,withCredentials:this.ie.withCredentials};let o;try{await this.$.delete(this.re,r)}catch(t){o=t}o?o instanceof i&&(404===o.statusCode?this.u.log(e.Trace,"(LongPolling transport) A 404 response was returned from sending a DELETE request."):this.u.log(e.Trace,`(LongPolling transport) Error sending a DELETE request: ${o}`)):this.u.log(e.Trace,"(LongPolling transport) DELETE request accepted.")}finally{this.u.log(e.Trace,"(LongPolling transport) Stop finished."),this.ae()}}ae(){if(this.onclose){let t="(LongPolling transport) Firing onclose event.";this.oe&&(t+=" Error: "+this.oe),this.u.log(e.Trace,t),this.onclose(this.oe)}}}class z{constructor(t,e,s,i){this.$=t,this.Zt=e,this.u=s,this.ie=i,this.onreceive=null,this.onclose=null}async connect(t,s){return w.isRequired(t,"url"),w.isRequired(s,"transferFormat"),w.isIn(s,B,"transferFormat"),this.u.log(e.Trace,"(SSE transport) Connecting."),this.re=t,this.Zt&&(t+=(t.indexOf("?")<0?"?":"&")+`access_token=${encodeURIComponent(this.Zt)}`),new Promise((i,n)=>{let r,o=!1;if(s===B.Text){if(g.isBrowser||g.isWebWorker)r=new this.ie.EventSource(t,{withCredentials:this.ie.withCredentials});else{const e=this.$.getCookieString(t),s={};s.Cookie=e;const[i,n]=$();s[i]=n,r=new this.ie.EventSource(t,{withCredentials:this.ie.withCredentials,headers:{...s,...this.ie.headers}})}try{r.onmessage=t=>{if(this.onreceive)try{this.u.log(e.Trace,`(SSE transport) data received. ${m(t.data,this.ie.logMessageContent)}.`),this.onreceive(t.data)}catch(t){return void this.le(t)}},r.onerror=t=>{o?this.le():n(new Error("EventSource failed to connect. The connection could not be found on the server, either the connection ID is not present on the server, or a proxy is refusing/buffering the connection. If you have multiple servers check that sticky sessions are enabled."))},r.onopen=()=>{this.u.log(e.Information,`SSE connected to ${this.re}`),this.ue=r,o=!0,i()}}catch(t){return void n(t)}}else n(new Error("The Server-Sent Events transport only supports the 'Text' transfer format"))})}async send(t){return this.ue?b(this.u,"SSE",this.$,this.re,t,this.ie):Promise.reject(new Error("Cannot send until the transport is connected"))}stop(){return this.le(),Promise.resolve()}le(t){this.ue&&(this.ue.close(),this.ue=void 0,this.onclose&&this.onclose(t))}}class V{constructor(t,e,s,i,n,r){this.u=s,this.Yt=e,this.de=i,this.fe=n,this.$=t,this.onreceive=null,this.onclose=null,this.pe=r}async connect(t,s){let i;return w.isRequired(t,"url"),w.isRequired(s,"transferFormat"),w.isIn(s,B,"transferFormat"),this.u.log(e.Trace,"(WebSockets transport) Connecting."),this.Yt&&(i=await this.Yt()),new Promise((n,r)=>{let o;t=t.replace(/^http/,"ws");const h=this.$.getCookieString(t);let c=!1;if(g.isNode||g.isReactNative){const e={},[s,n]=$();e[s]=n,i&&(e[W.Authorization]=`Bearer ${i}`),h&&(e[W.Cookie]=h),o=new this.fe(t,void 0,{headers:{...e,...this.pe}})}else i&&(t+=(t.indexOf("?")<0?"?":"&")+`access_token=${encodeURIComponent(i)}`);o||(o=new this.fe(t)),s===B.Binary&&(o.binaryType="arraybuffer"),o.onopen=s=>{this.u.log(e.Information,`WebSocket connected to ${t}.`),this.we=o,c=!0,n()},o.onerror=t=>{let s=null;s="undefined"!=typeof ErrorEvent&&t instanceof ErrorEvent?t.error:"There was an error with the transport",this.u.log(e.Information,`(WebSockets transport) ${s}.`)},o.onmessage=t=>{if(this.u.log(e.Trace,`(WebSockets transport) data received. ${m(t.data,this.de)}.`),this.onreceive)try{this.onreceive(t.data)}catch(t){return void this.le(t)}},o.onclose=t=>{if(c)this.le(t);else{let e=null;e="undefined"!=typeof ErrorEvent&&t instanceof ErrorEvent?t.error:"WebSocket failed to connect. The connection could not be found on the server, either the endpoint may not be a SignalR endpoint, the connection ID is not present on the server, or there is a proxy blocking WebSockets. If you have multiple servers check that sticky sessions are enabled.",r(new Error(e))}}})}send(t){return this.we&&this.we.readyState===this.fe.OPEN?(this.u.log(e.Trace,`(WebSockets transport) sending data. ${m(t,this.de)}.`),this.we.send(t),Promise.resolve()):Promise.reject("WebSocket is not in the OPEN state")}stop(){return this.we&&this.le(void 0),Promise.resolve()}le(t){this.we&&(this.we.onclose=()=>{},this.we.onmessage=()=>{},this.we.onerror=()=>{},this.we.close(),this.we=void 0),this.u.log(e.Trace,"(WebSockets transport) socket closed."),this.onclose&&(!this.ge(t)||!1!==t.wasClean&&1e3===t.code?t instanceof Error?this.onclose(t):this.onclose():this.onclose(new Error(`WebSocket closed with status code: ${t.code} (${t.reason||"no reason given"}).`)))}ge(t){return t&&"boolean"==typeof t.wasClean&&"number"==typeof t.code}}class K{constructor(t,s={}){var i;if(this.me=()=>{},this.features={},this.ye=1,w.isRequired(t,"url"),this.u=void 0===(i=s.logger)?new E(e.Information):null===i?f.instance:void 0!==i.log?i:new E(i),this.baseUrl=this.be(t),(s=s||{}).logMessageContent=void 0!==s.logMessageContent&&s.logMessageContent,"boolean"!=typeof s.withCredentials&&void 0!==s.withCredentials)throw new Error("withCredentials option was not a 'boolean' or 'undefined' value");s.withCredentials=void 0===s.withCredentials||s.withCredentials,s.timeout=void 0===s.timeout?1e5:s.timeout;let n=null,r=null;if(g.isNode){const t=require;n=t("ws"),r=t("eventsource")}g.isNode||"undefined"==typeof WebSocket||s.WebSocket?g.isNode&&!s.WebSocket&&n&&(s.WebSocket=n):s.WebSocket=WebSocket,g.isNode||"undefined"==typeof EventSource||s.EventSource?g.isNode&&!s.EventSource&&void 0!==r&&(s.EventSource=r):s.EventSource=EventSource,this.$=new O(s.httpClient||new H(this.u),s.accessTokenFactory),this.ut="Disconnected",this.dt=!1,this.ie=s,this.onreceive=null,this.onclose=null}async start(t){if(t=t||B.Binary,w.isIn(t,B,"transferFormat"),this.u.log(e.Debug,`Starting connection with transfer format '${B[t]}'.`),"Disconnected"!==this.ut)return Promise.reject(new Error("Cannot start an HttpConnection that is not in the 'Disconnected' state."));if(this.ut="Connecting",this.ve=this.yt(t),await this.ve,"Disconnecting"===this.ut){const t="Failed to start the HttpConnection before stop() was called.";return this.u.log(e.Error,t),await this.It,Promise.reject(new r(t))}if("Connected"!==this.ut){const t="HttpConnection.startInternal completed gracefully but didn't enter the connection into the connected state!";return this.u.log(e.Error,t),Promise.reject(new r(t))}this.dt=!0}send(t){return"Connected"!==this.ut?Promise.reject(new Error("Cannot send data if the connection is not in the 'Connected' State.")):(this.Ee||(this.Ee=new G(this.transport)),this.Ee.send(t))}async stop(t){return"Disconnected"===this.ut?(this.u.log(e.Debug,`Call to HttpConnection.stop(${t}) ignored because the connection is already in the disconnected state.`),Promise.resolve()):"Disconnecting"===this.ut?(this.u.log(e.Debug,`Call to HttpConnection.stop(${t}) ignored because the connection is already in the disconnecting state.`),this.It):(this.ut="Disconnecting",this.It=new Promise(t=>{this.me=t}),await this._t(t),void await this.It)}async _t(t){this.$e=t;try{await this.ve}catch(t){}if(this.transport){try{await this.transport.stop()}catch(t){this.u.log(e.Error,`HttpConnection.transport.stop() threw error '${t}'.`),this.Ce()}this.transport=void 0}else this.u.log(e.Debug,"HttpConnection.transport is undefined in HttpConnection.stop() because start() failed.")}async yt(t){let s=this.baseUrl;this.Yt=this.ie.accessTokenFactory,this.$.Yt=this.Yt;try{if(this.ie.skipNegotiation){if(this.ie.transport!==F.WebSockets)throw new Error("Negotiation can only be skipped when using the WebSocket transport directly.");this.transport=this.Se(F.WebSockets),await this.ke(s,t)}else{let e=null,i=0;do{if(e=await this.Pe(s),"Disconnecting"===this.ut||"Disconnected"===this.ut)throw new r("The connection was stopped during negotiation.");if(e.error)throw new Error(e.error);if(e.ProtocolVersion)throw new Error("Detected a connection attempt to an ASP.NET SignalR Server. This client only supports connecting to an ASP.NET Core SignalR Server. See https://aka.ms/signalr-core-differences for details.");if(e.url&&(s=e.url),e.accessToken){const t=e.accessToken;this.Yt=()=>t,this.$.Zt=t,this.$.Yt=void 0}i++}while(e.url&&i<100);if(100===i&&e.url)throw new Error("Negotiate redirection limit exceeded.");await this.Te(s,this.ie.transport,e,t)}this.transport instanceof J&&(this.features.inherentKeepAlive=!0),"Connecting"===this.ut&&(this.u.log(e.Debug,"The HttpConnection connected successfully."),this.ut="Connected")}catch(t){return this.u.log(e.Error,"Failed to start the connection: "+t),this.ut="Disconnected",this.transport=void 0,this.me(),Promise.reject(t)}}async Pe(t){const s={},[n,r]=$();s[n]=r;const o=this.Ie(t);this.u.log(e.Debug,`Sending negotiation request: ${o}.`);try{const t=await this.$.post(o,{content:"",headers:{...s,...this.ie.headers},timeout:this.ie.timeout,withCredentials:this.ie.withCredentials});if(200!==t.statusCode)return Promise.reject(new Error(`Unexpected status code returned from negotiate '${t.statusCode}'`));const e=JSON.parse(t.content);return(!e.negotiateVersion||e.negotiateVersion<1)&&(e.connectionToken=e.connectionId),e.useStatefulReconnect&&!0!==this.ie._e?Promise.reject(new a("Client didn't negotiate Stateful Reconnect but the server did.")):e}catch(t){let s="Failed to complete negotiation with the server: "+t;return t instanceof i&&404===t.statusCode&&(s+=" Either this is not a SignalR endpoint or there is a proxy blocking the connection."),this.u.log(e.Error,s),Promise.reject(new a(s))}}He(t,e){return e?t+(-1===t.indexOf("?")?"?":"&")+`id=${e}`:t}async Te(t,s,i,n){let o=this.He(t,i.connectionToken);if(this.De(s))return this.u.log(e.Debug,"Connection was provided an instance of ITransport, using that directly."),this.transport=s,await this.ke(o,n),void(this.connectionId=i.connectionId);const h=[],a=i.availableTransports||[];let u=i;for(const i of a){const a=this.Re(i,s,n,!0===(null==u?void 0:u.useStatefulReconnect));if(a instanceof Error)h.push(`${i.transport} failed:`),h.push(a);else if(this.De(a)){if(this.transport=a,!u){try{u=await this.Pe(t)}catch(t){return Promise.reject(t)}o=this.He(t,u.connectionToken)}try{return await this.ke(o,n),void(this.connectionId=u.connectionId)}catch(t){if(this.u.log(e.Error,`Failed to start the transport '${i.transport}': ${t}`),u=void 0,h.push(new c(`${i.transport} failed: ${t}`,F[i.transport])),"Connecting"!==this.ut){const t="Failed to select transport before stop() was called.";return this.u.log(e.Debug,t),Promise.reject(new r(t))}}}}return h.length>0?Promise.reject(new l(`Unable to connect to the server with any of the available transports. ${h.join(" ")}`,h)):Promise.reject(new Error("None of the transports supported by the client are supported by the server."))}Se(t){switch(t){case F.WebSockets:if(!this.ie.WebSocket)throw new Error("'WebSocket' is not supported in your environment.");return new V(this.$,this.Yt,this.u,this.ie.logMessageContent,this.ie.WebSocket,this.ie.headers||{});case F.ServerSentEvents:if(!this.ie.EventSource)throw new Error("'EventSource' is not supported in your environment.");return new z(this.$,this.$.Zt,this.u,this.ie);case F.LongPolling:return new J(this.$,this.u,this.ie);default:throw new Error(`Unknown transport: ${t}.`)}}ke(t,e){return this.transport.onreceive=this.onreceive,this.features.reconnect?this.transport.onclose=async s=>{let i=!1;if(this.features.reconnect){try{this.features.disconnected(),await this.transport.connect(t,e),await this.features.resend()}catch{i=!0}i&&this.Ce(s)}else this.Ce(s)}:this.transport.onclose=t=>this.Ce(t),this.transport.connect(t,e)}Re(t,s,i,n){const r=F[t.transport];if(null==r)return this.u.log(e.Debug,`Skipping transport '${t.transport}' because it is not supported by this client.`),new Error(`Skipping transport '${t.transport}' because it is not supported by this client.`);if(!function(t,e){return!t||0!==(e&t)}(s,r))return this.u.log(e.Debug,`Skipping transport '${F[r]}' because it was disabled by the client.`),new h(`'${F[r]}' is disabled by the client.`,r);if(!(t.transferFormats.map(t=>B[t]).indexOf(i)>=0))return this.u.log(e.Debug,`Skipping transport '${F[r]}' because it does not support the requested transfer format '${B[i]}'.`),new Error(`'${F[r]}' does not support ${B[i]}.`);if(r===F.WebSockets&&!this.ie.WebSocket||r===F.ServerSentEvents&&!this.ie.EventSource)return this.u.log(e.Debug,`Skipping transport '${F[r]}' because it is not supported in your environment.'`),new o(`'${F[r]}' is not supported in your environment.`,r);this.u.log(e.Debug,`Selecting transport '${F[r]}'.`);try{return this.features.reconnect=r===F.WebSockets?n:void 0,this.Se(r)}catch(t){return t}}De(t){return t&&"object"==typeof t&&"connect"in t}Ce(t){if(this.u.log(e.Debug,`HttpConnection.stopConnection(${t}) called while in state ${this.ut}.`),this.transport=void 0,t=this.$e||t,this.$e=void 0,"Disconnected"!==this.ut){if("Connecting"===this.ut)throw this.u.log(e.Warning,`Call to HttpConnection.stopConnection(${t}) was ignored because the connection is still in the connecting state.`),new Error(`HttpConnection.stopConnection(${t}) was called while the connection is still in the connecting state.`);if("Disconnecting"===this.ut&&this.me(),t?this.u.log(e.Error,`Connection disconnected with error '${t}'.`):this.u.log(e.Information,"Connection disconnected."),this.Ee&&(this.Ee.stop().catch(t=>{this.u.log(e.Error,`TransportSendQueue.stop() threw error '${t}'.`)}),this.Ee=void 0),this.connectionId=void 0,this.ut="Disconnected",this.dt){this.dt=!1;try{this.onclose&&this.onclose(t)}catch(s){this.u.log(e.Error,`HttpConnection.onclose(${t}) threw error '${s}'.`)}}}else this.u.log(e.Debug,`Call to HttpConnection.stopConnection(${t}) was ignored because the connection is already in the disconnected state.`)}be(t){if(0===t.lastIndexOf("https://",0)||0===t.lastIndexOf("http://",0))return t;if(!g.isBrowser)throw new Error(`Cannot resolve '${t}'.`);const s=window.document.createElement("a");return s.href=t,this.u.log(e.Information,`Normalizing '${t}' to '${s.href}'.`),s.href}Ie(t){const e=new URL(t);e.pathname.endsWith("/")?e.pathname+="negotiate":e.pathname+="/negotiate";const s=new URLSearchParams(e.searchParams);return s.has("negotiateVersion")||s.append("negotiateVersion",this.ye.toString()),s.has("useStatefulReconnect")?"true"===s.get("useStatefulReconnect")&&(this.ie._e=!0):!0===this.ie._e&&s.append("useStatefulReconnect","true"),e.search=s.toString(),e.toString()}}class G{constructor(t){this.xe=t,this.Ae=[],this.Ue=!0,this.Le=new Q,this.Ne=new Q,this.qe=this.Me()}send(t){return this.je(t),this.Ne||(this.Ne=new Q),this.Ne.promise}stop(){return this.Ue=!1,this.Le.resolve(),this.qe}je(t){if(this.Ae.length&&typeof this.Ae[0]!=typeof t)throw new Error(`Expected data to be of type ${typeof this.Ae} but was of type ${typeof t}`);this.Ae.push(t),this.Le.resolve()}async Me(){for(;;){if(await this.Le.promise,!this.Ue){this.Ne&&this.Ne.reject("Connection stopped.");break}this.Le=new Q;const t=this.Ne;this.Ne=void 0;const e="string"==typeof this.Ae[0]?this.Ae.join(""):G.We(this.Ae);this.Ae.length=0;try{await this.xe.send(e),t.resolve()}catch(e){t.reject(e)}}}static We(t){const e=t.map(t=>t.byteLength).reduce((t,e)=>t+e),s=new Uint8Array(e);let i=0;for(const e of t)s.set(new Uint8Array(e),i),i+=e.byteLength;return s.buffer}}class Q{constructor(){this.promise=new Promise((t,e)=>[this.j,this.Oe]=[t,e])}resolve(){this.j()}reject(t){this.Oe(t)}}class Y{constructor(){this.name="json",this.version=2,this.transferFormat=B.Text}parseMessages(t,s){if("string"!=typeof t)throw new Error("Invalid input for JSON hub protocol. Expected a string.");if(!t)return[];null===s&&(s=f.instance);const i=D.parse(t),n=[];for(const t of i){const i=JSON.parse(t);if("number"!=typeof i.type)throw new Error("Invalid payload.");switch(i.type){case x.Invocation:this.U(i);break;case x.StreamItem:this.Fe(i);break;case x.Completion:this.Be(i);break;case x.Ping:case x.Close:break;case x.Ack:this.Xe(i);break;case x.Sequence:this.Je(i);break;default:s.log(e.Information,"Unknown message type '"+i.type+"' ignored.");continue}n.push(i)}return n}writeMessage(t){return D.write(JSON.stringify(t))}U(t){this.ze(t.target,"Invalid payload for Invocation message."),void 0!==t.invocationId&&this.ze(t.invocationId,"Invalid payload for Invocation message.")}Fe(t){if(this.ze(t.invocationId,"Invalid payload for StreamItem message."),void 0===t.item)throw new Error("Invalid payload for StreamItem message.")}Be(t){if(t.result&&t.error)throw new Error("Invalid payload for Completion message.");!t.result&&t.error&&this.ze(t.error,"Invalid payload for Completion message."),this.ze(t.invocationId,"Invalid payload for Completion message.")}Xe(t){if("number"!=typeof t.sequenceId)throw new Error("Invalid SequenceId for Ack message.")}Je(t){if("number"!=typeof t.sequenceId)throw new Error("Invalid SequenceId for Sequence message.")}ze(t,e){if("string"!=typeof t||""===t)throw new Error(e)}}const Z={trace:e.Trace,debug:e.Debug,info:e.Information,information:e.Information,warn:e.Warning,warning:e.Warning,error:e.Error,critical:e.Critical,none:e.None};class tt{configureLogging(t){if(w.isRequired(t,"logging"),void 0!==t.log)this.logger=t;else if("string"==typeof t){const e=function(t){const e=Z[t.toLowerCase()];if(void 0!==e)return e;throw new Error(`Unknown log level: ${t}`)}(t);this.logger=new E(e)}else this.logger=new E(t);return this}withUrl(t,e){return w.isRequired(t,"url"),w.isNotEmpty(t,"url"),this.url=t,this.httpConnectionOptions="object"==typeof e?{...this.httpConnectionOptions,...e}:{...this.httpConnectionOptions,transport:e},this}withHubProtocol(t){return w.isRequired(t,"protocol"),this.protocol=t,this}withAutomaticReconnect(t){if(this.reconnectPolicy)throw new Error("A reconnectPolicy has already been set.");return t?Array.isArray(t)?this.reconnectPolicy=new j(t):this.reconnectPolicy=t:this.reconnectPolicy=new j,this}withServerTimeout(t){return w.isRequired(t,"milliseconds"),this.Ve=t,this}withKeepAliveInterval(t){return w.isRequired(t,"milliseconds"),this.Ke=t,this}withStatefulReconnect(t){return void 0===this.httpConnectionOptions&&(this.httpConnectionOptions={}),this.httpConnectionOptions._e=!0,this.Y=null==t?void 0:t.bufferSize,this}build(){const t=this.httpConnectionOptions||{};if(void 0===t.logger&&(t.logger=this.logger),!this.url)throw new Error("The 'HubConnectionBuilder.withUrl' method must be called before building the connection.");const e=new K(this.url,t);return q.create(e,this.logger||f.instance,this.protocol||new Y,this.reconnectPolicy,this.Ve,this.Ke,this.Y)}}return Uint8Array.prototype.indexOf||Object.defineProperty(Uint8Array.prototype,"indexOf",{value:Array.prototype.indexOf,writable:!0}),Uint8Array.prototype.slice||Object.defineProperty(Uint8Array.prototype,"slice",{value:function(t,e){return new Uint8Array(Array.prototype.slice.call(this,t,e))},writable:!0}),Uint8Array.prototype.forEach||Object.defineProperty(Uint8Array.prototype,"forEach",{value:Array.prototype.forEach,writable:!0}),s})(),"object"==typeof exports&&"object"==typeof module?module.exports=e():"function"==typeof define&&define.amd?define([],e):"object"==typeof exports?exports.signalR=e():t.signalR=e();
 +//# sourceMappingURL=signalr.min.js.map
 \ No newline at end of file
+diff --git a/EPC.SSO/wwwroot/js/site-header.js b/EPC.SSO/wwwroot/js/site-header.js
+index 3348997..3944b3f 100644
+--- a/EPC.SSO/wwwroot/js/site-header.js
++++ b/EPC.SSO/wwwroot/js/site-header.js
+@@ -29,6 +29,13 @@
+     };
+     window.hideToast = () => document.getElementById('pToast')?.classList.remove('is-visible');
+ 
++    // ── خروج: داده‌های کش‌شده‌ی داشبورد در این تب پاک می‌شود ─────────────────
++    document.getElementById('navItemLogout')?.addEventListener('click', () => {
++        try {
++            Object.keys(sessionStorage).filter(k => k.startsWith('epc-dash:')).forEach(k => sessionStorage.removeItem(k));
++        } catch { }
++    });
++
+     // ── Position switcher ─────────────────────────────────────────────────
+     const pill = document.getElementById('hdrPosPill');
+     if (pill) {
+@@ -43,10 +50,10 @@
+             const o = document.createElement('option');
+             o.value = p.guid;
+             o.textContent = title(p);
+-            o.selected = p.guid.toLowerCase() === selected;
++            o.selected = String(p.guid || '').toLowerCase() === selected;
+             sel.appendChild(o);
+         });
+-        const current = positions.find(p => p.guid.toLowerCase() === selected) ?? positions[0];
++        const current = positions.find(p => String(p.guid || '').toLowerCase() === selected) ?? positions[0];
+         if (current) lbl.textContent = title(current);
+ 
+         sel.addEventListener('change', async () => {
 diff --git a/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs b/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs
 index b536773..05cc6d9 100644
 --- a/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs

@@ -9,6 +9,8 @@
     'use strict';
     if (!window.signalR) return;
 
+    const isHttp = link => { try { return ['http:', 'https:'].includes(new URL(link).protocol); } catch { return false; } };
+
     function show(n) {
         const text = n.title ? `${n.title}: ${n.message || ''}` : (n.message || '');
         if (typeof window.showToast === 'function') {
@@ -20,7 +22,7 @@
         // اعلان مرورگر (فقط اگر کاربر قبلاً اجازه داده باشد و صفحه در پس‌زمینه است)
         if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
             const notification = new Notification(n.title || 'پرتال', { body: n.message || '', dir: 'rtl', lang: 'fa' });
-            if (n.link) notification.onclick = () => window.open(n.link, '_blank', 'noopener');
+            if (isHttp(n.link)) notification.onclick = () => window.open(n.link, '_blank', 'noopener');
         }
     }
 
@@ -35,11 +37,15 @@
         window.dispatchEvent(new CustomEvent('portal:notification', { detail: n }));
     });
 
+    let stopped = false;
     async function start(delay = 0) {
+        if (stopped) return;
         if (delay) await new Promise(r => setTimeout(r, delay));
         try {
             await connection.start();
-        } catch {
+        } catch (e) {
+            // نشست منقضی شده: تلاش دوباره بی‌فایده است (با ورود مجدد صفحه دوباره بارگذاری می‌شود)
+            if (e?.statusCode === 401 || e?.statusCode === 403) { stopped = true; return; }
             // سرور در دسترس نیست؛ با تأخیر بیشتر دوباره تلاش می‌شود (حداکثر هر ۲ دقیقه)
             start(Math.min((delay || 2000) * 2, 120000));
         }

@@ -1,0 +1,22 @@
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="light">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@(ViewData["Title"] ?? "درگاه مرکزی ورود به سامانه‌ها")</title>
+    <partial name="_ThemeHead" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <link rel="preload" href="/fonts/Sahel.woff" as="font" type="font/woff" crossorigin />
+    <link href="~/assets/css/icons.min.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/css/portal.css" rel="stylesheet" asp-append-version="true" />
+    @await RenderSectionAsync("style", false)
+</head>
+<body class="portal">
+    @RenderBody()
+    @await RenderSectionAsync("modals", false)
+    @await RenderSectionAsync("scripts", false)
+</body>
+</html>

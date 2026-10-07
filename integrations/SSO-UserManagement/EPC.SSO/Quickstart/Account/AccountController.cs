@@ -409,7 +409,7 @@ public class AccountController(
             .Select(x => x.Mobile)
             .FirstOrDefaultAsync();
 
-        var (success, message) = await farzinService.ResetAndNotifyAsync(personnelCode, mobile ?? string.Empty);
+        var (success, message) = await farzinService.ResetAndNotifyAsync(personnelCode, mobile ?? string.Empty, HttpContext.RequestAborted);
         return Json(new { success, message });
     }
 
@@ -584,10 +584,13 @@ public class AccountController(
     {
         Response.Headers[HeaderNames.CacheControl] = $"{(isPublic ? "public" : "private")}, max-age=604800, immutable";
         Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
+        // فقط تصویر/PDF/ویدئو inline؛ بقیه (HTML، SVG و …) دانلود و در sandbox (جلوگیری از XSS روی مبدأ SSO)
+        var inline = AnnouncementFileCache.IsInlineSafe(file.ContentType);
         Response.Headers[HeaderNames.ContentDisposition] =
-            $"inline; filename*=UTF-8''{Uri.EscapeDataString(file.FileName)}";
+            $"{(inline ? "inline" : "attachment")}; filename*=UTF-8''{Uri.EscapeDataString(file.FileName)}";
+        AnnouncementFileCache.ApplySandbox(Response, AnnouncementFileCache.SafeContentType(file.ContentType));
 
-        return PhysicalFile(file.PhysicalPath, file.ContentType, lastModified: null,
+        return PhysicalFile(file.PhysicalPath, AnnouncementFileCache.SafeContentType(file.ContentType), lastModified: null,
             entityTag: new EntityTagHeaderValue(file.ETag), enableRangeProcessing: true);
     }
 
@@ -599,10 +602,16 @@ public class AccountController(
             return StatusCode((int)upstream.StatusCode);
 
         Response.StatusCode = (int)upstream.StatusCode;
-        Response.ContentType = upstream.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+        var upstreamType = upstream.Content.Headers.ContentType?.MediaType;
+        var inline = AnnouncementFileCache.IsInlineSafe(upstreamType);
+        Response.ContentType = AnnouncementFileCache.SafeContentType(upstreamType);
         if (upstream.Content.Headers.ContentLength is { } length) Response.ContentLength = length;
         if (upstream.Content.Headers.ContentRange is not null) Response.Headers[HeaderNames.ContentRange] = upstream.Content.Headers.ContentRange.ToString();
-        if (upstream.Content.Headers.ContentDisposition is not null) Response.Headers[HeaderNames.ContentDisposition] = upstream.Content.Headers.ContentDisposition.ToString();
+        var upstreamName = upstream.Content.Headers.ContentDisposition?.FileNameStar ?? upstream.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+        Response.Headers[HeaderNames.ContentDisposition] = string.IsNullOrWhiteSpace(upstreamName)
+            ? (inline ? "inline" : "attachment")
+            : $"{(inline ? "inline" : "attachment")}; filename*=UTF-8''{Uri.EscapeDataString(upstreamName)}";
+        AnnouncementFileCache.ApplySandbox(Response, Response.ContentType ?? string.Empty);
         Response.Headers[HeaderNames.AcceptRanges] = "bytes";
         Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
 

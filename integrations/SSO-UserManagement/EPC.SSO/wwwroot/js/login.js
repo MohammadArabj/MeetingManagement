@@ -3,6 +3,8 @@
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
     'use strict';
+    // صفحه‌ی ورود = پایان نشست قبلی؛ داده‌ی کش‌شده‌ی داشبورد در این تب پاک می‌شود
+    try { Object.keys(sessionStorage).filter(k => k.startsWith('epc-dash:')).forEach(k => sessionStorage.removeItem(k)); } catch { }
     const $ = (s, r = document) => r.querySelector(s);
     const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
     const fa = n => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);

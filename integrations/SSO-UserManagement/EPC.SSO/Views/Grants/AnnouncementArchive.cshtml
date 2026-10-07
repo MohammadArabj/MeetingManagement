@@ -1,0 +1,106 @@
+﻿@{
+    Layout = "_Layout";
+    ViewData["Title"] = "آرشیو اطلاعیه‌ها | پورتال یکپارچه سازمانی";
+}
+
+@Html.AntiForgeryToken()
+
+
+@section style {
+    <link href="~/css/jalali-calendar.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/css/announcement-modal.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/css/announcement-archive.css" rel="stylesheet" asp-append-version="true" />
+}
+
+<main>
+    <div class="arch-wrap">
+        <div class="arch-hero">
+            <div class="arch-hero-inner">
+                <div>
+                    <div class="arch-title"><i class="fa fa-folder-open"></i> آرشیو اطلاعیه‌ها</div>
+                    <div class="arch-count" id="archCount"></div>
+                </div>
+                <a class="arch-back" href="/Grants/Index">
+                    <i class="fa fa-arrow-right"></i> بازگشت به داشبورد
+                </a>
+            </div>
+        </div>
+
+        <div class="arch-filter-card" id="archFilterCard">
+            <div class="arch-filter-row">
+                <div class="arch-search-field">
+                    <label>جستجو در عنوان</label>
+                    <div class="arch-search-input-wrap">
+                        <input type="text" id="archTitleInput" class="arch-search-input"
+                               placeholder="مثلاً: افزایش حقوق..." />
+                        <i class="fa fa-search arch-search-icon"></i>
+                    </div>
+                </div>
+
+                <div class="sess-date-field">
+                    <label>از تاریخ</label>
+                    <button type="button" class="sess-date-btn" id="archFromBtn">
+                        <i class="fa fa-calendar-days"></i><span id="archFromLabel">—</span>
+                    </button>
+                </div>
+                <div class="sess-date-sep"><i class="fa fa-arrow-left-long"></i></div>
+                <div class="sess-date-field">
+                    <label>تا تاریخ</label>
+                    <button type="button" class="sess-date-btn" id="archToBtn">
+                        <i class="fa fa-calendar-days"></i><span id="archToLabel">—</span>
+                    </button>
+                </div>
+
+                <div class="arch-filter-actions">
+                    <button type="button" class="arch-clear-btn" onclick="clearArchFilters()">
+                        <i class="fa fa-rotate-left"></i> پاک کردن
+                    </button>
+                </div>
+
+                <div class="sess-calendar-popup" id="archCalendarPopup"></div>
+            </div>
+        </div>
+
+        <div class="arch-list-wrap">
+            <div id="archiveList">
+                <div class="ann-skeleton"></div>
+                <div class="ann-skeleton"></div>
+                <div class="ann-skeleton"></div>
+                <div class="ann-skeleton"></div>
+                <div class="ann-skeleton"></div>
+            </div>
+        </div>
+
+        <div class="arch-pagination" id="archPagination"></div>
+    </div>
+</main>
+
+<!-- Modal جزئیات اطلاعیه -->
+<div class="modal fade" id="annDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" id="annDetailHeader" style="background:url('/images/bg1.png')">
+                <div class="d-flex align-items-center gap-2">
+                    <span id="annDetailIcon" style="font-size:1.25rem"></span>
+                    <h5 class="modal-title mb-0" id="annDetailTitle">در حال بارگذاری...</h5>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="annDetailBody">
+                <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+            </div>
+            <div class="modal-footer" id="annDetailFooter" style="display:none">
+                <div class="ann-confirmed d-none" id="annConfirmedMark">
+                    <i class="fa fa-check-circle" style="color:#10b981"></i>
+                    خواندن این اطلاعیه تأیید شد
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/js/jalali-picker.js" asp-append-version="true"></script>
+    <script src="~/js/announcement-common.js" asp-append-version="true"></script>
+    <script src="~/js/announcement-archive.js" asp-append-version="true"></script>
+}

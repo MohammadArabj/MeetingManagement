@@ -1,7 +1,9 @@
 ﻿using EPC.SSO.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using EPC.SSO.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace EPC.SSO.Quickstart.PhoneDirectory;
@@ -28,18 +30,21 @@ public class PhoneDirectoryController(
     }
 
     [HttpPost]
+    [EnableRateLimiting(RateLimitPolicies.PublicDirectory)]
     public async Task<IActionResult> Search(
         [FromForm] string? search,
         [FromForm] int? type)
     {
         var results = await directoryService.SearchAsync(
             search ?? string.Empty,
-            type);
+            type,
+            HttpContext.RequestAborted);
 
         return PartialView("_DirectoryResults", results);
     }
 
     [HttpPost]
+    [EnableRateLimiting(RateLimitPolicies.PublicDirectory)]
     public async Task<IActionResult> SearchPaginated(
         [FromForm] string? search,
         [FromForm] int? type,
@@ -53,7 +58,8 @@ public class PhoneDirectoryController(
             search?.Trim() ?? string.Empty,
             type,
             page,
-            pageSize);
+            pageSize,
+            HttpContext.RequestAborted);
 
         // ارتباط با API برقرار نشده: به‌جای «نتیجه‌ی خالی»، خطا برمی‌گردانیم
         // تا مرورگر خودکار چند بار دوباره تلاش کند.
@@ -69,6 +75,7 @@ public class PhoneDirectoryController(
     /// و باز کردن مستقیم آدرس در تب جدید جواب نمی‌دهد.
     /// </summary>
     [HttpGet]
+    [EnableRateLimiting(RateLimitPolicies.PublicDirectory)]
     [ResponseCache(Duration = 3600, Location = ResponseCacheLocation.Client)]
     public async Task<IActionResult> Photo(string? t, CancellationToken ct)
     {
@@ -98,8 +105,9 @@ public class PhoneDirectoryController(
             var cacheEntryOptions = new MemoryCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = bytes is null ? TimeSpan.FromMinutes(5) : TimeSpan.FromHours(1),
-                // Use bytes length when available; use 1 for "null" placeholder entries.
-                Size = bytes?.Length ?? 1L
+                // همه‌ی entryهای کش مشترک Size=1 دارند (SizeLimit تعداد است نه بایت)؛ قبلاً Size=طول عکس بود
+                // و چند عکس کل ظرفیت کش را پر می‌کرد و کش داشبورد و تنظیمات همه‌ی کاربران خالی می‌شد.
+                Size = 1
             };
             cache.Set(cacheKey, bytes, cacheEntryOptions);
         }
@@ -153,8 +161,9 @@ public class PhoneDirectoryController(
 
             return await response.Content.ReadAsByteArrayAsync(ct);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            // Timeout کلاینت هم TaskCanceledException است؛ قبلاً از catch عبور می‌کرد و 500 می‌داد
             logger.LogWarning(ex, "دریافت عکس دفترچه تلفن ناموفق بود");
             return null;
         }

@@ -9,11 +9,15 @@
 
     const $ = (s, r = document) => r.querySelector(s);
     const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-    const fa = n => String(n ?? '').replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
+    // اعداد فارسی + Escape (خروجی fa مستقیم در innerHTML قرار می‌گیرد)
+    const fa = n => escHtml(String(n ?? '').replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]));
     const csrf = () => window.getCsrfToken?.() || $('input[name="__RequestVerificationToken"]')?.value || '';
     const toast = m => window.showToast?.(m);
     const PALETTE = ['#f97316', '#0ea5e9', '#10b981', '#8b5cf6', '#ef4444', '#14b8a6', '#f59e0b', '#6366f1', '#ec4899', '#22c55e'];
-    const personnelCode = $('main[data-personnel-code]')?.dataset.personnelCode || '';
+    const main = $('main[data-personnel-code]');
+    const personnelCode = main?.dataset.personnelCode || '';
+    // کش به تفکیک کاربر + سمت/تفویض فعال (قبلاً بعد از تغییر سمت، داده‌ی سمت قبلی نمایش داده می‌شد)
+    const cacheScope = `${personnelCode}:${main?.dataset.cacheScope || ''}`;
 
     const getJson = async (url, opts) => {
         const r = await fetch(url, { credentials: 'same-origin', ...opts });
@@ -21,7 +25,8 @@
         return r.json();
     };
     const empty = (icon, text) => `<div class="p-empty"><i class="fa ${icon}"></i>${text}</div>`;
-    const errorBox = text => `<div class="p-empty"><i class="fa fa-triangle-exclamation"></i>${text}<br><button type="button" class="db-retry" data-retry><i class="fa fa-rotate"></i> تلاش دوباره</button></div>`;
+    /** retry: کلید ویجت (فقط همان ویجت دوباره خوانده می‌شود) یا 'force' برای اطلاعیه‌ی اجباری جاری */
+    const errorBox = (text, retry = '') => `<div class="p-empty"><i class="fa fa-triangle-exclamation"></i>${text}<br><button type="button" class="db-retry" data-retry="${escAttr(retry)}"><i class="fa fa-rotate"></i> تلاش دوباره</button></div>`;
 
     /** شمارنده‌ی کنار عنوان کارت؛ hideZero برای «خوانده‌نشده» که صفر بودنش نیاز به نمایش ندارد */
     function setCount(sel, n, hideZero = false) {
@@ -124,7 +129,10 @@
 
     function setTab(tab) {
         activeTab = tab;
-        $$('.db-tab').forEach(t => t.classList.toggle('is-active', t.dataset.tab === tab));
+        $$('.db-tab').forEach(t => {
+            t.classList.toggle('is-active', t.dataset.tab === tab);
+            t.setAttribute('aria-selected', String(t.dataset.tab === tab));
+        });
         $$('.db-pane').forEach(p => p.hidden = p.dataset.pane !== tab);
         filterApps();
     }
@@ -153,12 +161,12 @@
         $('#tabWin').hidden = false;
         $('#countWin').textContent = list.length;
         $('#windowsAppsGrid').innerHTML = list.map((a, i) => `
-            <div class="db-app" tabindex="0" role="button" data-kind="win" data-id="win:${a.id}" data-url="${escAttr(a.launchUrl)}"
+            <div class="db-app" tabindex="0" role="button" data-kind="win" data-id="win:${escAttr(a.id)}" data-url="${escAttr(a.launchUrl)}"
                  data-name="${escAttr(a.name)}" data-desc="${escAttr(a.description)}" title="${escAttr(a.description)}"
                  style="--_c:${PALETTE[(i + 3) % PALETTE.length]};animation-delay:${Math.min(i, 20) * 18}ms">
                 <button type="button" class="db-app__pin" aria-label="سنجاق"><i class="fa fa-star"></i></button>
                 <span class="db-app__icon">${a.id
-                    ? `<img src="/Grants/AppIcon/${a.id}" alt="" loading="lazy" onerror="this.outerHTML='<i class=&quot;fa fa-desktop&quot;></i>'">`
+                    ? `<img src="/Grants/AppIcon/${encodeURIComponent(a.id)}" alt="" loading="lazy" data-fallback-icon="fa-desktop">`
                     : '<i class="fa fa-desktop"></i>'}</span>
                 <span class="db-app__name">${escHtml(a.name)}</span>
             </div>`).join('');
@@ -170,7 +178,7 @@
         $('#tabOther').hidden = false;
         $('#countOther').textContent = list.length;
         $('#otherProgramsGrid').innerHTML = list.map((p, i) => `
-        <div class="db-app" tabindex="0" role="button" data-kind="other" data-id="other:${p.id}" data-pid="${p.id}"
+        <div class="db-app" tabindex="0" role="button" data-kind="other" data-id="other:${escAttr(p.id)}" data-pid="${escAttr(p.id)}"
              data-name="${escAttr(p.name)}" data-iswin="${p.kind === 2}" title="${escAttr(p.name)}"
              style="--_c:${PALETTE[(i + 6) % PALETTE.length]};animation-delay:${Math.min(i, 20) * 18}ms">
             <button type="button" class="db-app__pin" aria-label="سنجاق"><i class="fa fa-star"></i></button>
@@ -189,7 +197,7 @@
     function renderMeetings(list) {
         const ct = $('#meetingContainer');
         setCount('#countMeetings', list ? list.length : null);
-        if (!list) return ct.innerHTML = errorBox('جلسات در دسترس نیست');
+        if (!list) return ct.innerHTML = errorBox('جلسات در دسترس نیست', 'meetings');
         if (!list.length) return ct.innerHTML = empty('fa-mug-hot', 'جلسه‌ای در ۴ روز آینده ندارید');
 
         ct.innerHTML = list.map(m => {
@@ -197,10 +205,10 @@
             const [datePart, timePart] = String(m.date || '').split(' - ');
             const [, mo, d] = (datePart || '').split('/');
             const st = MEETING_STATUS[m.status] || MEETING_STATUS[1];
-            const url = m.baseUrl ? `${m.baseUrl}/#/meetings/details/${m.guid}` : '';
+            const url = m.baseUrl ? `${m.baseUrl}/#/meetings/details/${encodeURIComponent(m.guid)}` : '';
             return `
-            <div class="db-meet" tabindex="0" data-href="${escAttr(url)}">
-                <div class="db-meet__date"><b>${fa(+d || '')}</b><span>${typeof MONTH_NAMES_FA !== 'undefined' && mo ? MONTH_NAMES_FA[+mo - 1] || '' : ''}</span></div>
+            <div class="db-meet" tabindex="0" role="link" data-href="${escAttr(url)}">
+                <div class="db-meet__date"><b>${fa(+d || '')}</b><span>${typeof MONTH_NAMES_FA !== 'undefined' && mo ? escHtml(MONTH_NAMES_FA[+mo - 1] || '') : ''}</span></div>
                 <div class="db-meet__body">
                     <div class="db-meet__title" title="${escAttr(m.title)}">${escHtml(m.title)}</div>
                     <div class="db-meet__meta">
@@ -219,7 +227,7 @@
 
     function renderAnnouncements(list) {
         const ct = $('#announceContainer');
-        if (!list) { setCount('#countUnread', null, true); return ct.innerHTML = errorBox('اطلاعیه‌ها در دسترس نیست'); }
+        if (!list) { setCount('#countUnread', null, true); return ct.innerHTML = errorBox('اطلاعیه‌ها در دسترس نیست', 'announcements'); }
         const unread = list.filter(a => !a.isRead).length;
         setCount('#countUnread', unread, true);
         if (!list.length) return ct.innerHTML = empty('fa-bell-slash', 'اطلاعیه‌ای وجود ندارد');
@@ -229,7 +237,7 @@
             const pri = a.priority === 3 ? '<span class="p-badge" style="background:#ef44441f;color:#ef4444">فوری</span>'
                 : a.priority === 2 ? '<span class="p-badge" style="background:#f59e0b1f;color:#d97706">مهم</span>' : '';
             return `
-            <div class="db-ann ${a.isRead ? '' : 'db-ann--unread'}" tabindex="0" data-guid="${a.guid}">
+            <div class="db-ann ${a.isRead ? '' : 'db-ann--unread'}" tabindex="0" role="button" data-guid="${escAttr(a.guid)}">
                 <span class="db-ann__dot" style="background:${cfg.color}"></span>
                 <div style="min-width:0">
                     <div class="db-ann__title">${escHtml(a.title)}</div>
@@ -252,7 +260,7 @@
     function renderSurveys(list) {
         const ct = $('#surveyContainer');
         setCount('#countSurveys', list ? list.length : null);
-        if (!list) return ct.innerHTML = errorBox('نظرسنجی‌ها در دسترس نیست');
+        if (!list) return ct.innerHTML = errorBox('نظرسنجی‌ها در دسترس نیست', 'surveys');
         if (!list.length) return ct.innerHTML = empty('fa-circle-check', 'نظرسنجی فعالی برای شما وجود ندارد');
 
         ct.innerHTML = list.map(s => {
@@ -261,9 +269,9 @@
                 ? '<span class="p-badge" style="background:#f973161f;color:#ea580c">جدید</span>'
                 : '<span class="p-badge" style="background:#0ea5e91f;color:#0284c7">ناتمام</span>';
             return `
-            <div class="db-survey" tabindex="0" data-href="${escAttr(`${s.surveyBaseUrl}/#/survey/take/${s.guid}`)}">
+            <div class="db-survey" tabindex="0" role="link" data-href="${escAttr(`${s.surveyBaseUrl}/#/survey/take/${encodeURIComponent(s.guid)}`)}">
                 <div class="db-survey__head"><div class="db-survey__title">${escHtml(s.title)}</div>${badge}</div>
-                <div class="db-survey__bar"><span style="width:${pct}%"></span></div>
+                <div class="db-survey__bar"><span style="width:${Number(pct) || 0}%"></span></div>
                 <div class="db-survey__meta">
                     <span><i class="fa fa-list-check"></i> ${fa(s.totalQuestions)} سؤال</span>
                     ${s.daysRemaining > 0 ? `<span><i class="fa fa-hourglass-half"></i> ${fa(s.daysRemaining)} روز مانده</span>` : ''}
@@ -289,7 +297,7 @@
             <div class="db-sugg__slide ${i === 0 ? 'is-active' : ''}">
                 <span class="db-sugg__rank">رتبه ${fa(i + 1)}</span>
                 ${s.imageUrl
-                    ? `<img class="db-sugg__avatar" src="${escAttr(s.imageUrl)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;db-sugg__avatar&quot;>${escAttr(initial(s.lfName))}</div>'">`
+                    ? `<img class="db-sugg__avatar" src="${escAttr(s.imageUrl)}" alt="" loading="lazy" data-fallback-text="${escAttr(initial(s.lfName))}">`
                     : `<div class="db-sugg__avatar">${escHtml(initial(s.lfName))}</div>`}
                 <div class="db-sugg__name">${escHtml(s.lfName || 'بدون نام')}</div>
                 ${s.officeName ? `<div class="db-sugg__meta">${escHtml(s.officeName)}</div>` : ''}
@@ -306,7 +314,14 @@
             Sugg.cur = (i + Sugg.n) % Sugg.n;
             slides[Sugg.cur]?.classList.add('is-active'); dots[Sugg.cur]?.classList.add('is-active');
         };
-        const auto = () => { clearInterval(Sugg.timer); if (Sugg.n > 1) Sugg.timer = setInterval(() => go(Sugg.cur + 1), 4500); };
+        // اسلاید خودکار: در تب پنهان، هنگام فوکوس کیبورد و با «کاهش حرکت» متوقف است
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        const auto = () => {
+            clearInterval(Sugg.timer);
+            if (Sugg.n > 1 && !reduceMotion && !document.hidden && !ct.contains(document.activeElement))
+                Sugg.timer = setInterval(() => go(Sugg.cur + 1), 4500);
+        };
+        Sugg.auto = auto;
         ct.onclick = e => {
             const step = e.target.closest('[data-sugg]'); const dot = e.target.closest('[data-sugg-go]');
             if (step) go(Sugg.cur + +step.dataset.sugg);
@@ -314,8 +329,27 @@
         };
         ct.onmouseenter = () => clearInterval(Sugg.timer);
         ct.onmouseleave = auto;
+        ct.onfocusin = () => clearInterval(Sugg.timer);
+        ct.onfocusout = () => setTimeout(auto, 0);
         auto();
     }
+    document.addEventListener('visibilitychange', () => document.hidden ? clearInterval(Sugg.timer) : Sugg.auto?.());
+
+    // تصویر جایگزین (به جای onerror داخل HTML)؛ رویداد error حباب نمی‌زند، پس در capture گرفته می‌شود
+    document.addEventListener('error', e => {
+        const img = e.target;
+        if (!(img instanceof HTMLImageElement)) return;
+        if (img.dataset.fallbackIcon) {
+            const i = document.createElement('i');
+            i.className = 'fa ' + img.dataset.fallbackIcon;
+            img.replaceWith(i);
+        } else if (img.dataset.fallbackText !== undefined) {
+            const d = document.createElement('div');
+            d.className = img.className;
+            d.textContent = img.dataset.fallbackText;
+            img.replaceWith(d);
+        }
+    }, true);
 
     // ═══ Force read (اطلاعیه‌های نیازمند تأیید) ═════════════════════════════
     const Force = { items: [], idx: 0 };
@@ -336,23 +370,42 @@
         $('#forceTitle').textContent = it.title;
         $('#forceSteps').innerHTML = Force.items.map((x, k) => `<span class="${x.ok ? 'is-ok' : k === i ? 'is-cur' : ''}"></span>`).join('');
         const body = $('#forceBody');
+        const confirmBtn = $('#forceConfirm');
+        // تا متن اطلاعیه نمایش داده نشده، «مطالعه کردم» غیرفعال است
+        if (confirmBtn) confirmBtn.disabled = true;
         if (!it.loaded) {
             body.innerHTML = '<div class="p-skel" style="height:120px"></div>';
             try {
-                const res = await getJson(`/Grants/GetAnnouncementDetail?guid=${it.guid}`);
+                const res = await getJson(`/Grants/GetAnnouncementDetail?guid=${encodeURIComponent(it.guid)}`);
                 if (res?.success) { it.data = res.data; it.loaded = true; }
             } catch { }
         }
-        if (!it.data) { body.innerHTML = errorBox('بارگذاری جزئیات ممکن نشد'); return; }
+        if (Force.idx !== i) return;
+        if (!it.data) { body.innerHTML = errorBox('بارگذاری جزئیات ممکن نشد', 'force'); return; }
+        if (confirmBtn) confirmBtn.disabled = false;
         let html = `<div>${escHtml(it.data.body)}</div>`;
         if (it.data.files?.length && typeof buildFileSlideshowHtml === 'function') html += buildFileSlideshowHtml(it.data.files);
         typeof setHtml === 'function' ? setHtml(body, html) : (body.innerHTML = html);
         body.scrollTop = 0;
+        $('#forceTitle')?.focus?.();
     }
+
+    // فوکوس داخل پنجره‌ی اجباری می‌ماند (کاربر کیبورد/صفحه‌خوان پشت آن گیر نمی‌کند)
+    document.addEventListener('keydown', e => {
+        const overlay = $('#forceReadOverlay');
+        if (e.key !== 'Tab' || !overlay?.classList.contains('is-open')) return;
+        const focusables = $$('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"]), iframe', overlay)
+            .filter(el => el.offsetParent !== null);
+        if (!focusables.length) return;
+        const first = focusables[0], last = focusables[focusables.length - 1];
+        if (!overlay.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+        else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
 
     $('#forceConfirm')?.addEventListener('click', async e => {
         const btn = e.currentTarget, it = Force.items[Force.idx];
-        if (!it) return;
+        if (!it || !it.data) return;
         const orig = btn.innerHTML;
         btn.disabled = true; btn.innerHTML = '<span class="p-spin"></span> در حال ثبت...';
         try {
@@ -363,7 +416,7 @@
             });
             if (!r.ok) throw new Error();
             it.ok = true;
-            $(`.db-ann[data-guid="${it.guid}"]`)?.classList.remove('db-ann--unread');
+            $(`.db-ann[data-guid="${CSS.escape(String(it.guid))}"]`)?.classList.remove('db-ann--unread');
             const next = Force.items.findIndex(x => !x.ok);
             if (next === -1) {
                 $('#forceReadOverlay').classList.remove('is-open');
@@ -376,20 +429,23 @@
 
     // ═══ Sessions modal ══════════════════════════════════════════════════
     let sessPicker = null;
+    let sessSeq = 0;
     async function loadSessions() {
         const tbody = $('#sessionTableBody');
+        const seq = ++sessSeq;
         tbody.innerHTML = '<tr><td colspan="3" class="sess-empty-row"><span class="p-spin"></span></td></tr>';
         try {
             const { from, to } = sessPicker.getRange();
-            const q = `fromDate=${from ? jalaaliToStr(from) : ''}&toDate=${to ? jalaaliToStr(to) : ''}`;
+            const q = `fromDate=${from ? encodeURIComponent(jalaaliToStr(from)) : ''}&toDate=${to ? encodeURIComponent(jalaaliToStr(to)) : ''}`;
             const res = await getJson(`/Grants/GetSessions?${q}`);
+            if (seq !== sessSeq) return; // نتیجه‌ی بازه‌ی قدیمی‌تر
             const items = res.items || [];
             tbody.innerHTML = items.length
                 ? items.map(s => `<tr><td>${escHtml(s.created)}</td>
                     <td>${s.isSuccessful ? '<span class="p-badge" style="background:#10b9811f;color:#059669">موفق</span>' : '<span class="p-badge" style="background:#ef44441f;color:#dc2626">ناموفق</span>'}</td>
                     <td dir="ltr" style="text-align:right">${escHtml(s.clientIpAddress)}</td></tr>`).join('')
                 : '<tr><td colspan="3" class="sess-empty-row">در این بازه سابقه‌ای یافت نشد</td></tr>';
-        } catch { tbody.innerHTML = '<tr><td colspan="3" class="sess-empty-row">خطا در بارگذاری</td></tr>'; }
+        } catch { if (seq === sessSeq) tbody.innerHTML = '<tr><td colspan="3" class="sess-empty-row">خطا در بارگذاری</td></tr>'; }
     }
     function setPreset(days, chip) {
         const today = jalaaliToday();
@@ -411,12 +467,15 @@
     $$('.sess-preset-chip').forEach(c => c.addEventListener('click', () => setPreset(+c.dataset.days, c)));
 
     // ═══ User profiles (impersonation) ═══════════════════════════════════
-    const UP = { page: 1, search: '', loading: false, hasMore: true, items: [] };
+    const UP = { page: 1, search: '', loading: false, hasMore: true, items: [], seq: 0 };
     async function loadUsers(append) {
         const body = $('#upBody');
+        // هر جستجوی جدید شماره‌ی تازه می‌گیرد؛ پاسخ جستجوی قبلی نتیجه‌ی جدید را بازنویسی نمی‌کند
+        const seq = append ? UP.seq : ++UP.seq;
         UP.loading = true;
         try {
             const res = await getJson(`/Grants/GetUsersForProfile?search=${encodeURIComponent(UP.search)}&page=${UP.page}&pageSize=20`);
+            if (seq !== UP.seq) return;
             UP.hasMore = !!res.hasMore;
             UP.items = append ? UP.items.concat(res.items) : res.items;
             if (!UP.items.length) { body.innerHTML = empty('fa-user-slash', 'کاربری یافت نشد'); return; }
@@ -428,10 +487,16 @@
                         <div class="db-up__meta"><span>${fa(u.personnelCode)}</span>${u.mainPosition ? `<span>· ${escHtml(u.mainPosition)}</span>` : ''}
                         ${u.isSuperAdmin ? '<span class="p-badge" style="background:#ef44441f;color:#dc2626">سوپرادمین</span>' : ''}</div>
                     </div>
-                    <button type="button" class="p-btn" data-imp="${u.guid}">ورود <i class="fa fa-arrow-left"></i></button>
+                    <button type="button" class="p-btn" data-imp="${escAttr(u.guid)}">ورود <i class="fa fa-arrow-left"></i></button>
                 </div>`).join('') + (UP.hasMore ? '<div class="p-empty"><span class="p-spin"></span></div>' : '');
-        } catch { body.innerHTML = errorBox('خطا در بارگذاری کاربران'); }
-        finally { UP.loading = false; }
+        } catch { if (seq === UP.seq) body.innerHTML = errorBox('خطا در بارگذاری کاربران', 'users'); }
+        finally {
+            if (seq === UP.seq) {
+                UP.loading = false;
+                // اگر صفحه‌ی اول کادر را پر نکرد، رویداد scroll هرگز رخ نمی‌دهد؛ صفحه‌ی بعد همین‌جا خوانده می‌شود
+                if (UP.hasMore && body.scrollHeight <= body.clientHeight + 60 && UP.items.length) { UP.page++; loadUsers(true); }
+            }
+        }
     }
     const resetUsers = () => { UP.page = 1; UP.items = []; UP.hasMore = true; $('#upBody').innerHTML = '<div class="p-skel" style="height:56px;margin:8px"></div>'.repeat(4); loadUsers(false); };
     $('#btnProfiles')?.addEventListener('click', () => { bootstrap.Modal.getOrCreateInstance($('#userProfileModal')).show(); resetUsers(); });
@@ -478,16 +543,39 @@
     // ═══ Load all ════════════════════════════════════════════════════════
     applyPins($('#systemsGrid'));
 
-    // نور دنبال‌کننده‌ی ماوس روی کاشی‌ها
+    // نور دنبال‌کننده‌ی ماوس روی کاشی‌ها (حداکثر یک بار در هر فریم)
+    let glowFrame = 0, glowEvent = null;
     document.addEventListener('pointermove', e => {
-        const card = e.target.closest?.('.db-app');
-        if (!card) return;
-        const r = card.getBoundingClientRect();
-        card.style.setProperty('--mx', `${e.clientX - r.left}px`);
-        card.style.setProperty('--my', `${e.clientY - r.top}px`);
+        glowEvent = e;
+        if (glowFrame) return;
+        glowFrame = requestAnimationFrame(() => {
+            glowFrame = 0;
+            const ev = glowEvent;
+            const card = ev?.target.closest?.('.db-app');
+            if (!card) return;
+            const r = card.getBoundingClientRect();
+            card.style.setProperty('--mx', `${ev.clientX - r.left}px`);
+            card.style.setProperty('--my', `${ev.clientY - r.top}px`);
+        });
     }, { passive: true });
 
-    document.addEventListener('click', e => { if (e.target.closest('[data-retry]')) load(); });
+    // Enter/Space روی کارت‌های جلسه، اطلاعیه و نظرسنجی (قبلاً فقط کاشی سامانه‌ها با کیبورد باز می‌شد)
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const card = e.target.closest?.('.db-meet, .db-ann, .db-survey');
+        if (card && card === e.target) { e.preventDefault(); card.click(); }
+    });
+
+    // «تلاش دوباره» فقط همان بخش را دوباره می‌خواند
+    document.addEventListener('click', e => {
+        const btn = e.target.closest('[data-retry]');
+        if (!btn) return;
+        const key = btn.dataset.retry;
+        if (key === 'force') { const it = Force.items[Force.idx]; if (it) { it.loaded = false; showForce(Force.idx); } return; }
+        if (key === 'users') { resetUsers(); return; }
+        const widget = WIDGETS.find(w => w.key === key);
+        widget ? loadWidget(widget) : load();
+    });
 
     // با رسیدن اعلان لحظه‌ای سامانه جلسات (portal-realtime.js)، فقط ویجت جلسات دوباره خوانده می‌شود
     let meetingsReloadTimer;
@@ -505,7 +593,13 @@
         • هر ویجت درخواست مستقل دارد و به محض رسیدن پاسخش به‌روز می‌شود؛ قبلاً کل داشبورد منتظر کندترین API
           (تا ۱۰ ثانیه) می‌ماند.
         • خطای یک ویجت فقط همان ویجت را «تلاش دوباره» نشان می‌دهد و داده‌ی قبلی (اگر بود) حفظ می‌شود. */
-    const CACHE_PREFIX = `epc-dash:${personnelCode}:`;
+    const CACHE_PREFIX = `epc-dash:${cacheScope}:`;
+    // کش سمت‌های دیگر همین کاربر در این تب پاک می‌شود
+    try {
+        Object.keys(sessionStorage)
+            .filter(k => k.startsWith('epc-dash:') && !k.startsWith(CACHE_PREFIX))
+            .forEach(k => sessionStorage.removeItem(k));
+    } catch { /* حالت خصوصی */ }
     const readCache = key => { try { return JSON.parse(sessionStorage.getItem(CACHE_PREFIX + key) || 'null'); } catch { return null; } };
     const writeCache = (key, value) => { try { sessionStorage.setItem(CACHE_PREFIX + key, JSON.stringify(value)); } catch { /* حجم/حالت خصوصی */ } };
 

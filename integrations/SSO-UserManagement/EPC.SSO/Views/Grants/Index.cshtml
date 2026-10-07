@@ -13,7 +13,8 @@
     <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
 }
 
-<main class="p-container db" data-personnel-code="@Model.PersonnelCode">
+<main class="p-container db" data-personnel-code="@Model.PersonnelCode"
+      data-cache-scope="@(User.FindFirst("ActivatedPosition")?.Value):@(User.FindFirst("DelegationId")?.Value):@(User.FindFirst("ImpersonatedBy")?.Value)">
     <div class="db-grid">
         @* ═══════════ ستون اصلی ═══════════ *@
         <div class="db-col">
@@ -32,9 +33,9 @@
 
                 <div class="db-toolbar">
                     <div class="db-tabs" role="tablist">
-                        <button class="db-tab is-active" role="tab" data-tab="web"><i class="fa fa-globe"></i> تحت وب <span class="db-tab__n">@grants.Count</span></button>
-                        <button class="db-tab" role="tab" data-tab="win" id="tabWin" hidden><i class="fa fa-desktop"></i> ویندوزی <span class="db-tab__n" id="countWin">0</span></button>
-                        <button class="db-tab" role="tab" data-tab="other" id="tabOther" hidden><i class="fa fa-layer-group"></i> سایر <span class="db-tab__n" id="countOther">0</span></button>
+                        <button type="button" class="db-tab is-active" role="tab" aria-selected="true" data-tab="web"><i class="fa fa-globe"></i> تحت وب <span class="db-tab__n">@grants.Count</span></button>
+                        <button type="button" class="db-tab" role="tab" aria-selected="false" data-tab="win" id="tabWin" hidden><i class="fa fa-desktop"></i> ویندوزی <span class="db-tab__n" id="countWin">0</span></button>
+                        <button type="button" class="db-tab" role="tab" aria-selected="false" data-tab="other" id="tabOther" hidden><i class="fa fa-layer-group"></i> سایر <span class="db-tab__n" id="countOther">0</span></button>
                     </div>
                     <label class="db-search">
                         <i class="fa fa-magnifying-glass"></i>
@@ -193,7 +194,7 @@
 
     <div class="db-force" id="forceReadOverlay" role="dialog" aria-modal="true" aria-labelledby="forceTitle">
         <div class="db-force__card">
-            <div class="db-force__head"><small id="forceStep"></small><h3 id="forceTitle"></h3></div>
+            <div class="db-force__head"><small id="forceStep"></small><h3 id="forceTitle" tabindex="-1"></h3></div>
             <div class="db-force__body" id="forceBody"></div>
             <div class="db-force__foot">
                 <div class="db-force__steps" id="forceSteps"></div>
