@@ -1,4 +1,5 @@
-﻿using System;
+using MeetingManagement.Domain.Shared.Access;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,11 +11,15 @@ using MeetingManagement.Infrastructure.Query.Contracts.Agenda;
 using Microsoft.EntityFrameworkCore;
 
 namespace MeetingManagement.Infrastructure.Query;
-public class AgendaQueryHandler(MeetingManagementQueryContext context)
+public class AgendaQueryHandler(MeetingManagementQueryContext context, IMeetingAccessService accessService)
     : IQueryHandlerAsync<Result<List<AgendaListDto>>, Guid>
 {
     public async Task<Result<List<AgendaListDto>>> Handle(Guid command)
     {
+        var access = await accessService.GetAsync(command);
+        if (!access.Can(MeetingCapability.ViewAgenda))
+            return Result<List<AgendaListDto>>.Failure([], "شما به دستور این جلسه دسترسی ندارید.");
+
         var agendas = await context.Agendas
             .Where(c => c.Meeting.Guid == command)
             .OrderBy(c=>c.SortOrder)

@@ -179,7 +179,8 @@ export class TusUploadService {
   // ---------------------------
   // Cache for metas
   // ---------------------------
-  private readonly metaCache = new Map<string, AttachmentMetaDto>();
+  // آدرس فایل‌ها امضای موقت دارند (سامانه مدیریت فایل)؛ پس کش هم باید قبل از انقضای امضا خالی شود
+  private readonly metaCache = new ExpiringCache<AttachmentMetaDto>(90 * 60 * 1000);
 
   // ---------------------------
   // serialize Initiate/Complete HTTP calls
@@ -419,7 +420,16 @@ export class TusUploadService {
             sessionId: initData.sessionGuid,
             folderPath: options.folderPath,
           },
-          headers: { Authorization: `Bearer ${this.getAccessToken()}` },
+          // توکن در هر درخواست (هر قطعه) تازه خوانده می‌شود؛ آپلود فایل‌های بزرگ ممکن است از عمر توکن طولانی‌تر باشد
+          onBeforeRequest: (req) => {
+            req.setHeader('Authorization', `Bearer ${this.getAccessToken()}`);
+          },
+          // قطعه‌ی ناموفق با خطای شبکه یا 5xx/423 دوباره ارسال می‌شود؛ 401/403 تکرار نمی‌شود
+          onShouldRetry: (err) => {
+            const status = (err as any)?.originalResponse?.getStatus?.() ?? 0;
+            return status === 0 || status === 409 || status === 423 || status >= 500;
+          },
+          removeFingerprintOnSuccess: true,
 
           onError: (err) => {
             this.patch(fileId, { status: UploadStatus.Failed, errorMessage: err.message });
@@ -930,5 +940,38 @@ export class TusUploadService {
 
   private isPreviewableAsBlob(type: string): boolean {
     return this.isImage(type) || this.isPdf(type) || this.isAudio(type) || this.isVideo(type);
+  }
+}
+
+/** کش ساده با زمان انقضا (برای متادیتای فایل‌ها که آدرس امضاشده‌ی موقت دارند) */
+class ExpiringCache<T> {
+  private readonly items = new Map<string, { value: T; expiresAt: number }>();
+
+  constructor(private readonly ttlMs: number) {}
+
+  get(key: string): T | undefined {
+    const item = this.items.get(key);
+    if (!item) return undefined;
+    if (item.expiresAt < Date.now()) {
+      this.items.delete(key);
+      return undefined;
+    }
+    return item.value;
+  }
+
+  has(key: string): boolean {
+    return this.get(key) !== undefined;
+  }
+
+  set(key: string, value: T): void {
+    this.items.set(key, { value, expiresAt: Date.now() + this.ttlMs });
+  }
+
+  delete(key: string): boolean {
+    return this.items.delete(key);
+  }
+
+  clear(): void {
+    this.items.clear();
   }
 }

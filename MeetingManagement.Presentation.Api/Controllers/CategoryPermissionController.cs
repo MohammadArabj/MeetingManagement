@@ -1,3 +1,4 @@
+using MeetingManagement.Domain.Shared.Access;
 using MeetingManagement.Presentation.Api.Filters;
 using MeetingManagement.Common.Security;
 using Epc.Company.Query;
@@ -14,7 +15,8 @@ namespace MeetingManagement.Presentation.Api.Controllers
     [ApiController]
     public class CategoryPermissionController(
         ICategoryPermissionQueryFacade queryFacade,
-        ICategoryPermissionCommandFacade commandFacade) : ControllerBase
+        ICategoryPermissionCommandFacade commandFacade,
+        IActingIdentityResolver identityResolver) : ControllerBase
     {
         [RequirePermission(Permissions.Categories)]
         [HttpGet("GetByCategory/{categoryId:int}")]
@@ -26,7 +28,9 @@ namespace MeetingManagement.Presentation.Api.Controllers
             await queryFacade.GetByCategoryAsync(categoryGuid);
         [HttpGet("CheckAccess/{categoryId:int}/{positionGuid:guid}")]
         public async Task<Result<bool>> CheckAccess(int categoryId, Guid positionGuid) =>
-            await queryFacade.CheckAccessAsync(categoryId, positionGuid);
+            // همیشه برای سمت فعال کاربر جاری
+            await queryFacade.CheckAccessAsync(categoryId,
+                (await identityResolver.ResolveAsync(HttpContext.RequestAborted)).PositionGuid ?? Guid.Empty);
 
         [RequirePermission(Permissions.Categories)]
 

@@ -1,4 +1,4 @@
-﻿using Epc.Application.Query;
+using Epc.Application.Query;
 using Epc.Company.Query;
 using MeetingManagement.Application.Contracts.Assignment;
 using MeetingManagement.Application.Contracts.Resolution;
@@ -66,13 +66,6 @@ namespace MeetingManagement.Presentation.Api.Controllers
         [HttpPost("DetailReport")]
         public async Task<Result<ResolutionReportDto>> GetDetailReport(ResolutionDetailReportRequestDto request)
             => await queryFacade.GetDetailReport(request);
-
-        /// <summary>
-        /// دریافت گزارش خلاصه/آماری مصوبات
-        /// </summary>
-        [HttpPost("SummaryReport")]
-        public async Task<Result<ResolutionSummaryReportDto>> GetSummaryReport(ResolutionSummaryReportRequestDto request)
-            => await queryFacade.GetSummaryReport(request);
 
     }
 

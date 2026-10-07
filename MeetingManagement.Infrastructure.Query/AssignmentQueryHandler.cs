@@ -66,9 +66,9 @@ public class AssignmentQueryHandler(
         if (assignment == null)
             return Result<AssignmentDto>.Failure(null, NotFoundMessage);
 
-        var chain = await LoadChainAsync(assignment.Id);
+        var chain = await AssignmentAccessRules.LoadChainAsync(context, assignment.Id);
         var identity = await identityResolver.ResolveAsync();
-        if (!await CanViewAsync(assignment, chain, identity))
+        if (!await AssignmentAccessRules.CanViewAsync(accessService, assignment, chain, identity))
             return Result<AssignmentDto>.Failure(null, DeniedMessage);
 
         var position = identity.PositionGuid ?? Guid.Empty;
@@ -461,7 +461,7 @@ public class AssignmentQueryHandler(
             return Result<AssignmentResolutionDetails>.Failure(null, NotFoundMessage);
 
         var identity = await identityResolver.ResolveAsync();
-        if (!await CanViewAsync(assignment, await LoadChainAsync(id), identity))
+        if (!await AssignmentAccessRules.CanViewAsync(accessService, assignment, await AssignmentAccessRules.LoadChainAsync(context, id), identity))
             return Result<AssignmentResolutionDetails>.Failure(null, DeniedMessage);
 
         return Result<AssignmentResolutionDetails>.Success(new AssignmentResolutionDetails
@@ -483,7 +483,7 @@ public class AssignmentQueryHandler(
             return Result<List<AssignmentReferralListDto>>.Failure([], NotFoundMessage);
 
         var identity = await identityResolver.ResolveAsync();
-        if (!await CanViewAsync(parent, await LoadChainAsync(parentId), identity))
+        if (!await AssignmentAccessRules.CanViewAsync(accessService, parent, await AssignmentAccessRules.LoadChainAsync(context, parentId), identity))
             return Result<List<AssignmentReferralListDto>>.Failure([], DeniedMessage);
 
         var rows = await context.Assignments.AsNoTracking()
@@ -536,8 +536,8 @@ public class AssignmentQueryHandler(
         if (assignment == null)
             return Result<AssignmentTreeDto>.Failure(null, NotFoundMessage);
 
-        var chain = await LoadChainAsync(assignmentId);
-        if (!await CanViewAsync(assignment, chain, await identityResolver.ResolveAsync()))
+        var chain = await AssignmentAccessRules.LoadChainAsync(context, assignmentId);
+        if (!await AssignmentAccessRules.CanViewAsync(accessService, assignment, chain, await identityResolver.ResolveAsync()))
             return Result<AssignmentTreeDto>.Failure(null, DeniedMessage);
 
         // کل درخت مصوبه یک‌جا خوانده می‌شود (قبلاً برای هر گره یک Query جداگانه اجرا می‌شد)
@@ -642,37 +642,6 @@ public class AssignmentQueryHandler(
     // ═══════════════════════════════════════════════════════════
     private async Task<Guid> CurrentPositionAsync() =>
         (await identityResolver.ResolveAsync()).PositionGuid ?? Guid.Empty;
-
-    /// <summary>این تخصیص و همه‌ی اجداد آن (آخرین عضو = تخصیص اصلی)</summary>
-    private async Task<List<Assignment>> LoadChainAsync(int assignmentId)
-    {
-        var chain = new List<Assignment>();
-        var visited = new HashSet<int>();
-        int? currentId = assignmentId;
-        while (currentId is { } id && visited.Add(id) && chain.Count <= 50)
-        {
-            var current = await context.Assignments.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id);
-            if (current is null) break;
-            chain.Add(current);
-            currentId = current.ParentAssignmentId;
-        }
-        return chain;
-    }
-
-    /// <summary>
-    /// دیدن تخصیص مجاز است اگر کاربر در زنجیره‌ی آن نقشی داشته باشد (اقدام‌کننده/پیگیری‌کننده/ارجاع‌دهنده‌ی
-    /// همین ردیف یا اجدادش) یا در جلسه اجازه‌ی مشاهده‌ی پیگیری‌ها را داشته باشد.
-    /// </summary>
-    private async Task<bool> CanViewAsync(Assignment assignment, IReadOnlyCollection<Assignment> chain, ActingIdentity identity)
-    {
-        var position = identity.PositionGuid;
-        if (position is not null && chain.Append(assignment).Any(a =>
-                a.ActorPositionGuid == position || a.FollowerPositionGuid == position || a.ReferrerPositionGuid == position))
-            return true;
-
-        var access = await accessService.GetByResolutionAsync(assignment.ResolutionId);
-        return access.Exists && access.Can(MeetingCapability.ViewFollowUps);
-    }
 
     private async Task<Dictionary<Guid, string>> GetUserNamesAsync(IEnumerable<Guid?> guids)
     {

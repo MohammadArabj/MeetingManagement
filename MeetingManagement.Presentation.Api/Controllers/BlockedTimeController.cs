@@ -1,4 +1,5 @@
-﻿using Epc.Company.Query;
+using MeetingManagement.Domain.Shared.Access;
+using Epc.Company.Query;
 using MeetingManagement.Application.Contracts.BlockedTime;
 using MeetingManagement.Infrastructure.Query.Contracts.BlockedTime;
 using MeetingManagement.Infrastructure.Query.Contracts.UserBlockedTime;
@@ -12,14 +13,16 @@ namespace MeetingManagement.Presentation.Api.Controllers;
 [ApiController]
 public class BlockedTimeController(
     IBlockedTimeCommandFacade commandFacade,
-    IBlockedTimeQueryFacade queryFacade) : ControllerBase
+    IBlockedTimeQueryFacade queryFacade,
+    IActingIdentityResolver identityResolver) : ControllerBase
 {
     /// <summary>
     /// دریافت لیست زمان‌های عدم حضور
     /// </summary>
     [HttpGet("List/{userGuid:guid}")]
     public async Task<Result<List<BlockedTimeJsonModel>>> List(Guid userGuid) =>
-        await queryFacade.GetList(userGuid);
+        // زمان‌های عدم حضور (با شرح) شخصی هستند؛ هر کاربر فقط فهرست خودش را می‌بیند
+        await queryFacade.GetList((await identityResolver.ResolveAsync(HttpContext.RequestAborted)).UserGuid);
 
     /// <summary>
     /// دریافت زمان‌های عدم حضور برای تقویم
@@ -31,7 +34,7 @@ public class BlockedTimeController(
         [FromQuery] string? toDate) =>
         await queryFacade.GetForCalendar(new BlockedTimeCalendarSearchDto
         {
-            UserGuid = userGuid,
+            UserGuid = (await identityResolver.ResolveAsync(HttpContext.RequestAborted)).UserGuid,
             FromDate = fromDate,
             ToDate = toDate
         });

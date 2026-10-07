@@ -1,4 +1,4 @@
-﻿using Epc.Application.Query;
+using Epc.Application.Query;
 using Epc.Company.Query;
 using MeetingManagement.Application.Contracts.Assignment;
 using MeetingManagement.Common.Extensions;
@@ -27,9 +27,6 @@ public class ResolutionQueryFacade(IQueryBusAsync queryBusAsync) : IResolutionQu
 
     public async Task<Result<ResolutionReportDto>> GetDetailReport(ResolutionDetailReportRequestDto request)
         => await queryBusAsync.Dispatch<Result<ResolutionReportDto>, ResolutionDetailReportRequestDto>(request);
-
-    public async Task<Result<ResolutionSummaryReportDto>> GetSummaryReport(ResolutionSummaryReportRequestDto request)
-        => await queryBusAsync.Dispatch<Result<ResolutionSummaryReportDto>, ResolutionSummaryReportRequestDto>(request);
 
     public async Task<Result<MeetingActionsReportDto>> GetActionsReport(GetActionsReportQuery query)
         => await queryBusAsync.Dispatch<Result<MeetingActionsReportDto>, GetActionsReportQuery>(query);

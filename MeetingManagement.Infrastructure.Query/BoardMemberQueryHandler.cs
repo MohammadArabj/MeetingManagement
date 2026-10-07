@@ -1,4 +1,7 @@
-﻿using System;
+using MeetingManagement.Common.Security;
+using MeetingManagement.Domain.SettingAgg;
+using MeetingManagement.Domain.Shared.Access;
+using System;
 using Epc.Application.Query;
 using Epc.Company.Query;
 using MeetingManagement.Application.Contracts.BoardMember;
@@ -12,7 +15,11 @@ using System.Threading.Tasks;
 
 namespace MeetingManagement.Infrastructure.Query;
 
-public class BoardMemberQueryHandler(MeetingManagementQueryContext context)
+/// <summary>
+/// اعضای هیئت مدیره (اطلاعات تماس و تصویر). خواندن فقط برای دارندگان دسترسی «اعضای هیئت مدیره» یا
+/// «مشاهده جلسات هیئت مدیره»، یا سمتی که مجوز ثبت جلسه در دسته‌بندی هیئت مدیره را دارد (دبیرخانه).
+/// </summary>
+public class BoardMemberQueryHandler(MeetingManagementQueryContext context, IActingIdentityResolver identityResolver)
     : IQueryHandlerAsync<Result<List<BoardMemberDto>>>,
        // IQueryHandlerAsync<Result<List<BoardMemberComboModel>>>,
         IQueryHandlerAsync<Result<EditBoardMemberDto>, Guid>,
@@ -77,6 +84,9 @@ public class BoardMemberQueryHandler(MeetingManagementQueryContext context)
 
     public async Task<Result<List<BoardMemberDto>>> Handle(List<Guid> condition)
     {
+        if (!await CanReadAsync())
+            return Result<List<BoardMemberDto>>.Failure([], DeniedMessage);
+
         var result = context.BoardMembers.Where(x=>condition.Contains(x.Guid)).Select(bm => new BoardMemberDto()
         {
             Guid = bm.Guid,
@@ -97,6 +107,9 @@ public class BoardMemberQueryHandler(MeetingManagementQueryContext context)
 
     async Task<Result<List<BoardMemberListDto>>> IQueryHandlerAsync<Result<List<BoardMemberListDto>>>.Handle()
     {
+        if (!await CanReadAsync())
+            return Result<List<BoardMemberListDto>>.Failure([], DeniedMessage);
+
         var result =await context.BoardMembers.Select(bm => new BoardMemberListDto()
         {
             Guid = bm.Guid,
@@ -113,5 +126,19 @@ public class BoardMemberQueryHandler(MeetingManagementQueryContext context)
         }).ToListAsync();
 
         return Result<List<BoardMemberListDto>>.Success(result);
+    }
+
+    private const string DeniedMessage = "شما به اطلاعات اعضای هیئت مدیره دسترسی ندارید.";
+
+    private async Task<bool> CanReadAsync()
+    {
+        var identity = await identityResolver.ResolveAsync();
+        if (identity.HasExplicitPermission(Permissions.BoardMembers) || identity.HasExplicitPermission(Permissions.BoardViewAll))
+            return true;
+
+        var position = identity.PositionGuid;
+        var boardGuid = SettingValues.BoardCategoryGuid;
+        return position is not null && await context.CategoryPermissions.AsNoTracking()
+            .AnyAsync(cp => cp.PositionGuid == position && cp.Category.Guid == boardGuid);
     }
 }

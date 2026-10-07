@@ -1,4 +1,5 @@
-﻿using System;
+using MeetingManagement.Domain.Shared.Access;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,12 +15,28 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MeetingManagement.Infrastructure.Query;
 
-public class MemberQueryHandler(MeetingManagementQueryContext context, IUserManagementAclService userManagementAclService) : 
+/// <summary>
+/// اعضای جلسه. فهرست فقط برای کسی که جلسه را می‌بیند؛ موبایل و ایمیل اعضا (به‌ویژه هیئت مدیره)
+/// فقط برای مدیر جلسه و خود عضو برگردانده می‌شود.
+/// </summary>
+public class MemberQueryHandler(
+    MeetingManagementQueryContext context,
+    IUserManagementAclService userManagementAclService,
+    IMeetingAccessService accessService,
+    IActingIdentityResolver identityResolver) : 
     IQueryHandlerAsync<Result<List<MeetingMemberListDto>>, MemberSearchDto>,
     IQueryHandlerAsync<Result<MeetingMemberSignatureDetailsDto>,MeetingMemberSearchDto>
 {
     public async Task<Result<List<MeetingMemberListDto>>> Handle(MemberSearchDto condition)
     {
+        var access = await accessService.GetAsync(condition.MeetingGuid);
+        if (!access.Can(MeetingCapability.ViewMeeting))
+            return Result<List<MeetingMemberListDto>>.Failure([], "شما به اعضای این جلسه دسترسی ندارید.");
+
+        var identity = await identityResolver.ResolveAsync();
+        var canSeeContacts = access.Can(MeetingCapability.ManageMembers);
+        var canSeeSignatures = access.Can(MeetingCapability.ViewMinutes);
+
         var members = await context.MeetingsMembers
              .Where(c => c.Meeting.Guid == condition.MeetingGuid)
              .Include(c=>c.Role)
@@ -64,6 +81,10 @@ public class MemberQueryHandler(MeetingManagementQueryContext context, IUserMana
                 : m.Name;
             var personalNo =m.UserGuid!=null? users.FirstOrDefault(c => c.Guid == m.UserGuid)?.UserName??"0000":"00000";
             var signerPersonalNo = m.Signer != null ? users.FirstOrDefault(x => x.Guid == m.Signer)?.UserName??"0000" : "0000";
+            var isSelf = (m.PositionGuid != null && m.PositionGuid == identity.PositionGuid)
+                         || (m.PositionGuid == null && m.UserGuid == identity.UserGuid);
+            var showContact = canSeeContacts || isSelf;
+
             return new MeetingMemberListDto
             {
                 Id = m.Id,
@@ -71,8 +92,8 @@ public class MemberQueryHandler(MeetingManagementQueryContext context, IUserMana
                 BoardMemberGuid = m.BoardMemberGuid,
                 Name = userName,
                 ReplacementUserGuid = m.ReplacementUserGuid,
-                Email = m.Email,
-                Mobile = m.Mobile,
+                Email = showContact ? m.Email : null,
+                Mobile = showContact ? m.Mobile : null,
                 Organization = m.Organization,
                 IsExternal = m.IsExternal??false,
                 RoleId = m.RoleId ?? 0,
@@ -86,7 +107,7 @@ public class MemberQueryHandler(MeetingManagementQueryContext context, IUserMana
                 RoleColor = m.RoleColor,
                 UserName=personalNo,
                 ProfileGuid =m.BoardMemberGuid!=null?m.ProfileImageGuid: m.Profile,
-                SignatureGuid = m.Signature,
+                SignatureGuid = canSeeSignatures ? m.Signature : null,
                 Signer=m.Signer,
                 SignerName=signer,
                 Gender=m.Gender!=null?m.Gender.ToString():"",
@@ -99,6 +120,10 @@ public class MemberQueryHandler(MeetingManagementQueryContext context, IUserMana
 
     public async Task<Result<MeetingMemberSignatureDetailsDto>> Handle(MeetingMemberSearchDto condition)
     {
+        var access = await accessService.GetAsync(condition.MeetingGuid);
+        if (!access.Can(MeetingCapability.ViewMeeting))
+            return Result<MeetingMemberSignatureDetailsDto>.Failure(null!, "شما به این جلسه دسترسی ندارید.");
+
         var member = await context.MeetingsMembers
             .FirstOrDefaultAsync(c => c.Meeting.Guid == condition.MeetingGuid && c.UserGuid == condition.UserGuid);
         if (member == null) return Result<MeetingMemberSignatureDetailsDto>.Failure(null,"عضو مورد نظر یافت نشد");

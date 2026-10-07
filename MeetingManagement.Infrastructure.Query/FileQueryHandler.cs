@@ -1,4 +1,5 @@
-﻿using System;
+using MeetingManagement.Domain.Shared.Access;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,10 +14,21 @@ using Microsoft.Extensions.Configuration;
 
 namespace MeetingManagement.Infrastructure.Query;
 
-public class FileQueryHandler(MeetingManagementQueryContext context,IHttpContextAccessor httpContextAccessor,IConfiguration configuration): IQueryHandlerAsync<Result<List<FileDetailsDto>>,FileParameterDto>
+public class FileQueryHandler(MeetingManagementQueryContext context, IMeetingAccessService accessService): IQueryHandlerAsync<Result<List<FileDetailsDto>>,FileParameterDto>
 {
     public async Task<Result<List<FileDetailsDto>>> Handle(FileParameterDto condition)
     {
+        // شناسه‌ی فایل در سامانه مدیریت فایل حکم کلید دسترسی را دارد؛ فقط به کسی داده می‌شود که آن بخش را می‌بیند
+        var access = await accessService.GetByFileModuleAsync(condition.Type, condition.ModuleId);
+        var required = condition.Type switch
+        {
+            FileType.Resolution => MeetingCapability.ViewResolutions,
+            FileType.Agenda => MeetingCapability.ViewAgenda,
+            _ => MeetingCapability.ViewFiles,
+        };
+        if (!access.Can(required))
+            return Result<List<FileDetailsDto>>.Failure([], "شما به فایل‌های این بخش دسترسی ندارید.");
+
         var files = await context.Files
             .Where(c => c.ModuleId == condition.ModuleId && c.Type == condition.Type)
             .Select(c => new FileDetailsDto()

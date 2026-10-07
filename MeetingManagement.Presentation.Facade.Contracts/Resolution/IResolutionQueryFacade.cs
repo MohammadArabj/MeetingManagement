@@ -15,7 +15,6 @@ public interface IResolutionQueryFacade:IFacadeService
     Task<Result<List<ResolutionSearchResultDto>>> Search(ResolutionSearchRequestDto request);
     Task<Result<List<ComboBase>>> GetRelatedResolutions(Guid meetingGuid);
     Task<Result<ResolutionReportDto>> GetDetailReport(ResolutionDetailReportRequestDto request);
-    Task<Result<ResolutionSummaryReportDto>> GetSummaryReport(ResolutionSummaryReportRequestDto request);
     Task<Result<MeetingActionsReportDto>> GetActionsReport(GetActionsReportQuery query);
     Task<Result<int>> GetResolutionNumber(Guid meetingGuid);
     // Task<byte[]> ExportDetailReportToPdf(List<ResolutionDetailReportDto> data, ResolutionDetailReportRequestDto request);

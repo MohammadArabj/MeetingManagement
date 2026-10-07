@@ -1,4 +1,4 @@
-﻿using Epc.Application.Query;
+using Epc.Application.Query;
 using Epc.Company.Query;
 using MeetingManagement.Application.Contracts.Assignment;
 using MeetingManagement.Common.Extensions;
@@ -13,15 +13,21 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using static Microsoft.AspNetCore.Hosting.Internal.HostingApplication;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
+using MeetingManagement.Infrastructure.Query.Security;
 using MeetingManagement.Domain.Shared.Access;
 
 namespace MeetingManagement.Infrastructure.Query;
 
-public class ResolutionQueryHandler(MeetingManagementQueryContext context, IUserManagementAclService userManagementAclService) :
+/// <summary>
+/// Queryهای مصوبات. هر Query روی یک جلسه ابتدا دسترسی را بررسی می‌کند و جستجو/گزارش‌ها فقط مصوباتی را
+/// برمی‌گردانند که جلسه‌شان برای کاربر قابل مشاهده است یا کاربر در تخصیص ابلاغ‌شده‌ی آن نقش دارد.
+/// </summary>
+public class ResolutionQueryHandler(
+    MeetingManagementQueryContext context,
+    IUserManagementAclService userManagementAclService,
+    IActingIdentityResolver identityResolver,
+    IMeetingAccessService accessService) :
     IQueryHandlerAsync<Result<List<ResolutionJsonModel>>, Guid>,
     IQueryHandlerAsync<Result<List<ResolutionSearchResultDto>>, ResolutionSearchRequestDto>,
     IQueryHandlerAsync<Result<List<ComboBase>>, Guid>,
@@ -31,6 +37,10 @@ public class ResolutionQueryHandler(MeetingManagementQueryContext context, IUser
 {
     public async Task<Result<List<ResolutionJsonModel>>> Handle(Guid condition)
     {
+        var access = await accessService.GetAsync(condition);
+        if (!access.Can(MeetingCapability.ViewResolutions))
+            return Result<List<ResolutionJsonModel>>.Failure([], DeniedMessage);
+
         var resolutions = await context.Resolutions
             .Include(c => c.AssignedMembers)
             .Include(resolution => resolution.Label)
@@ -113,8 +123,7 @@ public class ResolutionQueryHandler(MeetingManagementQueryContext context, IUser
             .Include(resolution => resolution.AssignedMembers)
             .Include(resolution => resolution.Meeting)
             .ThenInclude(x => x.MeetingMembers)
-            //.Where(c => c.Meeting.StatusId == 6)
-            .Where(c => c.AssignedMembers.Any(x => x.ActorPositionGuid == condition.PositionGuid || x.FollowerPositionGuid == condition.PositionGuid) || c.Meeting.MeetingMembers.Any(d => d.PositionGuid == condition.PositionGuid&&d.RoleId != MeetingRoles.GuestId))
+            .Where(await VisibleResolutionsAsync())
             .WhereIf(meetingDateFrom != null, c => c.Meeting.Date >= meetingDateFrom)
             .WhereIf(meetingDateTo != null, c => c.Meeting.Date <= meetingDateTo)
             .WhereIf(resolutionDate != null, c => c.AssignedMembers.Any(x => x.DueDate == resolutionDate))
@@ -192,6 +201,10 @@ public class ResolutionQueryHandler(MeetingManagementQueryContext context, IUser
 
     async Task<Result<List<ComboBase>>> IQueryHandlerAsync<Result<List<ComboBase>>, Guid>.Handle(Guid condition)
     {
+        var access = await accessService.GetAsync(condition);
+        if (!access.Can(MeetingCapability.ViewResolutions))
+            return Result<List<ComboBase>>.Failure([], DeniedMessage);
+
         var resolutions = await context.Resolutions
             .Where(c => c.Meeting.Guid == condition)
             .Select(c => new ComboBase()
@@ -212,6 +225,7 @@ public class ResolutionQueryHandler(MeetingManagementQueryContext context, IUser
         // ------------------------
         var query = context.Resolutions
             .AsNoTracking()
+            .Where(await VisibleResolutionsAsync())
             .Include(r => r.Meeting).ThenInclude(m => m.Category)
             .Include(r => r.AssignedMembers).ThenInclude(a => a.Actions)
             .WhereIf(condition.PositionMainGuid.HasValue, r => r.AssignedMembers.Any(x =>
@@ -629,6 +643,10 @@ public class ResolutionQueryHandler(MeetingManagementQueryContext context, IUser
     /// </summary>
     public async Task<Result<MeetingActionsReportDto>> Handle(GetActionsReportQuery condition)
     {
+        var access = await accessService.GetAsync(condition.MeetingGuid);
+        if (!access.Can(MeetingCapability.ViewFollowUps))
+            return Result<MeetingActionsReportDto>.Failure(null!, DeniedMessage);
+
         // دریافت اطلاعات جلسه
         var meeting = await context.Meetings
             .Include(m => m.Category)
@@ -650,8 +668,7 @@ public class ResolutionQueryHandler(MeetingManagementQueryContext context, IUser
         }
 
         // تعیین جلسه هیئت مدیره - GUID دسته‌بندی هیئت مدیره را اینجا قرار دهید
-        var boardCategoryGuid = Guid.Parse("00000000-0000-0000-0000-000000000000"); // ✅ این را با GUID واقعی جایگزین کنید
-        var isBoardMeeting = meeting.CategoryGuid == boardCategoryGuid;
+        var isBoardMeeting = MeetingKinds.IsBoard(meeting.CategoryGuid);
 
         // Query مصوبات با فیلتر اختیاری
         var resolutionsQuery = context.Resolutions
@@ -958,11 +975,34 @@ public class ResolutionQueryHandler(MeetingManagementQueryContext context, IUser
 
     async Task<Result<int>> IQueryHandlerAsync<Result<int>, Guid>.Handle(Guid condition)
     {
-        var maxNumber = await context.Resolutions
-      .Where(r => r.Meeting.Guid == condition)
-      .MaxAsync(r =>r.Number);
-        var maxNumberInt=string.IsNullOrEmpty(maxNumber) ? 0 : int.Parse(maxNumber);
-        var number = maxNumberInt + 1;
-        return Result<int>.Success(number);
+        var access = await accessService.GetAsync(condition);
+        if (!access.Can(MeetingCapability.ViewResolutions))
+            return Result<int>.Failure(0, DeniedMessage);
+
+        // شماره‌های غیرعددی نادیده گرفته می‌شوند (قبلاً int.Parse خطا می‌داد)
+        var numbers = await context.Resolutions.AsNoTracking()
+            .Where(r => r.MeetingId == access.MeetingId && r.Number != null)
+            .Select(r => r.Number!)
+            .ToListAsync();
+        var max = numbers.Select(n => int.TryParse(n.Trim(), out var v) ? v : 0).DefaultIfEmpty(0).Max();
+        return Result<int>.Success(max + 1);
+    }
+
+    private const string DeniedMessage = "شما به مصوبات این جلسه دسترسی ندارید.";
+
+    /// <summary>
+    /// مصوباتی که کاربر می‌تواند ببیند: جلسه‌اش برای او قابل مشاهده است (اعضا به‌جز مهمان، ثبت‌کننده، دسترسی‌های سیستمی)
+    /// یا در یکی از تخصیص‌های «ابلاغ‌شده»ی آن نقش دارد.
+    /// </summary>
+    private async Task<System.Linq.Expressions.Expression<Func<Resolution, bool>>> VisibleResolutionsAsync()
+    {
+        var identity = await identityResolver.ResolveAsync();
+        var position = identity.PositionGuid ?? Guid.Empty;
+        var visibleMeetings = context.Meetings.VisibleTo(identity, includeGuests: false).Select(m => m.Id);
+        var myAssignments = context.Assignments.Published()
+            .Where(a => a.ActorPositionGuid == position || a.FollowerPositionGuid == position || a.ReferrerPositionGuid == position)
+            .Select(a => a.ResolutionId);
+
+        return r => visibleMeetings.Contains(r.MeetingId) || myAssignments.Contains(r.Id);
     }
 }

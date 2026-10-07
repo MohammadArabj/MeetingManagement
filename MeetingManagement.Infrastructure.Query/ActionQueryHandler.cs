@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+using MeetingManagement.Domain.Shared.Access;
+using MeetingManagement.Infrastructure.Query.Security;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Epc.Application.Command;
@@ -16,12 +18,20 @@ using NHibernate.Mapping;
 
 namespace MeetingManagement.Infrastructure.Query;
 
-public class ActionQueryHandler(MeetingManagementQueryContext context,IUserManagementAclService userManagementAclService)
+public class ActionQueryHandler(
+    MeetingManagementQueryContext context,
+    IUserManagementAclService userManagementAclService,
+    IActingIdentityResolver identityResolver,
+    IMeetingAccessService accessService)
     : IQueryHandlerAsync<Result<List<ActionListDto>>, int>
 {
    
     public async Task<Result<List<ActionListDto>>> Handle(int command)
     {
+        var identity = await identityResolver.ResolveAsync();
+        if (!await AssignmentAccessRules.CanViewAsync(context, accessService, command, identity))
+            return Result<List<ActionListDto>>.Failure([], "شما به اقدامات این تخصیص دسترسی ندارید.");
+
         // اول همه فرزندان رو پیدا کن
         var allAssignmentIds = await GetAssignmentAndChildrenIds(command);
 
