@@ -417,6 +417,8 @@ export class MeetingMembersTabComponent extends AgGridBaseComponent implements O
   // ═══════════════════════════════════════════════════════════════
 
   private setupBreadcrumb(): void {
+    // به‌عنوان تب صفحه‌ی جزئیات جلسه، مسیر صفحه را تغییر نمی‌دهد
+    if (this.router.url.includes('/meetings/details/')) return;
     this.breadcrumbService.setItems([
       { label: 'جلسات', routerLink: '/meetings/list' },
       { label: 'مدیریت اعضا',routerLink: '' }
