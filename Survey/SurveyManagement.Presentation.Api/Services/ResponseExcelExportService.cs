@@ -14,11 +14,18 @@ public class ResponseExcelExportService : IResponseExcelExportService
     private static readonly XLColor StripeBg = XLColor.FromHtml("#F8FAFC");
     private static readonly XLColor BorderColor = XLColor.FromHtml("#E2E8F0");
 
-    private record ColumnDef(string Key, string Header, Func<MatrixResponseRowDto, int, object> ValueGetter);
+    private record ColumnDef(string Key, string Header, Func<MatrixResponseRowDto, int, object> ValueGetter, string? Group = null);
+
+    private const string RespondentGroup = "اطلاعات پاسخ‌دهنده";
 
     public byte[] GenerateExcel(ResponseMatrixDto matrix, List<string>? selectedColumns = null)
     {
-        var orderedQuestions = matrix.Questions.OrderBy(q => q.OrderIndex).ToList();
+        // ستون‌ها به ترتیب گام و سپس ترتیب سوال (گروه‌بندی گام‌ها در ردیف بالای عنوان)
+        var orderedQuestions = matrix.Questions
+            .OrderBy(q => q.CriterionSortOrder ?? int.MaxValue)
+            .ThenBy(q => q.OrderIndex)
+            .ToList();
+        var hasGroups = orderedQuestions.Any(q => !string.IsNullOrWhiteSpace(q.CriterionTitle));
         var allColumns = BuildAllColumns(orderedQuestions);
 
         List<ColumnDef> columns;
@@ -65,9 +72,34 @@ public class ResponseExcelExportService : IResponseExcelExportService
         sheet.Cell(3, 1).Style.Font.Italic = true;
         sheet.Cell(3, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
 
-        const int headerRow = 4;
+        var headerRow = hasGroups ? 5 : 4;
         for (int i = 0; i < columns.Count; i++)
             sheet.Cell(headerRow, i + 1).Value = columns[i].Header;
+
+        if (hasGroups)
+        {
+            // ردیف گام‌ها: ستون‌های پشت‌سرهم با یک گام ادغام می‌شوند
+            var palette = new[] { "#DBEAFE", "#DCFCE7", "#FEF3C7", "#FCE7F3", "#E0E7FF", "#CCFBF1", "#FFE4E6", "#EDE9FE" };
+            var colorIndex = 0;
+            var start = 0;
+            for (var i = 1; i <= columns.Count; i++)
+            {
+                if (i < columns.Count && columns[i].Group == columns[start].Group) continue;
+                var title = columns[start].Group ?? "سایر سوالات";
+                var range = sheet.Range(4, start + 1, 4, i);
+                if (i - start > 1) range.Merge();
+                sheet.Cell(4, start + 1).Value = title;
+                range.Style.Font.Bold = true;
+                range.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                range.Style.Fill.BackgroundColor = title == RespondentGroup
+                    ? XLColor.FromHtml("#F1F5F9")
+                    : XLColor.FromHtml(palette[colorIndex++ % palette.Length]);
+                range.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                range.Style.Border.OutsideBorderColor = BorderColor;
+                start = i;
+            }
+            sheet.Row(4).Height = 24;
+        }
 
         var headerRange = sheet.Range(headerRow, 1, headerRow, Math.Max(totalCols, 1));
         headerRange.Style.Font.Bold = true;
@@ -134,19 +166,19 @@ public class ResponseExcelExportService : IResponseExcelExportService
     {
         var list = new List<ColumnDef>
         {
-            new("index", "ردیف", (row, idx) => idx),
-            new("age", "سن", (row, idx) => row.Age?.ToString() ?? "-"),
-            new("gender", "جنسیت", (row, idx) => row.Gender ?? "-"),
-            new("office", "امور", (row, idx) => row.Office ?? "-"),
-            new("employmentType", "نوع استخدام", (row, idx) => row.EmploymentType ?? "-"),
-            new("education", "مدرک تحصیلی", (row, idx) => row.Education ?? "-"),
-            new("shiftWorker", "نوبت‌کاری", (row, idx) => row.ShiftWorker ?? "-"),
-            new("experienceYears", "سابقه (سال)", (row, idx) => row.ExperienceYears?.ToString() ?? "-"),
-            new("organizationalGrade", "گرید سازمانی", (row, idx) => row.OrganizationalGrade ?? "-"),
-            new("organizationalGroup", "گروه سازمانی", (row, idx) => row.OrganizationalGroup ?? "-"),
-            new("startedAt", "تاریخ شروع", (row, idx) => row.StartedAt ?? "-"),
-            new("completedAt", "تاریخ اتمام", (row, idx) => row.CompletedAt ?? "-"),
-            new("timeSpent", "زمان صرف‌شده", (row, idx) => row.TimeSpentText ?? "-"),
+            new("index", "ردیف", (row, idx) => idx, RespondentGroup),
+            new("age", "سن", (row, idx) => row.Age?.ToString() ?? "-", RespondentGroup),
+            new("gender", "جنسیت", (row, idx) => row.Gender ?? "-", RespondentGroup),
+            new("office", "امور", (row, idx) => row.Office ?? "-", RespondentGroup),
+            new("employmentType", "نوع استخدام", (row, idx) => row.EmploymentType ?? "-", RespondentGroup),
+            new("education", "مدرک تحصیلی", (row, idx) => row.Education ?? "-", RespondentGroup),
+            new("shiftWorker", "نوبت‌کاری", (row, idx) => row.ShiftWorker ?? "-", RespondentGroup),
+            new("experienceYears", "سابقه (سال)", (row, idx) => row.ExperienceYears?.ToString() ?? "-", RespondentGroup),
+            new("organizationalGrade", "گرید سازمانی", (row, idx) => row.OrganizationalGrade ?? "-", RespondentGroup),
+            new("organizationalGroup", "گروه سازمانی", (row, idx) => row.OrganizationalGroup ?? "-", RespondentGroup),
+            new("startedAt", "تاریخ شروع", (row, idx) => row.StartedAt ?? "-", RespondentGroup),
+            new("completedAt", "تاریخ اتمام", (row, idx) => row.CompletedAt ?? "-", RespondentGroup),
+            new("timeSpent", "زمان صرف‌شده", (row, idx) => row.TimeSpentText ?? "-", RespondentGroup),
         };
 
         foreach (var q in questions)
@@ -155,7 +187,8 @@ public class ResponseExcelExportService : IResponseExcelExportService
             list.Add(new ColumnDef(
                 key,
                 q.QuestionText + (q.IsRequired ? " *" : ""),
-                (row, idx) => row.Answers.TryGetValue(key, out var v) ? v : "-"));
+                (row, idx) => row.Answers.TryGetValue(key, out var v) ? v : "-",
+                string.IsNullOrWhiteSpace(q.CriterionTitle) ? null : q.CriterionTitle));
         }
 
         return list;

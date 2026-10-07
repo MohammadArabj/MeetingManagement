@@ -15,6 +15,10 @@ public class MatrixQuestionColumnDto
     public int QuestionType { get; set; }
     public int OrderIndex { get; set; }
     public bool IsRequired { get; set; }
+
+    /// <summary>گام/معیار سوال (برای گروه‌بندی ستون‌ها در جدول و فایل خروجی)</summary>
+    public string? CriterionTitle { get; set; }
+    public int? CriterionSortOrder { get; set; }
 }
 
 public class MatrixResponseRowDto

@@ -228,8 +228,10 @@ public class ResponseQueryHandler(
 
         var questions = await context.Questions
             .AsNoTracking()
-            .Where(q => q.SurveyId == survey.Id)
-            .OrderBy(q => q.SortOrder)
+            .Include(q => q.Criterion)
+            .Where(q => q.SurveyId == survey.Id && !q.IsRemoved)
+            .OrderBy(q => q.Criterion != null ? q.Criterion.SortOrder : int.MaxValue)
+            .ThenBy(q => q.SortOrder)
             .ToListAsync();
         await PreloadOptionsAsync(questions.Select(q => q.Id));
 
@@ -251,7 +253,9 @@ public class ResponseQueryHandler(
                 QuestionText = q.QuestionText,
                 QuestionType = (int)q.QuestionType,
                 OrderIndex = q.SortOrder,
-                IsRequired = q.IsRequired
+                IsRequired = q.IsRequired,
+                CriterionTitle = q.Criterion?.Title,
+                CriterionSortOrder = q.Criterion?.SortOrder
             }).ToList()
         };
 
@@ -433,8 +437,11 @@ public class ResponseQueryHandler(
             return Result<SurveyAnalyticsDto>.Failure(null, "شما به نتایج این نظرسنجی دسترسی ندارید.");
 
         var questions = await context.Questions
-            .Where(q => q.SurveyId == survey.Id)
-            .OrderBy(q => q.SortOrder)
+            .AsNoTracking()
+            .Include(q => q.Criterion)
+            .Where(q => q.SurveyId == survey.Id && !q.IsRemoved)
+            .OrderBy(q => q.Criterion != null ? q.Criterion.SortOrder : int.MaxValue)
+            .ThenBy(q => q.SortOrder)
             .ToListAsync();
 
         var questionIds = questions.Select(q => q.Id).ToList();
@@ -484,6 +491,9 @@ public class ResponseQueryHandler(
                 QuestionTypeName = question.QuestionType.GetDisplayName(),
                 SortOrder = question.SortOrder,
                 IsRequired = question.IsRequired,
+                CriterionGuid = question.Criterion?.Guid,
+                CriterionTitle = question.Criterion?.Title,
+                CriterionSortOrder = question.Criterion?.SortOrder,
                 TotalAnswered = qAnswers.Count(a => !a.IsSkipped),
                 TotalSkipped = qAnswers.Count(a => a.IsSkipped)
             };
@@ -530,7 +540,57 @@ public class ResponseQueryHandler(
             dto.Questions.Add(qDto);
         }
 
+        dto.Criteria = BuildCriteriaSummary(dto.Questions);
         return Result<SurveyAnalyticsDto>.Success(dto);
+    }
+
+    /// <summary>
+    /// خلاصه‌ی هر گام: نرخ پاسخ، میانگین نرمال‌شده‌ی سوال‌های امتیازی و احساس پاسخ‌های متنی.
+    /// اگر هیچ سوالی گام نداشته باشد خالی است؛ سوال‌های بدون گام در «سایر سوالات» می‌آیند.
+    /// </summary>
+    private static List<CriterionAnalyticsDto> BuildCriteriaSummary(List<QuestionAnalyticsDto> questions)
+    {
+        if (questions.All(q => q.CriterionGuid is null)) return new();
+
+        return questions
+            .GroupBy(q => new { q.CriterionGuid, Title = q.CriterionTitle ?? "سایر سوالات", Sort = q.CriterionSortOrder ?? int.MaxValue })
+            .OrderBy(g => g.Key.Sort)
+            .Select(g =>
+            {
+                var scores = g.Where(q => q.NumericStats is not null && q.TotalAnswered > 0)
+                    .Select(q => NormalizedScore(q))
+                    .Where(v => v.HasValue)
+                    .Select(v => v!.Value)
+                    .ToList();
+                var texts = g.Where(q => q.TextAnalytics is { MeaningfulCount: > 0 }).ToList();
+                return new CriterionAnalyticsDto
+                {
+                    Guid = g.Key.CriterionGuid,
+                    Title = g.Key.Title,
+                    SortOrder = g.Key.Sort == int.MaxValue ? 9999 : g.Key.Sort,
+                    QuestionCount = g.Count(),
+                    AverageAnswerRate = Math.Round(g.Average(q => q.AnswerRate), 1),
+                    AverageScorePercent = scores.Count > 0 ? Math.Round(scores.Average(), 1) : null,
+                    NetSentiment = texts.Count > 0 ? Math.Round(texts.Average(q => q.TextAnalytics!.Sentiment.NetSentiment), 1) : null,
+                    QuestionGuids = g.Select(q => q.QuestionGuid).ToList()
+                };
+            })
+            .ToList();
+    }
+
+    /// <summary>میانگین سوال امتیازی روی مقیاس ۰ تا ۱۰۰ (برای مقایسه‌ی گام‌ها با مقیاس‌های مختلف)</summary>
+    private static decimal? NormalizedScore(QuestionAnalyticsDto q)
+    {
+        var stats = q.NumericStats!;
+        decimal min, max;
+        switch ((QuestionType)q.QuestionType)
+        {
+            case QuestionType.Rating: min = 1; max = Math.Max(5, stats.Max); break;
+            case QuestionType.NPS: min = 0; max = 10; break;
+            case QuestionType.LinearScale: min = Math.Min(0, stats.Min); max = Math.Max(10, stats.Max); break;
+            default: return null; // عدد آزاد مقیاس مشخصی ندارد
+        }
+        return max <= min ? null : Math.Clamp((stats.Average - min) / (max - min) * 100, 0, 100);
     }
 
     #region Analytics Helpers
@@ -825,41 +885,11 @@ public class ResponseQueryHandler(
     private TextAnalyticsDto BuildTextAnalytics(List<Domain.ResponseAgg.ResponseAnswer> answers)
     {
         var texts = answers
-            .Where(a => !string.IsNullOrWhiteSpace(a.TextAnswer))
+            .Where(a => !a.IsSkipped && !string.IsNullOrWhiteSpace(a.TextAnswer))
             .Select(a => a.TextAnswer!)
             .ToList();
 
-        var result = new TextAnalyticsDto
-        {
-            SampleAnswers = texts.Take(30).ToList(),
-            TopWords = Services.PersianSentimentAnalyzer.GetTopWords(texts, 25),
-            AverageWordCount = texts.Any()
-                ? Math.Round((decimal)texts.Average(t => Services.PersianSentimentAnalyzer.Tokenize(t).Count), 1) : 0,
-            AverageCharCount = texts.Any() ? Math.Round((decimal)texts.Average(t => t.Length), 1) : 0
-        };
-
-        var sentiments = texts
-            .Select(t => new { Text = t, Sentiment = Services.PersianSentimentAnalyzer.Analyze(t) })
-            .ToList();
-
-        result.Sentiment.PositiveCount = sentiments.Count(s => s.Sentiment == "positive");
-        result.Sentiment.NegativeCount = sentiments.Count(s => s.Sentiment == "negative");
-        result.Sentiment.NeutralCount = sentiments.Count(s => s.Sentiment == "neutral");
-
-        var totalSentiments = sentiments.Count;
-        if (totalSentiments > 0)
-        {
-            result.Sentiment.PositivePercentage = Math.Round((decimal)result.Sentiment.PositiveCount / totalSentiments * 100, 1);
-            result.Sentiment.NegativePercentage = Math.Round((decimal)result.Sentiment.NegativeCount / totalSentiments * 100, 1);
-            result.Sentiment.NeutralPercentage = Math.Round((decimal)result.Sentiment.NeutralCount / totalSentiments * 100, 1);
-        }
-
-        result.Sentiment.Samples = sentiments
-            .GroupBy(s => s.Sentiment)
-            .SelectMany(g => g.Take(5).Select(s => new SentimentAnswerDto(s.Text, s.Sentiment)))
-            .ToList();
-
-        return result;
+        return Services.PersianTextAnalyzer.Analyze(texts);
     }
 
     private List<TrendPointDto> BuildDateDistribution(List<Domain.ResponseAgg.ResponseAnswer> answers)
