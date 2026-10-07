@@ -7,6 +7,8 @@ import {
 
 /** «ادمین مدیریت جلسات»: دسترسی کامل به همه‌ی بخش‌ها در همه‌ی وضعیت‌ها (هم‌نام Permissions.MeetingAdmin در سرور) */
 export const MEETING_ADMIN_PERMISSION = 'MT_Admin';
+/** «ورود به جای کاربر» (هم‌نام Permissions.Impersonate در سرور) */
+export const IMPERSONATE_PERMISSION = 'MT_Impersonate';
 
 /** کلیدهایی از localStorage که وضعیت جلسه کاری کاربر را نگه می‌دارند */
 const TRACKED_KEYS = new Set([USER_ID_NAME, Main_USER_ID, POSITION_ID, POSITION_NAME, IsDeletage, ISSP, PERMISSIONS_NAME, USER_CURRENT_ACTIVE_SESSION_NAME]);

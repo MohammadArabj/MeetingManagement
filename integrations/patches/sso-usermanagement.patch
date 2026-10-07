@@ -363,10 +363,10 @@ index 0000000..e8be301
 +    start();
 +})();
 diff --git a/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs b/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs
-index b536773..f80ce3a 100644
+index b536773..05cc6d9 100644
 --- a/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs
 +++ b/UserManagement.Infrastructure.Query/DelegationQueryHandler.cs
-@@ -38,43 +38,52 @@ namespace UserManagement.Infrastructure.Query
+@@ -38,43 +38,56 @@ namespace UserManagement.Infrastructure.Query
          //}
  
  
@@ -388,6 +388,10 @@ index b536773..f80ce3a 100644
 -            var delegations = await context.Delegations
 -                .Where(c=>c.StartDate<=now&&c.EndDate>=now)
 -                .Where(c => c.DelegatedUserId==user.Id && c.IsActive == 1)
++            // «ورود به جای کاربر»: سمت‌ها و تفویض‌های کاربر دیگر فقط برای مدیر کل / دارندگان ImpersonationPolicy
++            if (condition.UserGuid != Guid.Empty && condition.UserGuid != userGuid
++                && await ImpersonationPolicy.CanImpersonateAsync(context, userGuid))
++                userGuid = condition.UserGuid;
 +            var user = await context.Users.AsNoTracking()
 +                .Where(u => u.Guid == userGuid)
 +                .Select(u => new { u.Id, FullName = u.FirstName + " " + u.LastName })
@@ -447,7 +451,7 @@ index b536773..f80ce3a 100644
          }
  
          //async Task<List<DelegationViewModel>> IQueryHandlerAsync<List<DelegationViewModel>, Guid>.Handle(Guid condition)
-@@ -131,7 +140,18 @@ namespace UserManagement.Infrastructure.Query
+@@ -131,7 +144,18 @@ namespace UserManagement.Infrastructure.Query
          //}
          public async Task<string> Handle(DelegationPermissionRequestDto request)
          {
@@ -466,11 +470,52 @@ index b536773..f80ce3a 100644
              var permissions =
                  context.DelegationSystemPermissions
                      .Where(c=>c.DelegationSystem.SystemId==system.Id)
+diff --git a/UserManagement.Infrastructure.Query/ImpersonationPolicy.cs b/UserManagement.Infrastructure.Query/ImpersonationPolicy.cs
+new file mode 100644
+index 0000000..721b6fa
+--- /dev/null
++++ b/UserManagement.Infrastructure.Query/ImpersonationPolicy.cs
+@@ -0,0 +1,35 @@
++﻿using Microsoft.EntityFrameworkCore;
++using UserManagement.Infrastructure.Persistence;
++
++namespace UserManagement.Infrastructure.Query;
++
++/// <summary>
++/// «ورود به جای کاربر» (Impersonation) برای پشتیبانی/مدیریت سامانه‌ها.
++/// فقط کاربری که سمت مدیر کل (IsSuperAdmin) دارد یا یکی از سمت‌هایش (مستقیم یا از راه گروه) یکی از
++/// دسترسی‌های <see cref="PermissionTitles"/> را دارد، می‌تواند سمت‌ها و دسترسی‌های کاربر دیگری را بخواند.
++/// سایر کاربران فقط اطلاعات سمت‌های خودشان را می‌گیرند.
++/// </summary>
++public static class ImpersonationPolicy
++{
++    public static readonly string[] PermissionTitles = ["MT_Admin", "MT_Impersonate"];
++
++    public static async Task<bool> CanImpersonateAsync(UserManagementQueryContext context, Guid userGuid)
++    {
++        var positionIds = context.UserPositions.AsNoTracking()
++            .Where(up => up.User.Guid == userGuid)
++            .Select(up => up.PositionId);
++
++        if (await context.Positions.AsNoTracking().AnyAsync(p => positionIds.Contains(p.Id) && p.IsSuperAdmin))
++            return true;
++
++        var groupIds = context.PositionGroups.AsNoTracking().Where(pg => positionIds.Contains(pg.PositionId)).Select(pg => pg.GroupId);
++        var permissionIds = context.PositionPermissions.AsNoTracking().Where(pp => positionIds.Contains(pp.PositionId)).Select(pp => pp.PermissionId)
++            .Concat(context.GroupPermissions.AsNoTracking().Where(gp => groupIds.Contains(gp.GroupId)).Select(gp => gp.PermissionId));
++
++        return await context.Permissions.AsNoTracking()
++            .AnyAsync(p => permissionIds.Contains(p.Id) && PermissionTitles.Contains(p.Title));
++    }
++
++    public static bool CanImpersonate(UserManagementQueryContext context, Guid userGuid)
++        => CanImpersonateAsync(context, userGuid).GetAwaiter().GetResult();
++}
 diff --git a/UserManagement.Infrastructure.Query/PermissionQueryHandler.cs b/UserManagement.Infrastructure.Query/PermissionQueryHandler.cs
-index 6da3ad4..643c828 100644
+index 6da3ad4..fbff7cf 100644
 --- a/UserManagement.Infrastructure.Query/PermissionQueryHandler.cs
 +++ b/UserManagement.Infrastructure.Query/PermissionQueryHandler.cs
-@@ -67,19 +67,31 @@ IQueryHandler<PermissionTreeNodeViewModel, Guid>
+@@ -67,19 +67,33 @@ IQueryHandler<PermissionTreeNodeViewModel, Guid>
          return null;
      }
  
@@ -478,7 +523,8 @@ index 6da3ad4..643c828 100644
 +    /// دسترسی‌های یک سمت در یک سامانه.
 +    /// فقط برای سمتی که متعلق به کاربر جاری است و فقط دسترسی‌های همان سامانه (ClientId) برگردانده می‌شود؛
 +    /// قبلاً دسترسی‌های هر سمتی، از همه‌ی سامانه‌ها، برای هر کاربری قابل دریافت بود.
-+    /// (برای تفویض از GetDelegationPermissions استفاده می‌شود.)
++    /// (برای تفویض از GetDelegationPermissions استفاده می‌شود؛ مدیر کل و دارندگان دسترسی «ورود به جای کاربر»
++    /// دسترسی‌های سمت هر کاربری را می‌گیرند.)
 +    /// </summary>
      public string Handle(PermissionRequestDto request)
      {
@@ -499,7 +545,8 @@ index 6da3ad4..643c828 100644
 +
 +        var ownsPosition = context.UserPositions.AsNoTracking()
 +            .Any(up => up.PositionId == position.Id && up.User.Guid == userGuid);
-+        if (!ownsPosition) return string.Empty;
++        // «ورود به جای کاربر»: فقط برای مدیر کل / دارندگان دسترسی ImpersonationPolicy
++        if (!ownsPosition && !ImpersonationPolicy.CanImpersonate(context, userGuid)) return string.Empty;
 +
 +        var groupIds = context.PositionGroups.AsNoTracking().Where(x => x.PositionId == position.Id).Select(c => c.GroupId);
 +        var positionPermissionIds = context.PositionPermissions.AsNoTracking().Where(c => c.PositionId == position.Id).Select(c => c.PermissionId);

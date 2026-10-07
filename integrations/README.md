@@ -77,6 +77,7 @@
 | `Delegation/GetActiveDelegationsForDelegatee` | در هر فراخوانی **همه‌ی کاربران** با سمت‌هایشان در حافظه بارگذاری می‌شد | چند Query هدفمند |
 | `Permission/GetPositionPermissions` | دسترسی‌های **هر سمتی** و **همه‌ی سامانه‌ها** را به هر کاربری برمی‌گرداند | فقط سمت متعلق به کاربر جاری و فقط سامانه‌ی همان `ClientId` |
 | `Delegation/GetDelegationPermissions` | بررسی نمی‌کرد تفویض متعلق به درخواست‌کننده باشد | فقط تفویض‌گیرنده‌ی همان تفویض، در بازه‌ی فعال |
+| «ورود به جای کاربر» | با محدودیت بالا، دسترسی‌های کاربر هدف دریافت نمی‌شد | `ImpersonationPolicy`: فقط سمت مدیر کل یا دارای `MT_Admin`/`MT_Impersonate` می‌تواند سمت‌ها (`GetActiveDelegationsForDelegatee` با `UserGuid` دیگر) و دسترسی‌های سمت کاربر دیگر را بخواند؛ سامانه جلسات هم همین را مستقل بررسی می‌کند |
 
 **فرانت UserManagement:** عکس سربرگ و `ImageCacheManager` با توکن `mt` (`core/media/media-token.ts`) بارگذاری می‌شوند.
 

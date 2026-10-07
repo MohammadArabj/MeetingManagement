@@ -47,6 +47,10 @@ namespace UserManagement.Infrastructure.Query
         {
             var now = DateTime.Now;
             var userGuid = claimHelper.GetCurrentUserGuid();
+            // «ورود به جای کاربر»: سمت‌ها و تفویض‌های کاربر دیگر فقط برای مدیر کل / دارندگان ImpersonationPolicy
+            if (condition.UserGuid != Guid.Empty && condition.UserGuid != userGuid
+                && await ImpersonationPolicy.CanImpersonateAsync(context, userGuid))
+                userGuid = condition.UserGuid;
             var user = await context.Users.AsNoTracking()
                 .Where(u => u.Guid == userGuid)
                 .Select(u => new { u.Id, FullName = u.FirstName + " " + u.LastName })

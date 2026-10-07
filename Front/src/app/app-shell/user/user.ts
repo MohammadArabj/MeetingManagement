@@ -27,6 +27,7 @@ import { AgGridBaseComponent } from '../../shared/ag-grid-base/ag-grid-base';
 import { LabelButtonComponent } from '../../shared/custom-buttons/label-button';
 import { environment } from '../../../environments/environment';
 import { ImpersonationService, ImpersonationTarget } from '../../services/framework-services/impersonation.service';
+import { IMPERSONATE_PERMISSION, SessionStore } from '../../core/auth/session.store';
 import { UserActionsCellComponent } from './user-actions-cell.component';
 
 import { userPhotoUrl } from '../../core/media/media-token';
@@ -74,6 +75,9 @@ export class UserList extends AgGridBaseComponent implements OnInit, AfterViewIn
   public gridState = signal<GridState>({ page: 0, filters: {} });
   public isPermitted = signal<boolean>(false);
   public isImpersonating = this.impersonationService.isImpersonating;
+  private readonly sessionStore = inject(SessionStore);
+  /** «ورود به جای کاربر» فقط برای مدیر کل، ادمین مدیریت جلسات یا دارنده‌ی MT_Impersonate (سرور هم بررسی می‌کند) */
+  readonly canImpersonate = computed(() => this.sessionStore.isSuperAdmin() || this.sessionStore.hasPermission(IMPERSONATE_PERMISSION));
 
   // ═══════════════════════════════════════════════════════════════
   // Computed
@@ -224,7 +228,8 @@ export class UserList extends AgGridBaseComponent implements OnInit, AfterViewIn
         cellRenderer: UserActionsCellComponent,
         cellRendererParams: {
           onImpersonate: (user: ExpandedUser) => this.impersonateUser(user),
-          isImpersonating: () => this.isImpersonating()
+          isImpersonating: () => this.isImpersonating(),
+          canImpersonate: () => this.canImpersonate()
         },
         cellStyle: { textAlign: 'center', overflow: 'visible' }
       }
@@ -351,23 +356,10 @@ export class UserList extends AgGridBaseComponent implements OnInit, AfterViewIn
         persNo: user.userName
       };
 
-      // ✅ صبر کن تا API call کامل شود، بعد reload کن
+      // پس از موفقیت، برنامه خودکار با هویت کاربر هدف روی داشبورد بارگذاری می‌شود
       this.impersonationService.impersonate(target)
         .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe({
-          next: (success) => {
-            if (success) {
-              // ✅ کمی صبر کن تا همه چیز ذخیره شود
-              setTimeout(() => {
-                window.location.href = '/#/dashboard';
-              }, 100);
-            }
-          },
-          error: (error) => {
-            console.error('Impersonation error:', error);
-            this.toastService.error('خطا در فرآیند ورود');
-          }
-        });
+        .subscribe();
 
     } catch (error) {
       console.error('Error in impersonateUser:', error);

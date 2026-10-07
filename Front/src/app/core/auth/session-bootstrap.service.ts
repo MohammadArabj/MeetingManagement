@@ -6,6 +6,8 @@ import { UserService } from '../../services/user.service';
 import { AuthService } from './auth.service';
 import { getClientSettings } from './auth.config';
 import { normalizePermissions, SessionStore } from './session.store';
+import { IdentityService } from './identity.service';
+import { IS_IMPERSONATING } from '../types/configuration';
 
 /**
  * آماده‌سازی جلسه کاری پس از ورود (جایگزین منطق ChallengeComponent):
@@ -22,6 +24,7 @@ export class SessionBootstrapService {
   private readonly userService = inject(UserService);
   private readonly permissionService = inject(PermissionService);
   private readonly delegationService = inject(DelegationService);
+  private readonly identity = inject(IdentityService);
 
   private clientAccess: boolean | null = null;
   private lastSessionCheck = 0;
@@ -33,7 +36,13 @@ export class SessionBootstrapService {
     const profile = this.auth.profile() as Record<string, any>;
     const token = this.auth.accessToken() ?? '';
 
-    if (freshLogin || !this.session.userGuid()) {
+    const impersonating = localStorage.getItem(IS_IMPERSONATING) === 'true';
+    if (freshLogin && impersonating && this.session.userGuid()) {
+      // ورود دوباره (مثلاً پس از انقضای توکن) در میانه‌ی «ورود به جای کاربر»: هویت هدف حفظ می‌شود
+      this.identity.updateOwnIdentityBackup(String(profile['id'] ?? profile['sub'] ?? ''),
+        String(profile['activatedPosition'] ?? ''), String(profile['positionTitle'] ?? ''), String(profile['isDelegate'] ?? 'false'));
+      this.session.setAccessToken(token);
+    } else if (freshLogin || !this.session.userGuid()) {
       this.session.initFromClaims(profile, token);
     }
 
@@ -51,9 +60,12 @@ export class SessionBootstrapService {
       }
     }
 
-    if (freshLogin || !this.session.hasPermissionsLoaded()) {
+    if (!impersonating && (freshLogin || !this.session.hasPermissionsLoaded())) {
       await this.loadPermissions(profile, token);
     }
+
+    // تطبیق سمت ذخیره‌شده با سمت‌های واقعی کاربر و بارگذاری اطلاعات کاربر عامل، پیش از رندر صفحه
+    await this.identity.initialize();
   }
 
   /** دسترسی به این سامانه (یک بار در هر بارگذاری برنامه) */

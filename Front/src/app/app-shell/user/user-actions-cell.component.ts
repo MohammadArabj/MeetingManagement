@@ -17,6 +17,7 @@ interface ExpandedUser {
 interface ActionsCellParams extends ICellRendererParams {
     onImpersonate: (user: ExpandedUser) => void;
     isImpersonating: () => boolean;
+    canImpersonate?: () => boolean;
 }
 
 @Component({
@@ -25,6 +26,7 @@ interface ActionsCellParams extends ICellRendererParams {
     imports: [CommonModule],
     template: `
     <div class="actions-container">
+      @if (allowed) {
       <button class="btn-impersonate" 
               (click)="onImpersonate()"
               [disabled]="isDisabled"
@@ -32,6 +34,7 @@ interface ActionsCellParams extends ICellRendererParams {
         <i class="fas fa-user-secret"></i>
         <span>ورود به عنوان کاربر</span>
       </button>
+      }
     </div>
   `,
     styles: [`
@@ -79,17 +82,20 @@ export class UserActionsCellComponent implements ICellRendererAngularComp {
     private params!: ActionsCellParams;
     private data!: ExpandedUser;
     isDisabled = false;
+    allowed = true;
 
     agInit(params: ActionsCellParams): void {
         this.params = params;
         this.data = params.data;
         this.isDisabled = params.isImpersonating?.() || false;
+        this.allowed = params.canImpersonate?.() ?? true;
     }
 
     refresh(params: ActionsCellParams): boolean {
         this.params = params;
         this.data = params.data;
         this.isDisabled = params.isImpersonating?.() || false;
+        this.allowed = params.canImpersonate?.() ?? true;
         return true;
     }
 

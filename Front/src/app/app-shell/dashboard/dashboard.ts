@@ -47,6 +47,7 @@ import { LocalStorageService } from '../../services/framework-services/local.sto
 import { MeetingService } from '../../services/meeting.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { SessionStore } from '../../core/auth/session.store';
+import { IdentityService } from '../../core/auth/identity.service';
 import { FollowerActorsActionCounts } from '../../core/models/followersActorCounts';
 
 declare var $: any;
@@ -111,7 +112,9 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
     const h = new Date().getHours();
     return h < 5 ? 'شب بخیر' : h < 12 ? 'صبح بخیر' : h < 17 ? 'روز بخیر' : 'عصر بخیر';
   })();
-  readonly userName = computed(() => String((this.auth.profile() as Record<string, unknown>)['name'] ?? '').trim());
+  /** کاربر عامل (در تفویض/ورود به جای کاربر همان شخص، نه صاحب توکن) */
+  private readonly identity = inject(IdentityService);
+  readonly userName = computed(() => this.identity.fullname() || String((this.auth.profile() as Record<string, unknown>)['name'] ?? '').trim());
   readonly positionName = this.session.positionName;
   readonly todayLabel = new Date().toLocaleDateString('fa-IR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   // اضافه کردن computed جدید

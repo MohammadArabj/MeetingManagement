@@ -71,7 +71,8 @@ IQueryHandler<PermissionTreeNodeViewModel, Guid>
     /// دسترسی‌های یک سمت در یک سامانه.
     /// فقط برای سمتی که متعلق به کاربر جاری است و فقط دسترسی‌های همان سامانه (ClientId) برگردانده می‌شود؛
     /// قبلاً دسترسی‌های هر سمتی، از همه‌ی سامانه‌ها، برای هر کاربری قابل دریافت بود.
-    /// (برای تفویض از GetDelegationPermissions استفاده می‌شود.)
+    /// (برای تفویض از GetDelegationPermissions استفاده می‌شود؛ مدیر کل و دارندگان دسترسی «ورود به جای کاربر»
+    /// دسترسی‌های سمت هر کاربری را می‌گیرند.)
     /// </summary>
     public string Handle(PermissionRequestDto request)
     {
@@ -82,7 +83,8 @@ IQueryHandler<PermissionTreeNodeViewModel, Guid>
 
         var ownsPosition = context.UserPositions.AsNoTracking()
             .Any(up => up.PositionId == position.Id && up.User.Guid == userGuid);
-        if (!ownsPosition) return string.Empty;
+        // «ورود به جای کاربر»: فقط برای مدیر کل / دارندگان دسترسی ImpersonationPolicy
+        if (!ownsPosition && !ImpersonationPolicy.CanImpersonate(context, userGuid)) return string.Empty;
 
         var groupIds = context.PositionGroups.AsNoTracking().Where(x => x.PositionId == position.Id).Select(c => c.GroupId);
         var positionPermissionIds = context.PositionPermissions.AsNoTracking().Where(c => c.PositionId == position.Id).Select(c => c.PermissionId);
