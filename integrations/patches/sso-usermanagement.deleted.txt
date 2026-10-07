@@ -1,0 +1,23 @@
+EPC.SSO/IdentitySettings/UserAuthenticationValidator.cs
+EPC.SSO/Views/Account/Login - Copy.cshtml
+EPC.SSO/Views/Grants/_WindowsApps.cshtml
+EPC.SSO/Views/Shared/_Layout-copy.cshtml
+EPC.SSO/wwwroot/css/app.min.css
+EPC.SSO/wwwroot/css/bootstrap-rtl.min.css
+EPC.SSO/wwwroot/css/bootstrap.min.css
+EPC.SSO/wwwroot/css/bootstrap.rtl.min.css
+EPC.SSO/wwwroot/css/custom.css
+EPC.SSO/wwwroot/css/grants-index.css
+EPC.SSO/wwwroot/css/icons.min.css
+EPC.SSO/wwwroot/css/login.css
+EPC.SSO/wwwroot/css/site-header.css
+EPC.SSO/wwwroot/css/site.css
+EPC.SSO/wwwroot/css/site.min.css
+EPC.SSO/wwwroot/css/site.scss
+EPC.SSO/wwwroot/js/app.min.js
+EPC.SSO/wwwroot/js/bootstrap.bundle.min.js
+EPC.SSO/wwwroot/js/custom.js
+EPC.SSO/wwwroot/js/grants-index.js
+EPC.SSO/wwwroot/js/grants.js
+EPC.SSO/wwwroot/js/jquery.min.js
+EPC.SSO/wwwroot/js/vendor.min.js

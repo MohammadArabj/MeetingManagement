@@ -4,7 +4,7 @@
 سورس آن سامانه‌ها در این مخزن نیست؛ دو راه برای اعمال وجود دارد:
 
 - **فایل‌های کامل:** فایل‌های پوشه‌های `FileManagement/` و `SSO-UserManagement/` را با همان مسیر در سورس اصلی جایگزین کنید.
-- **Patch:** در ریشه‌ی سورس هر سامانه `git apply integrations/patches/<name>.patch` را اجرا کنید (فقط تغییرات، بدون appsettings).
+- **Patch:** در ریشه‌ی سورس هر سامانه `git apply integrations/patches/<name>.patch` را اجرا کنید (فقط تغییرات، بدون appsettings). فایل‌هایی که باید حذف شوند در `patches/<name>.deleted.txt` آمده‌اند.
 
 هر سه پروژه با همین تغییرات build شده‌اند (`dotnet build`، بدون خطا).
 

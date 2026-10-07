@@ -11,9 +11,10 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
     <link rel="manifest" href="/favicon/site.webmanifest" />
     <link rel="preload" href="/fonts/Sahel.woff" as="font" type="font/woff" crossorigin />
-    <link href="~/assets/css/saas/bootstrap-rtl.min.css" rel="stylesheet" asp-append-version="true" />
-    <link href="~/assets/css/saas/app.min.css" rel="stylesheet" asp-append-version="true" />
-    <link href="~/assets/css/icons.min.css" rel="stylesheet" asp-append-version="true" />
+    <link rel="preload" href="~/lib/fontawesome/webfonts/fa-solid-900.subset.woff2" as="font" type="font/woff2" crossorigin />
+    @* سبک: Bootstrap 5.3 RTL (هم‌نسخه با JS) + فقط آیکن‌های استفاده‌شده (~۱۵KB به جای ۶۶۰KB) *@
+    <link href="~/lib/bootstrap/bootstrap.rtl.min.css" rel="stylesheet" asp-append-version="true" />
+    <link href="~/lib/fontawesome/fontawesome.subset.css" rel="stylesheet" asp-append-version="true" />
     @* برای سازگاری با صفحات قدیمی (تفویض، تنظیمات، مستندات، دفترچه تلفن، آرشیو) *@
     <link href="~/css/site-base.css" rel="stylesheet" asp-append-version="true" />
     <link href="~/css/portal.css" rel="stylesheet" asp-append-version="true" />
@@ -27,11 +28,8 @@
     <footer class="p-footer">فناوری اطلاعات و ارتباطات · @DateTime.Now.ToString("yyyy", new System.Globalization.CultureInfo("fa-IR"))</footer>
     <div class="p-toast" id="pToast" role="status" aria-live="polite"></div>
     @await RenderSectionAsync("modals", false)
-    <script src="~/assets/js/jquery.min.js" asp-append-version="true"></script>
-    <script src="~/assets/libs/jquery-validation/jquery.validate.min.js" asp-append-version="true"></script>
-    <script src="~/assets/libs/jquery-validation/jquery.validate.unobtrusive.min.js" asp-append-version="true"></script>
-    <script src="~/assets/js/vendor.min.js" asp-append-version="true"></script>
-    <script src="~/assets/js/app.min.js" asp-append-version="true"></script>
+    @* jQuery و اعتبارسنجی فقط در صفحات فرم (_ValidationScripts)؛ قالب Minton (vendor/app.min) استفاده نمی‌شد *@
+    <script src="~/lib/bootstrap/bootstrap.bundle.min.js" asp-append-version="true"></script>
     <script src="~/js/site-header.js" asp-append-version="true"></script>
     @await RenderSectionAsync("scripts", false)
 </body>

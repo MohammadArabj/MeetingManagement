@@ -7,10 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Remove="Views\Account\Login - Copy.cshtml" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Autofac.Extensions.DependencyInjection" Version="11.0.2" />
     <PackageReference Include="Check.Password.Strength" Version="1.0.3" />
     <PackageReference Include="Epc.Autofac" Version="2.0.3" />
@@ -24,13 +20,6 @@
     <ProjectReference Include="..\UserManagement.Infrastructure.Config\UserManagement.Infrastructure.Config.csproj" />
     <ProjectReference Include="..\UserManagement.Infrastructure.Persistence\UserManagement.Infrastructure.Persistence.csproj" />
     <ProjectReference Include="..\UserManagement.Infrastructure.Services\UserManagement.Infrastructure.Services.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Update="wwwroot\js\bootstrap.bundle.min.js">
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
   </ItemGroup>
 
   <ItemGroup>
