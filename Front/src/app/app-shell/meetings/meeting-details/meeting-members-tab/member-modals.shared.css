@@ -29,7 +29,7 @@
     top: 100%;
     left: 0;
     right: 0;
-    background: var(--bg-var(--mm-surface));
+    background: var(--mm-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
     box-shadow: var(--shadow-lg);

@@ -115,7 +115,7 @@
 }
 
 .main-card .card-header {
-    background: var(--bg-var(--mm-surface));
+    background: var(--mm-surface);
     border-bottom: 1px solid var(--border-color);
     padding: 1rem 1.5rem;
 }

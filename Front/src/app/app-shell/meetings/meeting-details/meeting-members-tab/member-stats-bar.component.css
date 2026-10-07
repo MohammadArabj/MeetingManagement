@@ -13,7 +13,7 @@
 }
 
 .stat-card {
-    background: var(--bg-var(--mm-surface));
+    background: var(--mm-surface);
     border-radius: var(--radius-lg);
     padding: 1rem;
     display: flex;
