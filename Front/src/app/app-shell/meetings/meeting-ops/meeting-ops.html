@@ -1,7 +1,8 @@
 @if(!isLoading()){
 
-<div class="row">
-  <div class="col-md-8">
+<div class="row g-3">
+  <!-- زیر ۱۲۰۰ پیکسل فرم و اعضا زیر هم قرار می‌گیرند (ستون اعضا در مانیتور کوچک خیلی باریک می‌شد) -->
+  <div class="col-xl-8">
     <div class="row">
       <div class="col-md-12">
         <div class="card h-100 flex-fill d-flex flex-column">
@@ -179,7 +180,7 @@
       </div>
     </div>
   </div>
-  <div class="col-md-4 d-flex">
+  <div class="col-xl-4 d-flex">
     <app-meeting-participants class="flex-fill" [selectedMembers]="selectedMembers()" [allSystemUsers]="allUsers()"
       [conflictedUsers]="conflictedUsers()" [availableSystemUsers]="availableUsers()" [allUsesrs]="systemUsers()"
       [isBoardMeeting]="isBoardMeetingCategory()" [availableBoardMembers]="boardMembers()"

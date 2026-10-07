@@ -122,3 +122,27 @@ router-outlet + * { animation: mm-fade-up .28s var(--mm-ease); }
 .mm-breadcrumb a { color: var(--mm-muted); padding: .1rem .45rem; border-radius: var(--mm-radius-pill); transition: background .12s var(--mm-ease), color .12s var(--mm-ease); }
 .mm-breadcrumb a:hover { background: var(--mm-primary-50); color: var(--mm-primary); }
 .mm-breadcrumb li.active span { color: var(--mm-ink); font-weight: 700; padding: .1rem .45rem; }
+
+/* ── واکنش‌گرایی عمومی ───────────────────────────────────── */
+/* ستون‌ها و فرزندان flex به اندازه‌ی محتوای طولانی بزرگ نشوند (علت بیرون‌زدگی صفحه در مانیتورهای کوچک) */
+.row > [class*="col"], .d-flex > .flex-fill, .d-flex > .flex-grow-1 { min-width: 0; }
+.content-wrapper { overflow-x: hidden; }
+.card-header { flex-wrap: wrap; gap: .5rem; }
+
+@media (max-width: 991.98px) {
+  .content-wrapper { padding: .75rem !important; }
+  .container-fluid { padding-inline: .25rem; }
+  /* مودال‌ها روی تبلت تقریباً تمام‌عرض */
+  .modal-dialog:not(.modal-sm) { max-width: calc(100vw - 1.5rem); margin-inline: auto; }
+}
+@media (max-width: 575.98px) {
+  .content-wrapper { padding: .5rem !important; }
+  .modal-dialog { margin: .5rem; }
+  .modal-content { border-radius: var(--mm-radius); }
+  .modal-footer { flex-wrap: wrap; }
+  .modal-footer > .btn { flex: 1 1 auto; }
+  /* جدول‌های ساده اسکرول افقی بگیرند به جای بیرون‌زدن */
+  .table-responsive, .content-wrapper table:not(.ag-root *) { display: block; overflow-x: auto; max-width: 100%; }
+  .nav-tabs, .nav-pills { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .nav-tabs .nav-link, .nav-pills .nav-link { white-space: nowrap; }
+}

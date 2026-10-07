@@ -4,6 +4,8 @@
 :host { display: contents; }
 
 .layout-menu {
+  position: sticky !important;
+  top: 0;
   flex: 0 0 auto !important;
   width: var(--mm-sidebar-w) !important;
   max-width: var(--mm-sidebar-w);
@@ -21,27 +23,28 @@
 /* نشانگرهای پیش‌فرض قالب Sneat حذف می‌شوند (نشانگر خودمان روی menu-link است) */
 .menu-item::before, .menu-inner > .menu-item.active::before { display: none !important; }
 
-/* دکمه‌ی جمع/باز کردن */
-.layout-menu-toggle {
-  position: absolute !important;
-  top: 18px !important;
-  inset-inline-start: auto;
+/* دکمه‌ی جمع/باز کردن (کلاس اختصاصی؛ اسکریپت قالب Sneat روی layout-menu-toggle رفتار خودش را دارد) */
+.mm-menu-toggle {
+  position: absolute;
+  top: 18px;
   left: 12px;
-  width: 30px !important;
+  width: 30px;
   height: 30px;
-  padding: 0 !important;
-  display: inline-flex !important;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px !important;
-  background: rgba(255, 255, 255, .08) !important;
-  color: var(--mm-sidebar-text-strong) !important;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .08);
+  color: var(--mm-sidebar-text-strong);
   border: 1px solid var(--mm-sidebar-border);
-  transition: background .15s var(--mm-ease), transform .15s var(--mm-ease);
+  cursor: pointer;
+  transition: background .15s var(--mm-ease);
   z-index: 2;
 }
-.layout-menu-toggle:hover { background: rgba(255, 255, 255, .16) !important; }
-.layout-menu.collapsed .layout-menu-toggle { position: static !important; margin: 14px auto 0 !important; }
+.mm-menu-toggle:hover { background: rgba(255, 255, 255, .16); }
+.mm-menu-toggle:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; }
+.layout-menu.collapsed .mm-menu-toggle { position: static; margin: 14px auto 0; }
 
 /* برند */
 .sidebar-brand { padding: 1.1rem 1rem .9rem; border-bottom: 1px solid var(--mm-sidebar-border); }
@@ -210,6 +213,53 @@
 .layout-menu.collapsed .sidebar-footer { padding: 12px 8px; }
 .layout-menu.collapsed .version-info { display: none; }
 
-@media (max-width: 1199.98px) {
-  .layout-menu { position: fixed !important; inset-block: 0; right: 0; }
+/* ═══════════════════════════════════════════════════════════════════════
+   واکنش‌گرا
+   compact (992–1199): نوار آیکونی ثابت + باز شدن روی محتوا
+   mobile  (<992):     کشوی کناری با پس‌زمینه‌ی تیره
+   ═══════════════════════════════════════════════════════════════════════ */
+.layout-menu-spacer { display: none; }
+.layout-menu-spacer.rail { display: block; flex: 0 0 var(--mm-sidebar-w-collapsed); }
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 18, 38, .45);
+  backdrop-filter: blur(2px);
+  z-index: 1040;
+  animation: mm-sidebar-fade .2s ease;
+}
+@keyframes mm-sidebar-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* compact: منو از جریان صفحه خارج و روی محتوا قرار می‌گیرد؛ spacer جای نوار را نگه می‌دارد */
+.layout-menu.mm-compact {
+  position: fixed !important;
+  inset-block: 0;
+  right: 0;
+  left: auto !important;
+  height: 100vh !important;
+  transform: none !important;
+  z-index: 1045;
+}
+.layout-menu.mm-compact.mm-open { width: var(--mm-sidebar-w) !important; max-width: min(var(--mm-sidebar-w), 86vw); box-shadow: -18px 0 48px -12px rgba(5, 15, 35, .55) !important; }
+
+/* mobile: کشو */
+.layout-menu.mm-mobile {
+  position: fixed !important;
+  inset-block: 0;
+  right: 0;
+  left: auto !important;
+  height: 100vh !important;
+  width: min(var(--mm-sidebar-w), 86vw) !important;
+  max-width: min(var(--mm-sidebar-w), 86vw);
+  transform: translateX(105%) !important;
+  transition: transform .28s var(--mm-ease) !important;
+  visibility: hidden;
+  z-index: 1045;
+}
+.layout-menu.mm-mobile.mm-open { transform: none !important; visibility: visible; }
+.layout-menu.mm-mobile .mm-menu-toggle { width: 34px; height: 34px; }
+
+@media print {
+  .layout-menu, .layout-menu-spacer, .sidebar-backdrop { display: none !important; }
 }

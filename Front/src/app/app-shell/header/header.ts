@@ -54,7 +54,7 @@ export class HeaderComponent implements OnInit {
   readonly theme = inject(ThemeService);
   private readonly passwordFlowService = inject(PasswordFlowService);
   private readonly codeFlowService = inject(CodeFlowService);
-  private readonly sidebarService = inject(SidebarService);
+  readonly sidebar = inject(SidebarService);
   private readonly swalService = inject(SwalService);
 
   private readonly identity = inject(IdentityService);
@@ -126,7 +126,7 @@ export class HeaderComponent implements OnInit {
   // ═══════════════════════════════════════════════════════════════
 
   toggle(): void {
-    this.sidebarService.toggleSidebar();
+    this.sidebar.toggleSidebar();
   }
 
   toggleRoleSwitcher(): void {

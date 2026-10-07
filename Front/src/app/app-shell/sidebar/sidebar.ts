@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal, ViewChild } from '@angular/core';
+import { Component, computed, HostListener, inject, signal, ViewChild } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 
@@ -22,7 +22,7 @@ import { HelpService } from '../../core/help/help.service';
   styleUrls: ['./sidebar.css']
 })
 export class SidebarComponent {
-  private readonly sidebarService = inject(SidebarService);
+  readonly sidebar = inject(SidebarService);
   readonly help = inject(HelpService);
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -34,7 +34,10 @@ export class SidebarComponent {
   // ═══════════════════════════════════════════════════════════════════════════════
   // Sidebar State
   // ═══════════════════════════════════════════════════════════════════════════════
-  readonly isMenuCollapsed = computed(() => this.sidebarService.collapsed());
+  /** نوار باریک آیکونی (دسکتاپ جمع‌شده یا مانیتور کوچک) */
+  readonly isMenuCollapsed = computed(() => this.sidebar.isRail());
+  readonly toggleTitle = computed(() =>
+    this.sidebar.mode() === 'mobile' ? 'بستن منو' : this.isMenuCollapsed() ? 'باز کردن منو' : 'جمع کردن منو');
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // What's New Reference
@@ -45,8 +48,18 @@ export class SidebarComponent {
   // Methods
   // ═══════════════════════════════════════════════════════════════════════════════
 
+  /** در حالت نوار آیکونی، کلیک روی گروهی که زیرمنو دارد منو را باز می‌کند تا زیرمنو دیده شود */
+  @HostListener('click', ['$event'])
+  onMenuClick(event: MouseEvent): void {
+    if (!this.isMenuCollapsed()) return;
+    const toggle = (event.target as HTMLElement | null)?.closest('.menu-toggle');
+    if (!toggle) return;
+    if (this.sidebar.mode() === 'desktop') this.sidebar.setCollapsed(false);
+    else this.sidebar.overlayOpen.set(true);
+  }
+
   toggleSidebar(): void {
-    this.sidebarService.toggleSidebar();
+    this.sidebar.toggleSidebar();
   }
 
   /**

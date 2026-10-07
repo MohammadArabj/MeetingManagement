@@ -213,3 +213,6 @@
   .role-info .fw-semibold { max-width: 110px; }
 }
 @media print { :host { display: none; } }
+
+/* دکمه‌ی منو (فقط زیر ۱۲۰۰ پیکسل نمایش داده می‌شود) */
+.menu-btn { flex: 0 0 auto; }

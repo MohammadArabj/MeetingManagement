@@ -1,11 +1,25 @@
-<aside id="layout-menu"
-  class="layout-menu menu-vertical menu bg-menu-theme d-flex flex-column position-relative shadow rounded-end h-100"
-  [class.collapsed]="isMenuCollapsed()">
+<!-- جای منو در چیدمان (در حالت compact منو روی محتوا باز می‌شود و صفحه جابه‌جا نمی‌شود) -->
+<div class="layout-menu-spacer" [class.rail]="sidebar.mode() === 'compact'" aria-hidden="true"></div>
 
-  <button class="layout-menu-toggle menu-link text-large ms-auto justify-content-center" title="بستن منو"
-    (click)="toggleSidebar()" style="top:10px;width: 40px;">
-    <i class="fa fa-sm align-middle" [class.fa-chevron-left]="!isMenuCollapsed()"
-      [class.fa-chevron-right]="isMenuCollapsed()"></i>
+@if (sidebar.showBackdrop()) {
+<div class="sidebar-backdrop" (click)="sidebar.closeOverlay()"></div>
+}
+
+<aside id="layout-menu"
+  class="layout-menu menu-vertical menu bg-menu-theme d-flex flex-column shadow rounded-end h-100"
+  [class.collapsed]="isMenuCollapsed()"
+  [class.mm-compact]="sidebar.mode() === 'compact'"
+  [class.mm-mobile]="sidebar.mode() === 'mobile'"
+  [class.mm-open]="sidebar.overlayOpen()"
+  [attr.aria-hidden]="sidebar.mode() === 'mobile' && !sidebar.overlayOpen() ? 'true' : null">
+
+  <button type="button" class="mm-menu-toggle" [title]="toggleTitle()" [attr.aria-label]="toggleTitle()"
+    (click)="toggleSidebar()">
+    @if (sidebar.mode() === 'mobile') {
+    <i class="fa fa-times"></i>
+    } @else {
+    <i class="fa fa-sm" [class.fa-chevron-left]="!isMenuCollapsed()" [class.fa-chevron-right]="isMenuCollapsed()"></i>
+    }
   </button>
 
   <!-- Brand -->

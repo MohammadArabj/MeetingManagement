@@ -1,6 +1,6 @@
 <div class="row">
   @if (!isBoardMeeting()) {
-  <div class="col-md-4">
+  <div class="col-xl-4">
     <div class="row">
       <div class="col-md-12 d-flex">
         <app-meeting-description class="w-100" [description]="description()" [canEditDescription]="canEditDescription()"
@@ -35,7 +35,7 @@
        Regular Resolution List - با شرط canShowActionsReport
        ═══════════════════════════════════════════════════════════════════════════════ -->
   @else{
-  <div class="d-flex col-md-8">
+  <div class="d-flex col-xl-8">
     <app-resolution-list class="w-100" [resolutions]="resolutions()" [canDrag]="canDragResolutions()"
       [canEditResolution]="canEditResolution()" [canAddResolution]="canAddResolution()" [canPrint]="canPrint()"
       [canDeleteResolution]="canDeleteResolution()" [canAddAssignment]="canAddAssignment()"

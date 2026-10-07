@@ -28,6 +28,13 @@
   <!-- Main Header -->
   <!-- ═══════════════════════════════════════════════════════════════ -->
   <div class="top-bar-main">
+    <!-- دکمه‌ی منو برای مانیتورهای کوچک، تبلت و موبایل -->
+    @if (sidebar.mode() !== 'desktop') {
+    <button type="button" class="icon-btn menu-btn" (click)="toggle()" title="منو" aria-label="باز کردن منو"
+      [attr.aria-expanded]="sidebar.overlayOpen()">
+      <i class="fa fa-bars"></i>
+    </button>
+    }
     <div class="top-bar-center">
       <div class="chip">
         <i class="fa fa-calendar-alt"></i>
