@@ -442,11 +442,11 @@ public class SurveyQueryHandler(
             LogicRules = q.QuestionLogics.Select(l => new QuestionLogicForEditDto
             {
                 Guid = l.Guid,
-                TargetQuestionGuid = l.TargetQuestion.Guid,
+                TargetQuestionGuid = l.TargetQuestion != null ? l.TargetQuestion.Guid : Guid.Empty,
                 LogicType = l.LogicType,
                 ConditionOperator = l.ConditionOperator,
                 ConditionValue = l.ConditionValue,
-                SelectedOptionGuid = l.Option.Guid,
+                SelectedOptionGuid = l.Option != null ? l.Option.Guid : null,
                 Priority = l.Priority
             }).ToList()
         }).ToList();
@@ -503,13 +503,21 @@ public class SurveyQueryHandler(
     /// </summary>
     public async Task<Result<PublicSurveyDto>> Handle(GetPublicSurveyRequest request)
     {
-        var survey = await context.Surveys
-            .Include(s => s.Questions.OrderBy(q => q.SortOrder))
+        var survey = await context.Surveys.AsNoTracking()
+            .Include(s => s.Questions.Where(q => !q.IsRemoved).OrderBy(q => q.SortOrder))
                 .ThenInclude(q => q.Options.OrderBy(o => o.SortOrder))
+            .Include(s => s.Questions.Where(q => !q.IsRemoved))
+                .ThenInclude(q => q.QuestionLogics)
+            .Include(s => s.Criteria)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(s => s.Guid == request.SurveyGuid && !s.IsRemoved);
 
         if (survey == null)
             return Result<PublicSurveyDto>.Failure(null, "نظرسنجی یافت نشد.");
+
+        var questionGuidById = survey.Questions.ToDictionary(q => q.Id, q => q.Guid);
+        var optionGuidById = survey.Questions.SelectMany(q => q.Options).GroupBy(o => o.Id).ToDictionary(g => g.Key, g => g.First().Guid);
+        var criterionGuidById = (survey.Criteria ?? []).ToDictionary(c => c.Id, c => c.Guid);
 
         // همان قواعد ثبت پاسخ (منتشرشده یا در حال اجرا؛ روز آخر هم قابل پاسخ است)
         if (survey.Status != SurveyStatus.Active && survey.Status != SurveyStatus.Published)
@@ -552,7 +560,11 @@ public class SurveyQueryHandler(
             IsActive = survey.Status is SurveyStatus.Active or SurveyStatus.Published,
             IsExpired = today > survey.EndDate.Date,
             IsFull = isFull,
-            Questions = survey.Questions.Select(q => new PublicQuestionDto
+            ShowType = (int)survey.ShowType,
+            Criteria = (survey.Criteria ?? []).OrderBy(c => c.SortOrder)
+                .Select(c => new PublicCriterionDto { Guid = c.Guid, Title = c.Title, Description = c.Description, SortOrder = c.SortOrder })
+                .ToList(),
+            Questions = survey.Questions.OrderBy(q => q.SortOrder).Select(q => new PublicQuestionDto
             {
                 Guid = q.Guid,
                 QuestionText = q.QuestionText,
@@ -579,6 +591,21 @@ public class SurveyQueryHandler(
                 MatrixColumnsJson = q.MatrixColumns,
                 MaxFileSize = q.MaxFileSize,
                 AllowedFileTypes = q.AllowedFileTypes,
+                CriterionGuid = q.CriterionId is { } cid && criterionGuidById.TryGetValue(cid, out var cg) ? cg : null,
+                MinSelections = q.MinSelections,
+                MaxSelections = q.MaxSelections,
+                CustomValidationRegex = q.CustomValidationRegex,
+                MatrixRows = ParseTextList(q.MatrixRows),
+                MatrixColumns = ParseTextList(q.MatrixColumns),
+                Logics = (q.QuestionLogics ?? []).OrderBy(l => l.Priority).Select(l => new PublicLogicDto
+                {
+                    TargetQuestionGuid = l.TargetQuestionId is { } tid && questionGuidById.TryGetValue(tid, out var tg) ? tg : null,
+                    LogicType = (int)l.LogicType,
+                    ConditionOperator = (int)l.ConditionOperator,
+                    ConditionValue = l.ConditionValue,
+                    OptionGuid = l.OptionId is { } oid && optionGuidById.TryGetValue(oid, out var og) ? og : null,
+                    Priority = l.Priority
+                }).ToList(),
                 Options = q.Options.Select(o => new PublicOptionDto
                 {
                     Guid = o.Guid,
@@ -598,6 +625,19 @@ public class SurveyQueryHandler(
         }
 
         return Result<PublicSurveyDto>.Success(result);
+    }
+
+    /// <summary>ردیف/ستون ماتریس: JSON array یا جداشده با کاما/خط جدید (هم‌سان با اعتبارسنج ثبت پاسخ)</summary>
+    private static List<string> ParseTextList(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return new();
+        raw = raw.Trim();
+        if (raw.StartsWith('['))
+        {
+            try { return (System.Text.Json.JsonSerializer.Deserialize<List<string>>(raw) ?? new()).Select(x => x.Trim()).Where(x => x.Length > 0).ToList(); }
+            catch (System.Text.Json.JsonException) { }
+        }
+        return raw.Split([',', '،', '\n', '\r', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
     }
 
     /// <summary>

@@ -64,7 +64,13 @@ public class ResponseCommandHandler(
         if (errors.Count > 0)
             return Result<Guid>.Failure(Guid.Empty, errors[0]);
 
+        // سوال‌هایی که با منطق شرطی پنهان/رد شده‌اند اجباری محسوب نمی‌شوند و پاسخ احتمالی‌شان حذف می‌شود
+        var relevant = SurveyLogicEngine.RelevantQuestionIds(validator.Questions, response.Answers);
+        foreach (var q in validator.Questions.Where(q => !relevant.Contains(q.Id)))
+            response.RemoveAnswer(q.Id);
+
         var missing = validator.Questions
+            .Where(q => relevant.Contains(q.Id))
             .Where(q => q.IsRequired && !validator.IsComplete(q, response.Answers.FirstOrDefault(a => a.QuestionId == q.Id)))
             .OrderBy(q => q.SortOrder)
             .ToList();
@@ -246,6 +252,7 @@ public class ResponseCommandHandler(
         context.Questions.AsNoTracking()
             .Where(q => q.SurveyId == surveyId && !q.IsRemoved)
             .Include(q => q.Options)
+            .Include(q => q.QuestionLogics)
             .AsSplitQuery()
             .ToListAsync();
 

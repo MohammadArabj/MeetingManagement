@@ -34,8 +34,39 @@ public class PublicSurveyDto
     public bool IsActive { get; set; }
     public bool IsExpired { get; set; }
     public bool IsFull { get; set; }
-    
+
+    /// <summary>1 = اسلایدی (گام‌به‌گام)، 2 = یک‌صفحه‌ای</summary>
+    public int ShowType { get; set; }
+
+    /// <summary>نظرسنجی گام‌بندی (معیار) دارد</summary>
+    public bool HasCriteria => Criteria.Count > 0;
+
+    /// <summary>گام‌ها/معیارهای نظرسنجی به ترتیب</summary>
+    public List<PublicCriterionDto> Criteria { get; set; } = new();
+
     public List<PublicQuestionDto> Questions { get; set; } = new();
+}
+
+/// <summary>گام (معیار) نظرسنجی</summary>
+public class PublicCriterionDto
+{
+    public Guid Guid { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public int SortOrder { get; set; }
+}
+
+/// <summary>منطق شرطی سوال (برای اجرا در صفحه‌ی پاسخ‌دهی)</summary>
+public class PublicLogicDto
+{
+    public Guid? TargetQuestionGuid { get; set; }
+    /// <summary>1 نمایش، 2 پنهان، 3 پرش به سوال، 4 پایان</summary>
+    public int LogicType { get; set; }
+    /// <summary>1 برابر، 2 نابرابر، 3 شامل، 4 شامل‌نبودن، 5 بزرگ‌تر، 6 کوچک‌تر، 7 پاسخ داده شده، 8 پاسخ داده نشده</summary>
+    public int ConditionOperator { get; set; }
+    public string? ConditionValue { get; set; }
+    public Guid? OptionGuid { get; set; }
+    public int Priority { get; set; }
 }
 
 /// <summary>
@@ -79,6 +110,14 @@ public class PublicQuestionDto
     // File Upload
     public int? MaxFileSize { get; set; }
     public string? AllowedFileTypes { get; set; }
+
+    public Guid? CriterionGuid { get; set; }
+    public int? MinSelections { get; set; }
+    public int? MaxSelections { get; set; }
+    public string? CustomValidationRegex { get; set; }
+    public List<string> MatrixRows { get; set; } = new();
+    public List<string> MatrixColumns { get; set; } = new();
+    public List<PublicLogicDto> Logics { get; set; } = new();
 }
 
 /// <summary>
