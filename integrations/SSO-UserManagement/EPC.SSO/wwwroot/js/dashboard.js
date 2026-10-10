@@ -77,13 +77,18 @@
 
     const launching = new Set();
     async function launchOther(card) {
-        const pid = card.dataset.pid;
-        if (launching.has(pid)) return;
-        launching.add(pid);
         card.classList.add('is-busy');
+        try { await launchOtherProgram(card.dataset.pid, card.dataset.name, card.dataset.iswin === 'true'); }
+        finally { card.classList.remove('is-busy'); }
+    }
+
+    /** اجرای «سایر برنامه‌ها» با شناسه (لینک و بلیط SSO سمت سرور با OtherProgramService ساخته می‌شود) */
+    async function launchOtherProgram(pid, name, isWin = false) {
+        pid = String(pid);
+        if (launching.has(pid)) return false;
+        launching.add(pid);
 
         // برای وب، پنجره باید هم‌زمان با کلیک باز شود، وگرنه بعد از await توسط popup-blocker بسته می‌شود
-        const isWin = card.dataset.iswin === 'true';
         const win = isWin ? null : window.open('about:blank', '_blank');
 
         try {
@@ -94,15 +99,16 @@
             });
             if (!res.success) throw new Error(res.message);
 
-            if (res.type === 'win') launchHidden(res.url, card.dataset.name);
+            if (res.type === 'win') { win?.close(); launchHidden(res.url, name); }
             else if (win) { win.opener = null; win.location.href = res.url; }
             else toast('⚠️ باز شدن پنجره مسدود شد؛ popup را برای پورتال مجاز کنید.');
+            return true;
         } catch (err) {
             win?.close();
             toast(err.message && !err.message.startsWith('HTTP') ? err.message : 'اجرای برنامه ناموفق بود.');
+            return false;
         } finally {
             launching.delete(pid);
-            card.classList.remove('is-busy');
         }
     }
 
@@ -662,8 +668,10 @@
         }
         try { sessionStorage.setItem(seenKey, '1'); } catch { }
 
+        // لینک ورود (با بلیط SSO) هنگام کلیک از «سایر برنامه‌ها» (شناسه‌ی سامانه فراگیر آموزش) ساخته می‌شود
         const go = $('#trainingEvalGo');
-        if (res.url) go.href = res.url; else go.hidden = true;
+        const programId = Number(res.programId) || 0;
+        go.hidden = !programId;
         $('#trainingEvalCount').textContent = `${fa(count)} ارزیابی تکمیل‌نشده`;
 
         const previous = document.activeElement;
@@ -675,17 +683,22 @@
         const onKey = e => {
             if (e.key === 'Escape') close();
             if (e.key === 'Tab') { // نگه داشتن فوکوس داخل پیغام
-                const items = $$('a:not([hidden]), button', overlay);
+                const items = $$('button:not([hidden])', overlay);
                 const first = items[0], last = items[items.length - 1];
                 if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
                 else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
             }
         };
         $('#trainingEvalClose').onclick = close;
-        go.onclick = () => setTimeout(close, 0);
+        go.onclick = async () => {
+            go.disabled = true;
+            const ok = await launchOtherProgram(programId, 'سامانه فراگیر آموزش');
+            go.disabled = false;
+            if (ok) close();
+        };
         overlay.onclick = e => { if (e.target === overlay) close(); };
         document.addEventListener('keydown', onKey);
         overlay.hidden = false;
-        (res.url ? go : $('#trainingEvalClose')).focus();
+        (programId ? go : $('#trainingEvalClose')).focus();
     }
 })();

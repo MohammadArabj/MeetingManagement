@@ -24,17 +24,11 @@ public class TrainingEvaluationService(
         configuration.GetValue("TrainingEvaluation:Enabled", true)
         && !string.IsNullOrWhiteSpace(configuration.GetConnectionString("Training"));
 
-    /// <summary>آدرس ورود به سامانه فراگیر آموزش (برای دکمه‌ی پیغام)</summary>
-    public string? PortalUrl
-    {
-        get
-        {
-            var url = configuration["TrainingEvaluation:PortalUrl"]?.Trim();
-            return Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps)
-                ? u.ToString()
-                : null;
-        }
-    }
+    /// <summary>
+    /// شناسه‌ی «سامانه فراگیر آموزش» در جدول سایر برنامه‌ها (OtherPrograms، پیش‌فرض ۲۲).
+    /// لینک ورود (همراه بلیط SSO) هنگام کلیک با OtherProgramService.PrepareLaunchAsync ساخته می‌شود.
+    /// </summary>
+    public int OtherProgramId => configuration.GetValue("TrainingEvaluation:OtherProgramId", 22);
 
     public async Task<int> GetPendingCountAsync(string? personnelCode, CancellationToken ct = default)
     {

@@ -134,9 +134,10 @@ public class GrantsController(
     public async Task<IActionResult> GetTrainingEvaluations()
     {
         if (!trainingEvaluation.Enabled || !string.IsNullOrEmpty(User.FindFirst("ImpersonatedBy")?.Value))
-            return Json(new { count = 0, url = (string?)null });
+            return Json(new { count = 0, programId = 0 });
         var count = await trainingEvaluation.GetPendingCountAsync(User.FindFirst("PersonnelCode")?.Value, HttpContext.RequestAborted);
-        return Json(new { count, url = trainingEvaluation.PortalUrl });
+        // دکمه‌ی ورود از همان مسیر «سایر برنامه‌ها» (LaunchOtherProgram) با این شناسه اجرا می‌شود
+        return Json(new { count, programId = trainingEvaluation.OtherProgramId });
     }
 
     [HttpGet]
