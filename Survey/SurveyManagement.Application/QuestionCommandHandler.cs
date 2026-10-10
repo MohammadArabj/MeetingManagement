@@ -31,11 +31,10 @@ public class QuestionCommandHandler(
         if (survey == null)
             return Result<Guid>.Failure(Guid.Empty, "نظرسنجی یافت نشد.");
 
-        if (!((await access.GetAsync(survey.Id))?.CanManage ?? false))
-            return Result<Guid>.Failure(Guid.Empty, "شما مجاز به ویرایش این نظرسنجی نیستید.");
-
-        if (survey.Status != SurveyStatus.Draft)
-            return Result<Guid>.Failure(Guid.Empty, "فقط نظرسنجی‌های پیش‌نویس قابل ویرایش هستند.");
+        // مالک فقط تا پیش از انتشار؛ مدیر سامانه در هر وضعیت
+        var info = await access.GetAsync(survey.Id);
+        if (info is null || !info.CanEditContent)
+            return Result<Guid>.Failure(Guid.Empty, info?.EditDeniedMessage ?? "شما مجاز به ویرایش این نظرسنجی نیستید.");
 
         if (command.Guid.HasValue)
         {
@@ -155,11 +154,9 @@ public class QuestionCommandHandler(
         if (question == null)
             return Result<bool>.Failure(false, "سوال یافت نشد.");
 
-        if (!((await access.GetAsync(question.SurveyId))?.CanManage ?? false))
-            return Result<bool>.Failure(false, "شما مجاز به حذف این سوال نیستید.");
-
-        if (question.Survey.Status != SurveyStatus.Draft)
-            return Result<bool>.Failure(false, "فقط سوالات نظرسنجی‌های پیش‌نویس قابل حذف هستند.");
+        var info = await access.GetAsync(question.SurveyId);
+        if (info is null || !info.CanEditContent)
+            return Result<bool>.Failure(false, info?.EditDeniedMessage ?? "شما مجاز به حذف این سوال نیستید.");
 
         question.Remove(currentUserId);
         questionRepository.Update(question);
@@ -180,11 +177,9 @@ public class QuestionCommandHandler(
         if (survey == null)
             return Result<bool>.Failure(false, "نظرسنجی یافت نشد.");
 
-        if (!((await access.GetAsync(survey.Id))?.CanManage ?? false))
-            return Result<bool>.Failure(false, "شما مجاز به تغییر ترتیب سوالات این نظرسنجی نیستید.");
-
-        if (survey.Status != SurveyStatus.Draft)
-            return Result<bool>.Failure(false, "فقط سوالات نظرسنجی‌های پیش‌نویس قابل تغییر ترتیب هستند.");
+        var info = await access.GetAsync(survey.Id);
+        if (info is null || !info.CanEditContent)
+            return Result<bool>.Failure(false, info?.EditDeniedMessage ?? "شما مجاز به تغییر ترتیب سوالات این نظرسنجی نیستید.");
 
         foreach (var order in command.Orders)
         {

@@ -53,11 +53,10 @@ public class SurveyCommandHandler(
             if (survey == null)
                 return Result<Guid>.Failure(Guid.Empty, "نظرسنجی یافت نشد.");
 
-            if (!(await access.GetAsync(survey.Id))?.CanManage ?? true)
-                return Result<Guid>.Failure(Guid.Empty, "شما مجاز به ویرایش این نظرسنجی نیستید.");
-
-            if (survey.Status == SurveyStatus.Archived)
-                return Result<Guid>.Failure(Guid.Empty, "نظرسنجی آرشیو شده را نمی‌توان ویرایش کرد.");
+            // مالک فقط تا پیش از انتشار؛ مدیر سامانه در هر وضعیت
+            var info = await access.GetAsync(survey.Id);
+            if (info is null || !info.CanEditContent)
+                return Result<Guid>.Failure(Guid.Empty, info?.EditDeniedMessage ?? "شما مجاز به ویرایش این نظرسنجی نیستید.");
 
             await service.ThrowWhenDuplicated(command.Title, survey.Id);
 
@@ -272,18 +271,15 @@ public class SurveyCommandHandler(
             if (survey == null)
                 return Result<CreateSurveyWithQuestionsResponse>.Failure(null, "نظرسنجی یافت نشد.");
 
-            // مالک، مدیر سامانه یا دارنده‌ی «ویرایش» در فهرست دسترسی همین نظرسنجی
-            // (قبلاً هر دارنده‌ی MT_Surveys_Create می‌توانست نظرسنجی و فهرست دسترسی دیگران را تغییر دهد)
-            if (!await CanManageAsync(survey))
-                return Result<CreateSurveyWithQuestionsResponse>.Failure(null, "شما مجاز به ویرایش این نظرسنجی نیستید.");
+            // مالک فقط تا پیش از انتشار (پیش‌نویس)؛ مدیر سامانه در هر وضعیت
+            var info = await access.GetAsync(survey.Id);
+            if (info is null || !info.CanEditContent)
+                return Result<CreateSurveyWithQuestionsResponse>.Failure(null, info?.EditDeniedMessage ?? "شما مجاز به ویرایش این نظرسنجی نیستید.");
 
             // حذف سوال یا گزینه‌ای که پاسخ ثبت‌شده دارد، پاسخ‌های جمع‌آوری‌شده را بی‌صدا پاک می‌کرد
             var blocked = await FindRemovalsWithAnswersAsync(survey, command.Questions);
             if (blocked is not null)
                 return Result<CreateSurveyWithQuestionsResponse>.Failure(null, blocked);
-            // ✅ محدودیت «فقط پیش‌نویس قابل ویرایش است» برداشته شد
-            if (survey.Status == SurveyStatus.Archived)
-                return Result<CreateSurveyWithQuestionsResponse>.Failure(null, "نظرسنجی آرشیو شده را نمی‌توان ویرایش کرد.");
 
             await service.ThrowWhenDuplicated(command.Survey.Title, survey.Id);
 

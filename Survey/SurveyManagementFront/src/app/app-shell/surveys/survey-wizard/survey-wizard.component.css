@@ -465,3 +465,9 @@
   .wizardTopBar__eyebrow { display: none; }
   .wizardFooter__status span:first-child { font-size: 0.72rem; }
 }
+
+/* اعلان «فقط مشاهده» / «ویرایش مدیر» */
+.wzNotice { display: flex; gap: .75rem; align-items: flex-start; margin: 0 0 1rem; padding: .9rem 1.1rem; border-radius: 1rem; line-height: 1.9; font-size: .92rem; }
+.wzNotice i { margin-top: .35rem; }
+.wzNotice--lock { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; }
+.wzNotice--admin { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; }

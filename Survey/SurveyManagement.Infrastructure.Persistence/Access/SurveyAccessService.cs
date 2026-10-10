@@ -53,11 +53,12 @@ public sealed class SurveyAccessService(
             survey.Id, survey.Guid, survey.Status, survey.AccessType,
             IsOwner: isOwner,
             IsAdmin: isAdmin,
-            CanView: isAdmin || isOwner || isPublic || grants.Any(g => g.CanView || g.CanRespond || g.CanViewResults || g.CanEdit),
+            // کاربران مجزا: نتایج، ویرایش و حذف فقط برای مالک و مدیر سامانه؛ دسترسی‌های تعریف‌شده فقط برای پاسخ‌دادن
+            CanView: isAdmin || isOwner || isPublic || grants.Any(g => g.CanView || g.CanRespond),
             CanRespond: isAdmin || isOwner || isPublic || grants.Any(g => g.CanRespond),
-            CanViewResults: isAdmin || isOwner || grants.Any(g => g.CanViewResults || g.CanEdit),
-            CanEdit: isAdmin || isOwner || grants.Any(g => g.CanEdit),
-            CanDelete: isAdmin || isOwner || grants.Any(g => g.CanDelete));
+            CanViewResults: isAdmin || isOwner,
+            CanEdit: isAdmin || (isOwner && survey.Status == SurveyStatus.Draft),
+            CanDelete: isAdmin || isOwner);
 
         return _byId[surveyId] = info;
     }
@@ -68,16 +69,12 @@ public sealed class SurveyAccessService(
         if (identity.IsSuperAdmin) return null;
         if (!identity.IsAuthenticated) return new HashSet<long>();
 
-        var owned = await context.Surveys.AsNoTracking()
-            .Where(s => !s.IsRemoved && s.CreatedBy == identity.UserGuid)
-            .Select(s => s.Id)
-            .ToListAsync();
-
-        var granted = (await AllGrantsAsync(identity))
-            .Where(g => g.CanEdit || g.CanViewResults || g.CanDelete)
-            .Select(g => g.SurveyId);
-
-        return owned.Concat(granted).ToHashSet();
+        // هر ثبت‌کننده فقط نظرسنجی‌های خودش را می‌بیند (مدیر سامانه همه را)
+        return (await context.Surveys.AsNoTracking()
+                .Where(s => !s.IsRemoved && s.CreatedBy == identity.UserGuid)
+                .Select(s => s.Id)
+                .ToListAsync())
+            .ToHashSet();
     }
 
     public async Task<IReadOnlySet<long>> RespondableSurveyIdsAsync()

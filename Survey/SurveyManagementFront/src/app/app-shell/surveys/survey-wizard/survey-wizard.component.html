@@ -13,7 +13,7 @@
             <div class="wizardTopBar__title">
                 <span class="wizardTopBar__eyebrow">
                     <i class="fa fa-poll" aria-hidden="true"></i>
-                    {{ isEditMode() ? 'ویرایش نظرسنجی' : 'نظرسنجی جدید' }}
+                    {{ readOnly() ? 'مشاهده‌ی نظرسنجی' : isEditMode() ? 'ویرایش نظرسنجی' : 'نظرسنجی جدید' }}
                 </span>
                 <h1>{{ stepTitle() }}</h1>
                 <p class="wizardTopBar__desc">{{ stepDescription() }}</p>
@@ -56,6 +56,18 @@
             <div class="wizardTopBar__progressFill" [style.width.%]="progress()"></div>
         </div>
     </header>
+
+    @if (readOnly()) {
+    <div class="wzNotice wzNotice--lock" role="status">
+        <i class="fa fa-lock" aria-hidden="true"></i>
+        <div><strong>این نظرسنجی منتشر شده است.</strong> پس از انتشار فقط امکان مشاهده وجود دارد؛ ویرایش فقط توسط مدیر سامانه انجام می‌شود.</div>
+    </div>
+    } @else if (adminEditingPublished()) {
+    <div class="wzNotice wzNotice--admin" role="status">
+        <i class="fa fa-user-shield" aria-hidden="true"></i>
+        <div><strong>ویرایش به‌عنوان مدیر سامانه:</strong> این نظرسنجی منتشر شده است. سوال یا گزینه‌ای که پاسخ ثبت‌شده دارد قابل حذف نیست.</div>
+    </div>
+    }
 
     <!-- ============ خطاهای مرحله‌ی جاری ============ -->
     @if (currentStepErrors().length > 0) {
@@ -124,6 +136,9 @@
                 <i class="fa fa-arrow-left" aria-hidden="true"></i>
             </button>
             } @else {
+            @if (readOnly()) {
+            <span class="wizardFooter__dirty"><i class="fa fa-lock" aria-hidden="true"></i> فقط مشاهده</span>
+            } @else {
             <button type="button" class="wzBtn wzBtn--success" (click)="submitWizard()" [disabled]="isSubmitting()">
                 @if (isSubmitting()) {
                 <i class="fa fa-spinner fa-spin" aria-hidden="true"></i> در حال ثبت...
@@ -131,6 +146,7 @@
                 <i class="fa fa-check" aria-hidden="true"></i> {{ isEditMode() ? 'ذخیره تغییرات' : 'ثبت نظرسنجی' }}
                 }
             </button>
+            }
             }
         </div>
     </footer>

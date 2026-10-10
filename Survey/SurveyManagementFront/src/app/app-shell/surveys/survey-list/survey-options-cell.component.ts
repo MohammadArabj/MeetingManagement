@@ -353,8 +353,9 @@ export class SurveyOptionsCellComponent {
     return [
       {
         id: 'edit',
-        label: 'مشاهده / ویرایش',
-        icon: 'fa fa-edit scaleX-n1-rtl',
+        // ویرایش: مدیر سامانه همیشه؛ مالک فقط پیش از انتشار (سرور canEdit را تعیین می‌کند)
+        label: (data as any).canEdit === false ? 'مشاهده' : 'ویرایش',
+        icon: (data as any).canEdit === false ? 'fa fa-eye' : 'fa fa-edit scaleX-n1-rtl',
         tone: 'primary',
         visible: () => true,
         action: () => this.viewDetails()
@@ -441,7 +442,7 @@ export class SurveyOptionsCellComponent {
         icon: 'fa fa-trash scaleX-n1-rtl',
         tone: 'danger',
         danger: true,
-        visible: () => this.hasPermission('SV_Surveys_Delete') && (data.statusEnum === 1 || data.statusEnum === 3),
+        visible: () => this.hasPermission('SV_Surveys_Delete') && data.statusEnum === 1,
         action: () => this.deleteSurvey()
       }
     ];

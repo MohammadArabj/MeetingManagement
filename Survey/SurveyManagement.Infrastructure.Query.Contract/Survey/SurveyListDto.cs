@@ -21,5 +21,8 @@ public class SurveyListDto
     public bool AllowAnonymous { get; set; }
     public bool IsActive { get; set; }
     public string CreatedBy { get; set; } // نام کاربر از SSO
+
+    /// <summary>کاربر جاری می‌تواند ویرایش کند (مدیر سامانه همیشه؛ مالک فقط پیش از انتشار)</summary>
+    public bool CanEdit { get; set; }
     public string Created { get; set; }
 }

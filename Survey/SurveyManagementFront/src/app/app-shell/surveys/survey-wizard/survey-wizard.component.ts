@@ -75,6 +75,10 @@ export class SurveyWizardComponent extends AppSharedDataComponent
   readonly isLoading = signal<boolean>(false);
   readonly isSubmitting = signal<boolean>(false);
   readonly isEditMode = signal<boolean>(false);
+  /** نظرسنجی منتشرشده و کاربر مدیر سامانه نیست: فقط مشاهده (ویرایش پس از انتشار فقط برای مدیر سامانه) */
+  readonly readOnly = signal<boolean>(false);
+  /** مدیر سامانه در حال ویرایش نظرسنجی منتشرشده است */
+  readonly adminEditingPublished = signal<boolean>(false);
   readonly surveyGuid = signal<string>('');
 
   /** مراحلی که کاربر سعی کرده از آن‌ها عبور کند (برای نمایش خطاهای inline) */
@@ -225,7 +229,7 @@ export class SurveyWizardComponent extends AppSharedDataComponent
   }
 
   hasUnsavedChanges(): boolean {
-    if (this.savedSuccessfully || this.skipLeaveGuard) return false;
+    if (this.savedSuccessfully || this.skipLeaveGuard || this.readOnly()) return false;
     return this.isDirty() || this.pendingUploads.size > 0;
   }
 
@@ -294,6 +298,9 @@ export class SurveyWizardComponent extends AppSharedDataComponent
             this.router.navigate(['/surveys/list']);
             return;
           }
+          // سرور تعیین می‌کند: مالک فقط پیش از انتشار؛ مدیر سامانه همیشه
+          this.readOnly.set(data.canEdit === false);
+          this.adminEditingPublished.set(data.canEdit !== false && !!data.isAdmin && Number(data.status ?? 1) !== 1);
           const survey: WizardSurveyData = {
             ...data.survey,
             showType: String(data.survey.showType ?? '2'),
@@ -457,6 +464,10 @@ export class SurveyWizardComponent extends AppSharedDataComponent
   }
 
   submitWizard(): void {
+    if (this.readOnly()) {
+      this.toastService.warning('نظرسنجی منتشر شده است و فقط مدیر سامانه می‌تواند آن را ویرایش کند.');
+      return;
+    }
     if (this.isSubmitting()) return;
     if (!this.canSubmit()) {
       if (this.ensureStepsValid(this.totalSteps())) {

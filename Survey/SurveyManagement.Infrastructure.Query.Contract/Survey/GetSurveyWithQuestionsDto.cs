@@ -16,6 +16,15 @@ public class GetSurveyWithQuestionsResponse
     public SurveyForEditDto Survey { get; set; }
     public List<QuestionForEditDto> Questions { get; set; }
     public List<SurveyCriterionEditDto> Criteria { get; set; }
+
+    /// <summary>کاربر جاری می‌تواند ذخیره کند (مدیر سامانه همیشه؛ مالک فقط پیش از انتشار). در غیر این صورت فقط مشاهده</summary>
+    public bool CanEdit { get; set; }
+
+    /// <summary>کاربر جاری مدیر سامانه است</summary>
+    public bool IsAdmin { get; set; }
+
+    /// <summary>وضعیت نظرسنجی (1 پیش‌نویس، 2 منتشرشده، ...)</summary>
+    public int Status { get; set; }
     // ✅ اضافه شود
     public List<AccessItemForEditDto>? AccessItems { get; set; }
 }

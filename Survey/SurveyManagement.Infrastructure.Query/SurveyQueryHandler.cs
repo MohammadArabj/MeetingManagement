@@ -45,8 +45,9 @@ public class SurveyQueryHandler(
     /// </summary>
     public async Task<Result<List<SurveyListDto>>> Handle(SurveySearchRequest request)
     {
-        // فقط نظرسنجی‌هایی که کاربر مالک، مدیر یا دارنده‌ی دسترسی مدیریت/نتایج آن‌هاست (مدیر سامانه: همه)
+        // هر ثبت‌کننده فقط نظرسنجی‌های خودش؛ مدیر سامانه همه را می‌بیند (کاربران از هم مجزا هستند)
         var manageable = await access.ManageableSurveyIdsAsync();
+        var isAdmin = manageable is null;
 
         var query = context.Surveys.AsNoTracking()
             .WhereIf(manageable is not null, s => manageable!.Contains(s.Id))
@@ -125,7 +126,8 @@ public class SurveyQueryHandler(
             AllowAnonymous = s.AllowAnonymous,
             IsActive = s.IsActive == 1,
             CreatedBy = userDict.TryGetValue(s.CreatedBy, out var name) ? name : "نامشخص",
-            Created = s.Created.ToString("yyyy/MM/dd HH:mm")
+            Created = s.Created.ToString("yyyy/MM/dd HH:mm"),
+            CanEdit = isAdmin || s.Status == SurveyStatus.Draft
         }).ToList();
 
         return Result<List<SurveyListDto>>.Success(result);
@@ -369,8 +371,9 @@ public class SurveyQueryHandler(
 
         if (survey == null)
             return Result<GetSurveyWithQuestionsResponse>.Failure(null, "نظرسنجی یافت نشد.");
-        // شامل فهرست دسترسی‌ها و تنظیمات کامل؛ فقط برای کسی که حق ویرایش دارد
-        if (!((await access.GetAsync(survey.Id))?.CanManage ?? false))
+        // شامل فهرست دسترسی‌ها و تنظیمات کامل؛ فقط مالک یا مدیر سامانه (ذخیره فقط با CanEditContent)
+        var accessInfo = await access.GetAsync(survey.Id);
+        if (!(accessInfo?.CanManage ?? false))
             return Result<GetSurveyWithQuestionsResponse>.Failure(null, NoAccess);
 
         var surveyDto = new SurveyForEditDto
@@ -455,6 +458,9 @@ public class SurveyQueryHandler(
         {
             Survey = surveyDto,
             Questions = questionsDto,
+            CanEdit = accessInfo!.CanEditContent,
+            IsAdmin = accessInfo.IsAdmin,
+            Status = (int)survey.Status,
         };
         var criteria = await context.SurveyCriteria   // اگر DbSet با این اسم در context ندارید، پایین توضیح داده شده
                     .Where(c => c.SurveyId == survey.Id)
