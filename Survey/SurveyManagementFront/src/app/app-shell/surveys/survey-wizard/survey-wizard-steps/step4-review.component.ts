@@ -1,7 +1,15 @@
 import { Component, Input, inject, signal, OnInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TusUploadService } from '../../../../services/framework-services/tus-upload.service';
-import { WizardSurveyData, WizardQuestionData, WizardCriterionData } from '../../../../core/models/survey-wizard.model';
+import {
+  COMPLETION_EFFECTS,
+  QUESTION_TYPE_LABELS,
+  VALIDATION_TYPE_LABELS,
+  WizardSurveyData,
+  WizardQuestionData,
+  WizardCriterionData,
+  normalizeCompletionEffect,
+} from '../../../../core/models/survey-wizard.model';
 
 const UNASSIGNED_KEY = '__none__';
 
@@ -50,7 +58,7 @@ interface ReviewGroup {
               <i class="fa fa-question-circle"></i>
               <div>
                 <span class="metaLabel">تعداد سوالات</span>
-                <span class="metaValue">{{ questions.length }} سوال</span>
+                <span class="metaValue">{{ visibleQuestions().length }} سوال</span>
               </div>
             </div>
 
@@ -127,6 +135,10 @@ interface ReviewGroup {
                 پاسخ چندباره
               </span>
             }
+            <span class="settingTag">
+              <i class="fa fa-magic" aria-hidden="true"></i>
+              جلوه‌ی پایان: {{ completionEffectTitle() }}
+            </span>
             @if (surveyData.maxResponses) {
               <span class="settingTag">
                 <i class="fa fa-users"></i>
@@ -189,9 +201,9 @@ interface ReviewGroup {
                     </td>
 
                     <td class="col-answers">
-                      @if (question.options && question.options.length > 0) {
+                      @if (activeOptions(question).length > 0) {
                         <div class="optionsChips">
-                          @for (opt of question.options; track opt.tempId) {
+                          @for (opt of activeOptions(question); track opt.tempId) {
                             <span class="optionChip">
                               @if (opt.color) {
                                 <span class="optionChip__dot" [style.background]="opt.color"></span>
@@ -217,11 +229,23 @@ interface ReviewGroup {
                             <span class="scaleLabel">{{ question.maxScaleLabel }}</span>
                           }
                         </div>
-                      } @else if (question.questionType === 11 && question.matrixRows && question.matrixColumns) {
+                      } @else if (question.questionType === 11 && question.matrixRows?.length) {
                         <div class="matrixPreview">
-                          <i class="fa fa-table"></i>
-                          <span>ماتریسی</span>
+                          <i class="fa fa-table" aria-hidden="true"></i>
+                          <span>ماتریس {{ question.matrixRows?.length }} × {{ question.matrixColumns?.length || 0 }}</span>
                         </div>
+                        <div class="qHelp">ردیف‌ها: {{ question.matrixRows?.join('، ') }}</div>
+                        <div class="qHelp">ستون‌ها: {{ question.matrixColumns?.join('، ') }}</div>
+                      } @else if (question.questionType === 7 || question.questionType === 8) {
+                        <span class="freeTextHint">
+                          <i class="fa fa-calendar" aria-hidden="true"></i>
+                          {{ typeName(question.questionType) }}
+                        </span>
+                      } @else if (question.questionType === 9) {
+                        <span class="freeTextHint">
+                          <i class="fa fa-upload" aria-hidden="true"></i>
+                          آپلود فایل
+                        </span>
                       } @else {
                         <span class="freeTextHint">
                           <i class="fa fa-pen"></i>
@@ -259,7 +283,7 @@ interface ReviewGroup {
           <p>با کلیک روی دکمه «ثبت نظرسنجی»، تمام اطلاعات شامل:</p>
           <ul>
             <li>اطلاعات نظرسنجی و تنظیمات</li>
-            <li>{{ questions.length }} سوال</li>
+            <li>{{ visibleQuestions().length }} سوال</li>
             @if (hasCriteria) {
               <li>{{ visibleCriteria().length }} معیار</li>
             }
@@ -284,7 +308,7 @@ interface ReviewGroup {
     /* ==================== Summary Card ==================== */
     .summaryCard {
       padding: 22px 24px;
-      background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(249,250,251,0.95));
+      background: #fff;
       border: 2px solid var(--line);
       border-radius: 18px;
       box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
@@ -476,7 +500,7 @@ interface ReviewGroup {
       position: sticky;
       top: 0;
       z-index: 2;
-      background: linear-gradient(135deg, rgba(249,250,251,0.98), rgba(243,244,246,0.98));
+      background: var(--wz-subtle, #f8fafc);
       backdrop-filter: blur(6px);
       padding: 12px 16px;
       font-size: 0.8rem;
@@ -501,7 +525,7 @@ interface ReviewGroup {
     .numBadge {
       display: inline-flex; align-items: center; justify-content: center;
       width: 26px; height: 26px; border-radius: 8px;
-      background: linear-gradient(135deg, var(--primary), #3b82f6);
+      background: var(--wz-primary, var(--primary));
       color: white; font-weight: 900; font-size: 0.75rem;
     }
 
@@ -568,7 +592,7 @@ interface ReviewGroup {
       display: flex;
       gap: 18px;
       padding: 22px 24px;
-      background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(16, 185, 129, 0.08));
+      background: var(--wz-success-soft, rgba(22,163,74,.1));
       border: 3px solid rgba(34, 197, 94, 0.3);
       border-radius: 18px;
       align-items: flex-start;
@@ -608,6 +632,21 @@ export class SurveyWizardStep4ReviewComponent implements OnInit {
   readonly questionImageUrls = signal<Map<string, string>>(new Map());
   readonly optionImageUrls = signal<Map<string, string>>(new Map());
 
+  readonly visibleQuestions = computed(() => (this.questions ?? []).filter(q => !q.isRemoved));
+
+  readonly completionEffectTitle = computed(() => {
+    const v = normalizeCompletionEffect(this.surveyData?.completionEffect);
+    return COMPLETION_EFFECTS.find(e => e.value === v)?.title ?? '';
+  });
+
+  activeOptions(question: WizardQuestionData) {
+    return (question.options ?? []).filter(o => !o.isRemoved);
+  }
+
+  typeName(type: number): string {
+    return QUESTION_TYPE_LABELS[Number(type)] ?? '';
+  }
+
   readonly visibleCriteria = computed(() =>
     (this.criteria ?? []).filter(c => !c.isRemoved).sort((a, b) => a.sortOrder - b.sortOrder)
   );
@@ -638,7 +677,7 @@ export class SurveyWizardStep4ReviewComponent implements OnInit {
     if (this.surveyData.logoGuid) count++;
     if (this.surveyData.backgroundImageGuid) count++;
 
-    this.questions.forEach(q => {
+    this.visibleQuestions().forEach(q => {
       if (q.imageGuid) count++;
       if (q.videoGuid) count++;
       q.options?.forEach(opt => {
@@ -699,13 +738,6 @@ export class SurveyWizardStep4ReviewComponent implements OnInit {
   }
 
   getValidationTypeName(type: number): string {
-    const types: Record<number, string> = {
-      0: 'بدون اعتبارسنجی',
-      1: 'ایمیل',
-      2: 'شماره تلفن',
-      3: 'URL',
-      4: 'Regex سفارشی',
-    };
-    return types[type] || 'نامشخص';
+    return VALIDATION_TYPE_LABELS[Number(type)] || 'نامشخص';
   }
 }

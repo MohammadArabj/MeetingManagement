@@ -1,76 +1,84 @@
 @if (isLoading()) {
-<div class="loadingBox">
+<div class="loadingBox" role="status" aria-live="polite">
     <div class="loadingSpinner"></div>
-    <p class="muted" style="margin-top:16px;font-size:0.95rem">در حال بارگذاری...</p>
+    <p class="loadingBox__text">در حال بارگذاری...</p>
 </div>
 } @else {
 
 <div class="wizardContainer">
 
     <!-- ============ نوار بالایی ثابت ============ -->
-    <div class="wizardTopBar" #topBar>
-        <div class="wizardTopBar__accent"></div>
-
+    <header class="wizardTopBar" #topBar>
         <div class="wizardTopBar__row">
             <div class="wizardTopBar__title">
                 <span class="wizardTopBar__eyebrow">
-                    <i class="fa fa-poll"></i>
+                    <i class="fa fa-poll" aria-hidden="true"></i>
                     {{ isEditMode() ? 'ویرایش نظرسنجی' : 'نظرسنجی جدید' }}
                 </span>
                 <h1>{{ stepTitle() }}</h1>
                 <p class="wizardTopBar__desc">{{ stepDescription() }}</p>
             </div>
 
-            <!-- ✅ همه‌ی مراحل همیشه قابل کلیک‌اند — هیچ‌کدام قفل نیست -->
-            <div class="wizardTopBar__stepper">
-                <div class="stepUnit" [class.active]="currentStep() === 1" [class.done]="currentStep() > 1"
-                    (click)="goToStep(1)">
-                    <span class="stepUnit__dot">
-                        @if (currentStep() > 1) { <i class="fa fa-check"></i> } @else { 1 }
-                    </span>
-                    <span class="stepUnit__label">اطلاعات</span>
-                </div>
-                <span class="stepUnit__line" [class.active]="currentStep() >= 2"></span>
+            <nav class="stepper" aria-label="مراحل ایجاد نظرسنجی">
+                <ol class="stepper__list">
+                    @for (s of steps; track s.index; let last = $last) {
+                    <li class="stepper__item">
+                        <button type="button" class="stepUnit" [class.active]="currentStep() === s.index"
+                            [class.done]="isStepDone(s.index)" [class.error]="hasStepError(s.index)"
+                            [attr.aria-current]="currentStep() === s.index ? 'step' : null"
+                            [attr.aria-label]="'مرحله ' + s.index + ' از ' + totalSteps() + ': ' + s.label"
+                            (click)="goToStep(s.index)">
+                            <span class="stepUnit__dot">
+                                @if (hasStepError(s.index)) {
+                                <i class="fa fa-exclamation" aria-hidden="true"></i>
+                                } @else if (isStepDone(s.index)) {
+                                <i class="fa fa-check" aria-hidden="true"></i>
+                                } @else {
+                                {{ s.index }}
+                                }
+                            </span>
+                            <span class="stepUnit__label">{{ s.label }}</span>
+                        </button>
+                        @if (!last) {
+                        <span class="stepUnit__line" [class.active]="currentStep() > s.index" aria-hidden="true"></span>
+                        }
+                    </li>
+                    }
+                </ol>
+            </nav>
 
-                <div class="stepUnit" [class.active]="currentStep() === 2" [class.done]="currentStep() > 2"
-                    (click)="goToStep(2)">
-                    <span class="stepUnit__dot">
-                        @if (currentStep() > 2) { <i class="fa fa-check"></i> } @else { 2 }
-                    </span>
-                    <span class="stepUnit__label">سوالات</span>
-                </div>
-                <span class="stepUnit__line" [class.active]="currentStep() >= 3"></span>
-
-                <div class="stepUnit" [class.active]="currentStep() === 3" [class.done]="currentStep() > 3"
-                    (click)="goToStep(3)">
-                    <span class="stepUnit__dot">
-                        @if (currentStep() > 3) { <i class="fa fa-check"></i> } @else { 3 }
-                    </span>
-                    <span class="stepUnit__label">دسترسی‌ها</span>
-                </div>
-                <span class="stepUnit__line" [class.active]="currentStep() >= 4"></span>
-
-                <div class="stepUnit" [class.active]="currentStep() === 4" [class.done]="currentStep() > 4"
-                    (click)="goToStep(4)">
-                    <span class="stepUnit__dot">
-                        @if (currentStep() > 4) { <i class="fa fa-check"></i> } @else { 4 }
-                    </span>
-                    <span class="stepUnit__label">بررسی</span>
-                </div>
-            </div>
-
-            <button type="button" class="wizardTopBar__close" (click)="cancel()" title="انصراف">
-                <i class="fa fa-times"></i>
+            <button type="button" class="wizardTopBar__close" (click)="cancel()" title="انصراف"
+                aria-label="انصراف و بازگشت به لیست">
+                <i class="fa fa-times" aria-hidden="true"></i>
             </button>
         </div>
+        <div class="wizardTopBar__progress" aria-hidden="true">
+            <div class="wizardTopBar__progressFill" [style.width.%]="progress()"></div>
+        </div>
+    </header>
+
+    <!-- ============ خطاهای مرحله‌ی جاری ============ -->
+    @if (currentStepErrors().length > 0) {
+    <div class="stepErrors" role="alert">
+        <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
+        <div>
+            <strong>برای ادامه، موارد زیر را اصلاح کنید:</strong>
+            <ul>
+                @for (e of currentStepErrors(); track e) {
+                <li>{{ e }}</li>
+                }
+            </ul>
+        </div>
     </div>
+    }
 
     <!-- ============ Step Content ============ -->
-    <div class="stepContent">
+    <main class="stepContent">
 
         @if (currentStep() === 1) {
-        <app-survey-wizard-step1 [surveyData]="surveyData()" (dataChange)="onSurveyDataChange($event)"
-            (fileUploaded)="onFileUploaded($event.type, $event.guid)">
+        <app-survey-wizard-step1 [surveyData]="surveyData()" [showErrors]="attemptedSteps().has(1)"
+            (dataChange)="onSurveyDataChange($event)" (fileUploaded)="onFileUploaded($event.type, $event.guid)"
+            (fileRemoved)="onFileRemoved($event.guid)">
         </app-survey-wizard-step1>
         }
 
@@ -93,38 +101,39 @@
         </app-survey-wizard-step3>
         }
 
-    </div>
+    </main>
 
     <!-- ============ Footer ثابت ============ -->
-    <div class="wizardFooter">
+    <footer class="wizardFooter">
         <div class="wizardFooter__inner">
-            <button type="button" class="btn ghost lg" (click)="previousStep()" [disabled]="!canGoPrevious()">
-                <i class="fa fa-arrow-right"></i>
+            <button type="button" class="wzBtn wzBtn--ghost" (click)="previousStep()" [disabled]="!canGoPrevious()">
+                <i class="fa fa-arrow-right" aria-hidden="true"></i>
                 قبلی
             </button>
 
-            <div class="wizardFooter__progress">
-                <div class="wizardFooter__progressTrack">
-                    <div class="wizardFooter__progressFill" [style.width.%]="progress()"></div>
-                </div>
+            <div class="wizardFooter__status" aria-live="polite">
                 <span>مرحله {{ currentStep() }} از {{ totalSteps() }}</span>
+                @if (hasUnsavedChanges()) {
+                <span class="wizardFooter__dirty"><i class="fa fa-circle" aria-hidden="true"></i> تغییرات ذخیره نشده</span>
+                }
             </div>
 
-            @if (currentStep() < totalSteps()) { <button type="button" class="btn primary lg" (click)="nextStep()">
+            @if (currentStep() < totalSteps()) {
+            <button type="button" class="wzBtn wzBtn--primary" (click)="nextStep()">
                 بعدی
-                <i class="fa fa-arrow-left"></i>
-                </button>
+                <i class="fa fa-arrow-left" aria-hidden="true"></i>
+            </button>
+            } @else {
+            <button type="button" class="wzBtn wzBtn--success" (click)="submitWizard()" [disabled]="isSubmitting()">
+                @if (isSubmitting()) {
+                <i class="fa fa-spinner fa-spin" aria-hidden="true"></i> در حال ثبت...
                 } @else {
-                <button type="button" class="btn success lg" (click)="submitWizard()" [disabled]="isLoading()">
-                    @if (isLoading()) {
-                    <i class="fa fa-spinner fa-spin"></i> در حال ثبت...
-                    } @else {
-                    <i class="fa fa-check"></i> ثبت نظرسنجی
-                    }
-                </button>
+                <i class="fa fa-check" aria-hidden="true"></i> {{ isEditMode() ? 'ذخیره تغییرات' : 'ثبت نظرسنجی' }}
                 }
+            </button>
+            }
         </div>
-    </div>
+    </footer>
 
 </div>
 

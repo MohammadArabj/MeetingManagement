@@ -7,7 +7,23 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, of } from 'rxjs';
 
 import { ToastService } from '../../../services/framework-services/toast.service';
-import { ResponseMatrixDto } from '../../../core/models/response-report';
+import { MatrixQuestionColumnDto, ResponseMatrixDto } from '../../../core/models/response-report';
+
+/** ستون سوال به‌همراه گام آن (فیلدهای جدید بک‌اند) */
+type MatrixColumn = MatrixQuestionColumnDto & {
+  criterionTitle?: string | null;
+  criterionSortOrder?: number | null;
+};
+
+interface MatrixColumnGroup {
+  key: string;
+  title: string;
+  /** شماره‌ی گام برای نمایش؛ null برای «سایر سوالات» */
+  index: number | null;
+  columns: MatrixColumn[];
+}
+
+const OTHER_STEP_TITLE = 'سایر سوالات';
 import { ResponseService } from '../../../services/response.service';
 
 interface ExportColumnItem {
@@ -15,6 +31,8 @@ interface ExportColumnItem {
   label: string;
   type: 'meta' | 'question';
   selected: boolean;
+  /** عنوان گام سوال (در صورت وجود) */
+  step?: string | null;
 }
 
 // ✅ respondentName/participantType/status/progress/deviceType حذف شدن
@@ -84,9 +102,45 @@ export class ResponseMatrixComponent implements OnInit {
     });
   });
 
-  readonly questions = computed(() =>
-    [...(this.matrix()?.questions ?? [])].sort((a, b) => a.orderIndex - b.orderIndex)
+  /** آیا ستون‌های سوال گام‌بندی شده‌اند؟ */
+  readonly hasSteps = computed(() =>
+    (this.matrix()?.questions ?? []).some(q => !!(q as MatrixColumn).criterionTitle)
   );
+
+  /** سوال‌ها به ترتیب گام و سپس ترتیب سوال (سوال‌های بدون گام در انتها) */
+  readonly questions = computed<MatrixColumn[]>(() => {
+    const list = [...(this.matrix()?.questions ?? [])] as MatrixColumn[];
+    if (!this.hasSteps()) return list.sort((a, b) => a.orderIndex - b.orderIndex);
+    const stepOrder = (q: MatrixColumn) =>
+      q.criterionTitle ? (q.criterionSortOrder ?? Number.MAX_SAFE_INTEGER - 1) : Number.MAX_SAFE_INTEGER;
+    return list
+      .map((q, i) => ({ q, i }))
+      .sort((a, b) => stepOrder(a.q) - stepOrder(b.q) || a.q.orderIndex - b.q.orderIndex || a.i - b.i)
+      .map(x => x.q);
+  });
+
+  /** گروه‌های ستون برای سرتیتر دوسطری جدول */
+  readonly columnGroups = computed<MatrixColumnGroup[]>(() => {
+    if (!this.hasSteps()) return [];
+    const groups: MatrixColumnGroup[] = [];
+    let stepNo = 0;
+    for (const q of this.questions()) {
+      const title = q.criterionTitle || OTHER_STEP_TITLE;
+      const key = q.criterionTitle ? `${q.criterionSortOrder ?? ''}|${q.criterionTitle}` : '__other__';
+      const last = groups[groups.length - 1];
+      if (last && last.key === key) {
+        last.columns.push(q);
+      } else {
+        groups.push({ key, title, index: q.criterionTitle ? ++stepNo : null, columns: [q] });
+      }
+    }
+    return groups;
+  });
+
+  /** آیا این ستون اولین ستون یک گام است؟ (برای خط جداکننده‌ی گام‌ها) */
+  isStepStart(q: MatrixColumn): boolean {
+    return this.columnGroups().some((g, i) => i > 0 && g.columns[0] === q);
+  }
 
   constructor() {
     effect(() => {
@@ -125,13 +179,13 @@ export class ResponseMatrixComponent implements OnInit {
       selected: true
     }));
 
-    const questionItems: ExportColumnItem[] = [...matrix.questions]
-      .sort((a, b) => a.orderIndex - b.orderIndex)
+    const questionItems: ExportColumnItem[] = this.questions()
       .map(q => ({
         key: q.questionGuid,
         label: q.questionText,
         type: 'question' as const,
-        selected: true
+        selected: true,
+        step: q.criterionTitle ?? (this.hasSteps() ? OTHER_STEP_TITLE : null)
       }));
 
     this.exportColumns.set([...metaItems, ...questionItems]);

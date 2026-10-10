@@ -123,13 +123,13 @@ export async function parseExcelFile(file: File): Promise<ExcelImportResult> {
           tempId: generateTempId(),
           optionText: text,
           sortOrder: idx + 1,
-          color: '#667eea',
+          color: undefined,
         }));
       } else if ([1, 2, 10].includes(questionType) && !optionsStr) {
         warnings.push(`ردیف ${rowNumber}: سوال چندگزینه‌ای بدون گزینه - گزینه‌ها را دستی اضافه کنید`);
         options = [
-          { tempId: generateTempId(), optionText: 'گزینه 1', sortOrder: 1, color: '#667eea' },
-          { tempId: generateTempId(), optionText: 'گزینه 2', sortOrder: 2, color: '#667eea' },
+          { tempId: generateTempId(), optionText: 'گزینه 1', sortOrder: 1 },
+          { tempId: generateTempId(), optionText: 'گزینه 2', sortOrder: 2 },
         ];
       }
 
@@ -181,7 +181,9 @@ function resolveQuestionType(typeStr: string): number | null {
 
   // بررسی عددی
   const num = Number(typeStr);
-  if (!isNaN(num) && [1, 2, 3, 4, 5, 8, 9, 10, 11].includes(num)) {
+  // کد 8 در نسخه‌های قبلی برای «تاریخ» استفاده می‌شد؛ در بک‌اند تاریخ = 7 است
+  if (!isNaN(num) && num === 8) return 7;
+  if (!isNaN(num) && [1, 2, 3, 4, 5, 7, 9, 10, 11].includes(num)) {
     return num;
   }
 
@@ -273,7 +275,7 @@ export function generateExcelTemplate(): Blob {
     { 'نوع سوال': 'چند انتخابی', 'کد عددی': 2, 'توضیحات': 'چند گزینه‌ای - چند گزینه' },
     { 'نوع سوال': 'لیست کشویی', 'کد عددی': 10, 'توضیحات': 'انتخاب از لیست' },
     { 'نوع سوال': 'امتیازدهی', 'کد عددی': 5, 'توضیحات': 'مقیاس 1 تا 5' },
-    { 'نوع سوال': 'تاریخ', 'کد عددی': 8, 'توضیحات': 'انتخاب تاریخ' },
+    { 'نوع سوال': 'تاریخ', 'کد عددی': 7, 'توضیحات': 'انتخاب تاریخ' },
     { 'نوع سوال': 'آپلود فایل', 'کد عددی': 9, 'توضیحات': 'بارگذاری فایل' },
     { 'نوع سوال': 'ماتریس', 'کد عددی': 11, 'توضیحات': 'جدول ماتریسی' },
   ];

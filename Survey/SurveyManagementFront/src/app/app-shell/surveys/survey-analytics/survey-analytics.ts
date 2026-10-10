@@ -13,9 +13,17 @@ import {
   SurveyAnalyticsDto,
   QuestionAnalyticsDto,
   TrendPointDto,
-  DemographicBucketDto
+  DemographicBucketDto,
+  CriterionAnalyticsDto,
+  QuestionStepGroup,
+  groupQuestionsByStep,
+  surveyHasSteps,
+  stepDisplayTitle,
+  formatSigned,
+  sentimentLabelFa
 } from '../../../core/models/survey-analytics.model';
 import { ChartCanvasComponent } from '../../../shared/chart-canvas/chart-canvas';
+import { TextAnalyticsPanelComponent } from './text-analytics-panel/text-analytics-panel';
 import { downloadAnalyticsExcel } from '../../../core/models/analytics-excel-export.util';
 import { downloadAnalyticsHtml } from '../../../core/models/analytics-html-export.util';
 
@@ -25,15 +33,16 @@ const CHART_PALETTE = [
 ];
 
 const SENTIMENT_COLORS = {
-  positive: '#22c55e',
-  negative: '#ff4d6d',
+  positive: '#16a34a',
+  negative: '#e11d48',
+  mixed: '#d97706',
   neutral: '#94a3b8'
 };
 
 @Component({
   selector: 'app-survey-analytics',
   standalone: true,
-  imports: [CommonModule, FormsModule, ChartCanvasComponent],
+  imports: [CommonModule, FormsModule, ChartCanvasComponent, TextAnalyticsPanelComponent],
   templateUrl: './survey-analytics.html',
   styleUrls: ['./survey-analytics.css']
 })
@@ -50,6 +59,30 @@ export class SurveyAnalyticsComponent implements OnInit {
   readonly expandedQuestionGuid = signal<string | null>(null);
 
   readonly hasData = computed(() => (this.analytics()?.overview.totalResponses ?? 0) > 0);
+
+  // ==================== گام‌ها ====================
+
+  /** آیا نظرسنجی گام‌بندی شده است؟ (در غیر این صورت چیدمان تخت قبلی) */
+  readonly hasSteps = computed(() => surveyHasSteps(this.analytics()));
+
+  /** گروه‌های گام (بدون فیلتر جستجو) برای خلاصه‌ی گام‌ها */
+  readonly allStepGroups = computed<QuestionStepGroup[]>(() => {
+    const data = this.analytics();
+    if (!data || !this.hasSteps()) return [];
+    return groupQuestionsByStep(data);
+  });
+
+  /** گروه‌های نمایشی سوال‌ها (با اعمال جستجو). بدون گام = یک گروه بدون سرتیتر */
+  readonly stepGroups = computed<QuestionStepGroup[]>(() => {
+    const data = this.analytics();
+    if (!data) return [];
+    return groupQuestionsByStep(data, this.filteredQuestions());
+  });
+
+  readonly collapsedSteps = signal<ReadonlySet<string>>(new Set());
+
+  readonly fmtSigned = formatSigned;
+  readonly stepTitle = stepDisplayTitle;
 
   readonly exportingExcel = signal(false);
   readonly exportingHtml = signal(false);
@@ -130,12 +163,12 @@ export class SurveyAnalyticsComponent implements OnInit {
     }
   }
 
-  exportToExcel(): void {
+  async exportToExcel(): Promise<void> {
     const data = this.analytics();
     if (!data) return;
     this.exportingExcel.set(true);
     try {
-      downloadAnalyticsExcel(data);
+      await downloadAnalyticsExcel(data);
       this.toastService.success('فایل Excel با موفقیت دانلود شد');
     } catch (err) {
       console.error('Analytics export error:', err);
@@ -143,6 +176,70 @@ export class SurveyAnalyticsComponent implements OnInit {
     } finally {
       this.exportingExcel.set(false);
     }
+  }
+
+  // ==================== اکشن‌های گام ====================
+
+  stepAnchor(key: string): string {
+    return 'step-' + key;
+  }
+
+  isStepCollapsed(key: string): boolean {
+    return this.collapsedSteps().has(key);
+  }
+
+  toggleStep(key: string): void {
+    const next = new Set(this.collapsedSteps());
+    if (next.has(key)) next.delete(key); else next.add(key);
+    this.collapsedSteps.set(next);
+  }
+
+  setAllStepsCollapsed(collapsed: boolean): void {
+    this.collapsedSteps.set(collapsed ? new Set(this.allStepGroups().map(g => g.key)) : new Set());
+  }
+
+  readonly allStepsCollapsed = computed(() =>
+    this.allStepGroups().length > 0 && this.allStepGroups().every(g => this.collapsedSteps().has(g.key))
+  );
+
+  /** پرش به یک گام (در صورت نیاز تب را هم عوض می‌کند و گام را باز می‌کند) */
+  jumpToStep(key: string, tab?: 'questions' | 'dashboard'): void {
+    if (tab && this.activeTab() !== tab) this.activeTab.set(tab);
+    if (this.collapsedSteps().has(key)) {
+      const next = new Set(this.collapsedSteps());
+      next.delete(key);
+      this.collapsedSteps.set(next);
+    }
+    const reduceMotion = typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    setTimeout(() => {
+      document.getElementById(this.stepAnchor(key))
+        ?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    }, 30);
+  }
+
+  /** رنگ‌بندی درصد امتیاز گام */
+  scoreTone(value: number | null | undefined): 'good' | 'mid' | 'bad' | 'none' {
+    if (value === null || value === undefined) return 'none';
+    return value >= 70 ? 'good' : value >= 50 ? 'mid' : 'bad';
+  }
+
+  /** رنگ‌بندی شاخص خالص احساس */
+  sentimentTone(value: number | null | undefined): 'good' | 'mid' | 'bad' | 'none' {
+    if (value === null || value === undefined) return 'none';
+    return value >= 10 ? 'good' : value <= -10 ? 'bad' : 'mid';
+  }
+
+  stepSummary(g: QuestionStepGroup): CriterionAnalyticsDto | null {
+    return g.criterion;
+  }
+
+  /** شاخص خالص احساس یک سوال متنی */
+  questionNetSentiment(q: QuestionAnalyticsDto): number {
+    const s = q.textAnalytics?.sentiment;
+    if (!s) return 0;
+    if (s.netSentiment !== undefined && s.netSentiment !== null) return Number(s.netSentiment);
+    return Math.round((s.positivePercentage - s.negativePercentage) * 10) / 10;
   }
 
   readonly filteredQuestions = computed(() => {
@@ -281,7 +378,20 @@ export class SurveyAnalyticsComponent implements OnInit {
     return q.fileUploadCount !== undefined && q.fileUploadCount !== null;
   }
 
+  // ✅ کش داده‌ی نمودارها تا با هر change detection نمودار از نو ساخته نشود
+  private readonly chartCache = new WeakMap<QuestionAnalyticsDto, Record<string, ChartConfiguration['data']>>();
+
+  private cached(q: QuestionAnalyticsDto, kind: string, build: () => ChartConfiguration['data']): ChartConfiguration['data'] {
+    let entry = this.chartCache.get(q);
+    if (!entry) { entry = {}; this.chartCache.set(q, entry); }
+    return entry[kind] ??= build();
+  }
+
   optionChartData(q: QuestionAnalyticsDto): ChartConfiguration['data'] {
+    return this.cached(q, 'option', () => this.buildOptionChartData(q));
+  }
+
+  private buildOptionChartData(q: QuestionAnalyticsDto): ChartConfiguration['data'] {
     const stats = q.optionStats ?? [];
     return {
       labels: stats.map(s => s.optionText),
@@ -294,6 +404,10 @@ export class SurveyAnalyticsComponent implements OnInit {
   }
 
   numericHistogramData(q: QuestionAnalyticsDto): ChartConfiguration['data'] {
+    return this.cached(q, 'numeric', () => this.buildNumericHistogramData(q));
+  }
+
+  private buildNumericHistogramData(q: QuestionAnalyticsDto): ChartConfiguration['data'] {
     const dist = q.numericStats?.distribution ?? [];
     return {
       labels: dist.map(d => d.label),
@@ -306,19 +420,11 @@ export class SurveyAnalyticsComponent implements OnInit {
     };
   }
 
-  sentimentChartData(q: QuestionAnalyticsDto): ChartConfiguration['data'] {
-    const s = q.textAnalytics!.sentiment;
-    return {
-      labels: ['مثبت', 'منفی', 'خنثی'],
-      datasets: [{
-        data: [s.positiveCount, s.negativeCount, s.neutralCount],
-        backgroundColor: [SENTIMENT_COLORS.positive, SENTIMENT_COLORS.negative, SENTIMENT_COLORS.neutral],
-        borderWidth: 0
-      }]
-    };
+  rankingChartData(q: QuestionAnalyticsDto): ChartConfiguration['data'] {
+    return this.cached(q, 'ranking', () => this.buildRankingChartData(q));
   }
 
-  rankingChartData(q: QuestionAnalyticsDto): ChartConfiguration['data'] {
+  private buildRankingChartData(q: QuestionAnalyticsDto): ChartConfiguration['data'] {
     const stats = q.rankingStats ?? [];
     return {
       labels: stats.map(s => s.itemLabel),
@@ -332,26 +438,22 @@ export class SurveyAnalyticsComponent implements OnInit {
   }
 
   dateChartData(q: QuestionAnalyticsDto): ChartConfiguration['data'] {
-    return this.buildTrendLineData(q.dateDistribution ?? [], 'تعداد پاسخ');
+    return this.cached(q, 'date', () => this.buildTrendLineData(q.dateDistribution ?? [], 'تعداد پاسخ'));
   }
 
-  wordFontSize(count: number, q: QuestionAnalyticsDto): number {
-    const words = q.textAnalytics?.topWords ?? [];
-    if (words.length === 0) return 14;
-    const max = Math.max(...words.map(w => w.count));
-    const min = Math.min(...words.map(w => w.count));
-    if (max === min) return 18;
-    const ratio = (count - min) / (max - min);
-    return Math.round(13 + ratio * 22);
+  /** کلیدواژه‌های مختصر برای کارت داشبورد (با پشتیبانی از داده‌ی قدیمی) */
+  topTerms(q: QuestionAnalyticsDto, n = 8): string[] {
+    const t = q.textAnalytics;
+    if (!t) return [];
+    if (t.keywords && t.keywords.length > 0) return t.keywords.slice(0, n).map(k => k.term);
+    return (t.topWords ?? []).slice(0, n).map(w => w.word);
   }
 
   sentimentLabel(sentiment: string): string {
-    return sentiment === 'positive' ? 'مثبت' : sentiment === 'negative' ? 'منفی' : 'خنثی';
+    return sentimentLabelFa(sentiment);
   }
 
-  sentimentIcon(sentiment: string): string {
-    return sentiment === 'positive' ? 'fa-smile' : sentiment === 'negative' ? 'fa-frown' : 'fa-meh';
-  }
+  readonly sentimentColors = SENTIMENT_COLORS;
 
   private buildTrendLineData(points: TrendPointDto[], label: string): ChartConfiguration['data'] {
     return {

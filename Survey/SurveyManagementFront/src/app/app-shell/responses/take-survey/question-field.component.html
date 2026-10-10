@@ -1,0 +1,264 @@
+@let q = question();
+@let t = type();
+@let val = v();
+<fieldset class="qf" [class.qf--invalid]="!!error()" [attr.aria-describedby]="error() ? qid() + '-err' : null"
+  [attr.aria-invalid]="!!error()">
+  <legend class="qf__title">
+    <span class="qf__num" aria-hidden="true">{{ fa(index()) }}</span>
+    <span class="qf__text">{{ q.questionText }}</span>
+    @if (q.isRequired) { <span class="qf__req" title="الزامی">*<span class="visually-hidden">الزامی</span></span> }
+  </legend>
+
+  @if (q.helpText) { <p class="qf__help">{{ q.helpText }}</p> }
+  @if (imageUrl()) { <img class="qf__image" [src]="imageUrl()" alt="" loading="lazy" /> }
+
+  <div class="qf__body">
+    @switch (true) {
+
+      <!-- ─── متن ─── -->
+      @case (t === QT.LongText) {
+        <textarea class="qf-input qf-input--area" [id]="qid()" rows="4" [value]="val.text ?? ''"
+          [attr.maxlength]="q.maxLength || 4000" [placeholder]="q.placeholder || 'پاسخ خود را بنویسید…'"
+          (input)="setText($any($event.target).value)"></textarea>
+        @if (q.maxLength) { <div class="qf__counter">{{ fa((val.text ?? '').length) }} / {{ fa(q.maxLength) }}</div> }
+      }
+      @case (t === QT.ShortText || t === QT.Email || t === QT.Phone || t === QT.Address) {
+        <input class="qf-input" [id]="qid()" [value]="val.text ?? ''"
+          [type]="t === QT.Email ? 'email' : t === QT.Phone ? 'tel' : 'text'"
+          [attr.inputmode]="t === QT.Phone ? 'tel' : t === QT.Email ? 'email' : null"
+          [attr.dir]="t === QT.Email || t === QT.Phone ? 'ltr' : null"
+          [attr.autocomplete]="t === QT.Email ? 'email' : t === QT.Phone ? 'tel' : 'off'"
+          [attr.maxlength]="q.maxLength || 4000" [placeholder]="q.placeholder || (t === QT.Email ? 'name@example.com' : t === QT.Phone ? '09xxxxxxxxx' : 'پاسخ شما')"
+          (input)="setText($any($event.target).value)" />
+        @if (q.maxLength) { <div class="qf__counter">{{ fa((val.text ?? '').length) }} / {{ fa(q.maxLength) }}</div> }
+      }
+      @case (t === QT.Number) {
+        <input class="qf-input qf-input--num" [id]="qid()" type="text" inputmode="decimal" dir="ltr"
+          [value]="val.text ?? (val.number ?? '')" [placeholder]="q.placeholder || 'عدد'"
+          (input)="setNumberText($any($event.target).value)" />
+        @if (q.minValue != null || q.maxValue != null) {
+          <div class="qf__hint">بازه‌ی مجاز: {{ fa(q.minValue ?? '—') }} تا {{ fa(q.maxValue ?? '—') }}</div>
+        }
+      }
+
+      <!-- ─── تک‌انتخابی / بله‌خیر ─── -->
+      @case (t === QT.SingleChoice || t === QT.YesNo) {
+        <div class="choices" [class.choices--inline]="t === QT.YesNo" role="radiogroup">
+          @for (o of options(); track o.guid) {
+            <label class="choice" [class.is-on]="val.option === o.guid">
+              <input type="radio" class="visually-hidden" [name]="qid()" [checked]="val.option === o.guid" (change)="selectOption(o.guid)" />
+              <span class="choice__mark choice__mark--radio" aria-hidden="true"></span>
+              @if (o.color) { <span class="choice__swatch" [style.background]="o.color"></span> }
+              <span class="choice__text">{{ o.optionText }}</span>
+            </label>
+          }
+          @if (q.allowOtherOption) {
+            <label class="choice" [class.is-on]="val.otherSelected">
+              <input type="radio" class="visually-hidden" [name]="qid()" [checked]="!!val.otherSelected" (change)="selectOther()" />
+              <span class="choice__mark choice__mark--radio" aria-hidden="true"></span>
+              <span class="choice__text">{{ q.otherOptionText || 'سایر' }}</span>
+            </label>
+            @if (val.otherSelected) {
+              <input class="qf-input qf-other" [value]="val.other ?? ''" maxlength="1000" placeholder="لطفاً بنویسید…"
+                aria-label="متن گزینه‌ی سایر" (input)="setOther($any($event.target).value)" />
+            }
+          }
+        </div>
+      }
+
+      <!-- ─── چندانتخابی ─── -->
+      @case (t === QT.MultipleChoice) {
+        @if (q.minSelections || q.maxSelections) {
+          <div class="qf__hint">
+            @if (q.minSelections) { حداقل {{ fa(q.minSelections) }} گزینه }
+            @if (q.minSelections && q.maxSelections) { و }
+            @if (q.maxSelections) { حداکثر {{ fa(q.maxSelections) }} گزینه }
+          </div>
+        }
+        <div class="choices" role="group">
+          @for (o of options(); track o.guid) {
+            @let on = (val.options ?? []).includes(o.guid);
+            <label class="choice" [class.is-on]="on" [class.is-disabled]="isMaxReached(o.guid)">
+              <input type="checkbox" class="visually-hidden" [checked]="on" [disabled]="isMaxReached(o.guid)" (change)="toggleOption(o.guid)" />
+              <span class="choice__mark choice__mark--check" aria-hidden="true"></span>
+              @if (o.color) { <span class="choice__swatch" [style.background]="o.color"></span> }
+              <span class="choice__text">{{ o.optionText }}</span>
+            </label>
+          }
+          @if (q.allowOtherOption) {
+            <label class="choice" [class.is-on]="val.otherSelected">
+              <input type="checkbox" class="visually-hidden" [checked]="!!val.otherSelected" (change)="toggleOtherMulti()" />
+              <span class="choice__mark choice__mark--check" aria-hidden="true"></span>
+              <span class="choice__text">{{ q.otherOptionText || 'سایر' }}</span>
+            </label>
+            @if (val.otherSelected) {
+              <input class="qf-input qf-other" [value]="val.other ?? ''" maxlength="1000" placeholder="لطفاً بنویسید…"
+                aria-label="متن گزینه‌ی سایر" (input)="setOther($any($event.target).value)" />
+            }
+          }
+        </div>
+      }
+
+      <!-- ─── لیست کشویی ─── -->
+      @case (t === QT.Dropdown) {
+        <select class="qf-input qf-select" [id]="qid()" (change)="setDropdown($any($event.target).value)">
+          <option value="" [selected]="!val.option && !val.otherSelected">انتخاب کنید…</option>
+          @for (o of options(); track o.guid) {
+            <option [value]="o.guid" [selected]="val.option === o.guid">{{ o.optionText }}</option>
+          }
+          @if (q.allowOtherOption) { <option value="__other__" [selected]="!!val.otherSelected">{{ q.otherOptionText || 'سایر' }}</option> }
+        </select>
+        @if (val.otherSelected) {
+          <input class="qf-input qf-other" [value]="val.other ?? ''" maxlength="1000" placeholder="لطفاً بنویسید…"
+            aria-label="متن گزینه‌ی سایر" (input)="setOther($any($event.target).value)" />
+        }
+      }
+
+      <!-- ─── امتیاز (ستاره) ─── -->
+      @case (t === QT.Rating) {
+        <div class="stars" role="radiogroup" [attr.aria-label]="q.questionText">
+          @for (n of scale(); track n) {
+            @if (n > 0) {
+              <button type="button" class="star" role="radio" [attr.aria-checked]="val.number === n"
+                [class.is-on]="(val.number ?? 0) >= n" [attr.aria-label]="fa(n) + ' از ' + fa(scale()[scale().length - 1])"
+                (click)="setNumber(n)"><i class="fas fa-star" aria-hidden="true"></i></button>
+            }
+          }
+          @if (val.number != null) { <span class="stars__value">{{ fa(val.number) }} از {{ fa(scale()[scale().length - 1]) }}</span> }
+        </div>
+        @if (q.minScaleLabel || q.maxScaleLabel) {
+          <div class="scale-labels"><span>{{ q.minScaleLabel }}</span><span>{{ q.maxScaleLabel }}</span></div>
+        }
+      }
+
+      <!-- ─── مقیاس خطی / NPS ─── -->
+      @case (t === QT.LinearScale || t === QT.NPS) {
+        <div class="scale" [class.scale--nps]="t === QT.NPS" role="radiogroup" [attr.aria-label]="q.questionText">
+          @for (n of scale(); track n) {
+            <button type="button" class="scale__btn" role="radio" [attr.aria-checked]="val.number === n"
+              [class.is-on]="val.number === n" [attr.data-tone]="t === QT.NPS ? npsTone(n) : null"
+              (click)="setNumber(n)">{{ fa(n) }}</button>
+          }
+        </div>
+        <div class="scale-labels">
+          <span>{{ q.minScaleLabel || (t === QT.NPS ? 'اصلاً' : '') }}</span>
+          <span>{{ q.maxScaleLabel || (t === QT.NPS ? 'حتماً' : '') }}</span>
+        </div>
+      }
+
+      <!-- ─── تاریخ شمسی ─── -->
+      @case (t === QT.Date) {
+        @let d = shownDate();
+        <div class="date-pick">
+          <select class="qf-input qf-select" aria-label="روز" (change)="setDatePart('d', $any($event.target).value)">
+            <option value="0" [selected]="!d.d">روز</option>
+            @for (x of days(); track x) { <option [value]="x" [selected]="d.d === x">{{ fa(x) }}</option> }
+          </select>
+          <select class="qf-input qf-select" aria-label="ماه" (change)="setDatePart('m', $any($event.target).value)">
+            <option value="0" [selected]="!d.m">ماه</option>
+            @for (name of months; track name; let i = $index) { <option [value]="i + 1" [selected]="d.m === i + 1">{{ name }}</option> }
+          </select>
+          <select class="qf-input qf-select" aria-label="سال" (change)="setDatePart('y', $any($event.target).value)">
+            <option value="0" [selected]="!d.y">سال</option>
+            @for (x of years(); track x) { <option [value]="x" [selected]="d.y === x">{{ fa(x) }}</option> }
+          </select>
+        </div>
+        <div class="date-actions">
+          <button type="button" class="link-btn" (click)="setToday()"><i class="fas fa-calendar-day"></i> امروز</button>
+          @if (val.date) { <button type="button" class="link-btn" (click)="clearDate()">پاک کردن</button> }
+        </div>
+      }
+
+      @case (t === QT.Time) {
+        <input class="qf-input qf-input--time" [id]="qid()" type="time" dir="ltr" [value]="val.date ?? ''"
+          (input)="setTime($any($event.target).value)" />
+      }
+
+      <!-- ─── ماتریس ─── -->
+      @case (isMatrixType()) {
+        <div class="matrix" [style.--cols]="q.matrixColumns.length">
+          <div class="matrix__head" aria-hidden="true">
+            <span></span>
+            @for (c of q.matrixColumns; track c) { <span>{{ c }}</span> }
+          </div>
+          @for (r of q.matrixRows; track r; let ri = $index) {
+            <div class="matrix__row" [class.is-done]="!!val.matrix?.[r]"
+              [attr.role]="t === QT.MatrixSingle ? 'radiogroup' : 'group'" [attr.aria-label]="r">
+              <div class="matrix__label">{{ r }}</div>
+              <div class="matrix__cells">
+                @for (c of q.matrixColumns; track c) {
+                  <label class="matrix__cell" [class.is-on]="matrixChecked(r, c)">
+                    <input class="visually-hidden" [type]="t === QT.MatrixSingle ? 'radio' : 'checkbox'"
+                      [name]="qid() + '-' + ri" [checked]="matrixChecked(r, c)" (change)="setMatrix(r, c)" />
+                    <span class="choice__mark" [class.choice__mark--radio]="t === QT.MatrixSingle"
+                      [class.choice__mark--check]="t === QT.MatrixMultiple" aria-hidden="true"></span>
+                    <span class="matrix__cell-text">{{ c }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- ─── رتبه‌بندی ─── -->
+      @case (t === QT.Ranking) {
+        <p class="qf__hint">با دکمه‌های بالا/پایین گزینه‌ها را از مهم‌ترین (بالا) مرتب کنید.</p>
+        <ol class="rank">
+          @for (o of rankingOrder(); track o.guid; let i = $index; let last = $last) {
+            <li class="rank__item" [class.is-set]="!!val.ranking?.length">
+              <span class="rank__pos">{{ fa(i + 1) }}</span>
+              <span class="rank__text">{{ o.optionText }}</span>
+              <span class="rank__btns">
+                <button type="button" class="icon-btn" [disabled]="i === 0" (click)="moveRank(i, -1)" [attr.aria-label]="'بالا بردن ' + o.optionText"><i class="fas fa-chevron-up"></i></button>
+                <button type="button" class="icon-btn" [disabled]="last" (click)="moveRank(i, 1)" [attr.aria-label]="'پایین بردن ' + o.optionText"><i class="fas fa-chevron-down"></i></button>
+              </span>
+            </li>
+          }
+        </ol>
+        @if (!val.ranking?.length) {
+          <button type="button" class="link-btn" (click)="acceptRanking()"><i class="fas fa-check"></i> همین ترتیب را تأیید می‌کنم</button>
+        }
+      }
+
+      <!-- ─── فایل ─── -->
+      @case (t === QT.FileUpload) {
+        @if (!canUpload()) {
+          <div class="qf__notice"><i class="fas fa-lock"></i> برای ارسال فایل باید وارد سامانه شوید.</div>
+        } @else if (val.file?.url) {
+          <div class="file-chip">
+            <i class="fas fa-file-alt" aria-hidden="true"></i>
+            <span class="file-chip__name">{{ val.file!.name }}</span>
+            <span class="file-chip__size">{{ formatSize(val.file!.size) }}</span>
+            <button type="button" class="icon-btn" (click)="removeFile()" aria-label="حذف فایل"><i class="fas fa-times"></i></button>
+          </div>
+        } @else if (uploading(); as up) {
+          <div class="file-progress" role="status">
+            <span>{{ up.name }}</span>
+            <div class="bar"><span [style.width.%]="up.progress"></span></div>
+            <span>{{ fa(up.progress) }}٪</span>
+          </div>
+        } @else {
+          <label class="dropzone">
+            <input type="file" class="visually-hidden" [attr.accept]="accept() || null" (change)="onFile($any($event.target))" />
+            <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
+            <span>انتخاب فایل</span>
+            <small>
+              @if (q.allowedFileTypes) { قالب‌های مجاز: {{ q.allowedFileTypes }} }
+              @if (q.maxFileSize) { — حداکثر {{ fa(q.maxFileSize) }} مگابایت }
+            </small>
+          </label>
+        }
+        @if (uploadError()) { <div class="qf__err" role="alert">{{ uploadError() }}</div> }
+      }
+
+      @default {
+        <div class="qf__notice">این نوع سوال پشتیبانی نمی‌شود.</div>
+      }
+    }
+  </div>
+
+  @if (error()) {
+    <div class="qf__err" [id]="qid() + '-err'" role="alert"><i class="fas fa-exclamation-circle" aria-hidden="true"></i> {{ error() }}</div>
+  }
+</fieldset>

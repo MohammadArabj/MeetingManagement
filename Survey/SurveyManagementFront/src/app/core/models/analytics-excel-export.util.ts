@@ -9,10 +9,18 @@ import {
     SurveyAnalyticsDto,
     QuestionAnalyticsDto,
     DemographicBucketDto,
+    QuestionStepGroup,
+    groupQuestionsByStep,
+    surveyHasSteps,
+    stepDisplayTitle,
+    sentimentLabelFa,
+    formatSigned,
 } from '../../core/models/survey-analytics.model';
 
 const FONT_NAME = 'BNazanin';
 const HEADER_FILL = 'FFEFEFEF';
+const STEP_FILL = 'FFE8EEFB';
+const STEP_FONT_COLOR = 'FF1E3A8A';
 
 /**
  * ساخت Workbook کامل تحلیل نظرسنجی (چند شیت) و برگرداندن آن به‌صورت Blob
@@ -23,13 +31,17 @@ export async function generateAnalyticsExcelBlob(analytics: SurveyAnalyticsDto):
     workbook.created = new Date();
 
     appendOverviewSheet(workbook, analytics);
+    appendStepsSummarySheet(workbook, analytics);
     appendQuestionsSummarySheet(workbook, analytics);
     appendChoiceStatsSheet(workbook, analytics);
     appendNumericStatsSheet(workbook, analytics);
-    appendTextSentimentSheet(workbook, analytics);
-    appendTopWordsSheet(workbook, analytics);
-    appendTextSamplesSheet(workbook, analytics);
     appendRankingSheet(workbook, analytics);
+    appendTextSummarySheet(workbook, analytics);
+    appendTextThemesSheet(workbook, analytics);
+    appendTextKeywordsSheet(workbook, analytics);
+    appendSuggestionsSheet(workbook, analytics);
+    appendRepeatedAnswersSheet(workbook, analytics);
+    appendTextAnswersSheet(workbook, analytics);
 
     const buffer = await workbook.xlsx.writeBuffer();
     return new Blob([buffer], {
@@ -47,8 +59,11 @@ export async function downloadAnalyticsExcel(analytics: SurveyAnalyticsDto): Pro
     a.href = url;
     const safeTitle = sanitizeFileName(analytics.surveyTitle || 'نظرسنجی');
     a.download = `تحلیل_${safeTitle}_${Date.now()}.xlsx`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 // ==================== ابزار مشترک ساخت شیت ====================
@@ -56,9 +71,11 @@ export async function downloadAnalyticsExcel(analytics: SurveyAnalyticsDto): Pro
 /**
  * ساخت یک worksheet با تنظیمات RTL و فونت پیش‌فرض
  */
-function createSheet(workbook: ExcelJS.Workbook, name: string): ExcelJS.Worksheet {
+function createSheet(workbook: ExcelJS.Workbook, name: string, freezeHeader = false): ExcelJS.Worksheet {
     const ws = workbook.addWorksheet(name, {
-        views: [{ rightToLeft: true, showGridLines: true }],
+        views: freezeHeader
+            ? [{ rightToLeft: true, showGridLines: true, state: 'frozen', ySplit: 1 }]
+            : [{ rightToLeft: true, showGridLines: true }],
     });
     return ws;
 }
@@ -103,10 +120,11 @@ function applyDefaultFont(ws: ExcelJS.Worksheet): void {
 /**
  * تنظیم خودکار عرض ستون‌ها بر اساس بیشترین طول محتوا (با در نظر گرفتن حروف فارسی)
  */
-function autoFitColumns(ws: ExcelJS.Worksheet, minWidth = 10, maxWidth = 60): void {
+function autoFitColumns(ws: ExcelJS.Worksheet, minWidth = 10, maxWidth = 60, skipRows?: Set<number>): void {
     ws.columns.forEach(column => {
         let maxLen = minWidth;
-        column?.eachCell?.({ includeEmpty: true }, cell => {
+        column?.eachCell?.({ includeEmpty: true }, (cell, rowNumber) => {
+            if (skipRows?.has(rowNumber)) return;
             const val = cell.value;
             const text = val === null || val === undefined ? '' : String(val);
             // تخمین عرض: کاراکترهای فارسی/عربی کمی پهن‌تر رندر می‌شن
@@ -219,11 +237,121 @@ function appendOverviewSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyt
     autoFitColumns(ws);
 }
 
-// ==================== شیت ۲: خلاصه سوالات ====================
+// ==================== گروه‌بندی بر اساس گام ====================
+
+interface ColumnDef {
+    header: string;
+    key: string;
+    width: number;
+}
+
+/** متن خلاصه‌ی یک گام برای ردیف سرتیتر */
+function stepSummaryText(g: QuestionStepGroup): string {
+    const parts: string[] = [stepDisplayTitle(g)];
+    const c = g.criterion;
+    parts.push(`${c?.questionCount ?? g.questions.length} سوال`);
+    if (c) {
+        parts.push(`نرخ پاسخ‌دهی ${c.averageAnswerRate}%`);
+        if (c.averageScorePercent !== null && c.averageScorePercent !== undefined) {
+            parts.push(`امتیاز ${c.averageScorePercent}%`);
+        }
+        if (c.netSentiment !== null && c.netSentiment !== undefined) {
+            parts.push(`شاخص احساس ${formatSigned(c.netSentiment)}`);
+        }
+    }
+    return parts.join('  |  ');
+}
+
+/**
+ * ساخت یک شیت جدولی که ردیف‌هایش به تفکیک گام گروه‌بندی شده‌اند.
+ * اگر نظرسنجی گام داشته باشد: ستون «گام» به ابتدای جدول اضافه می‌شود و قبل از ردیف‌های هر گام
+ * یک ردیف سرتیتر (ادغام‌شده) با خلاصه‌ی گام درج می‌شود.
+ * اگر هیچ ردیفی وجود نداشته باشد شیت ساخته نمی‌شود.
+ */
+function appendGroupedSheet(
+    workbook: ExcelJS.Workbook,
+    analytics: SurveyAnalyticsDto,
+    sheetName: string,
+    columns: ColumnDef[],
+    rowsFor: (q: QuestionAnalyticsDto) => Record<string, unknown>[],
+    maxWidth = 60
+): void {
+    const hasSteps = surveyHasSteps(analytics);
+    const groups = groupQuestionsByStep(analytics);
+    const grouped = groups
+        .map(g => ({ g, rows: g.questions.flatMap(q => rowsFor(q)) }))
+        .filter(x => x.rows.length > 0);
+    if (grouped.length === 0) return;
+
+    const ws = createSheet(workbook, sheetName, true);
+    const cols: ColumnDef[] = hasSteps ? [{ header: 'گام', key: '__step', width: 22 }, ...columns] : columns;
+    ws.columns = cols.map(c => ({ header: c.header, key: c.key, width: c.width }));
+    styleHeaderRow(ws);
+
+    const stepRows = new Set<number>();
+    for (const { g, rows } of grouped) {
+        if (hasSteps) {
+            const row = ws.addRow([stepSummaryText(g)]);
+            const r = row.number;
+            ws.mergeCells(r, 1, r, cols.length);
+            const cell = ws.getCell(r, 1);
+            cell.font = { name: FONT_NAME, bold: true, size: 12, color: { argb: STEP_FONT_COLOR } };
+            cell.alignment = { horizontal: 'right', vertical: 'middle' };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STEP_FILL } };
+            cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' } };
+            row.height = 22;
+            stepRows.add(r);
+        }
+        const stepLabel = g.index === null ? g.title : `${g.index}. ${g.title}`;
+        for (const r of rows) {
+            ws.addRow(hasSteps ? { __step: stepLabel, ...r } : r);
+        }
+    }
+
+    applyDefaultFont(ws);
+    autoFitColumns(ws, 10, maxWidth, stepRows);
+}
+
+// ==================== شیت: خلاصه گام‌ها ====================
+
+function appendStepsSummarySheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
+    if (!surveyHasSteps(analytics)) return;
+    const groups = groupQuestionsByStep(analytics, analytics.questions, true);
+
+    const ws = createSheet(workbook, 'خلاصه گام‌ها', true);
+    ws.columns = [
+        { header: 'شماره گام', key: 'idx', width: 10 },
+        { header: 'عنوان گام', key: 'title', width: 36 },
+        { header: 'تعداد سوال', key: 'count', width: 12 },
+        { header: 'میانگین نرخ پاسخ‌دهی (%)', key: 'rate', width: 22 },
+        { header: 'میانگین امتیاز (۰ تا ۱۰۰)', key: 'score', width: 22 },
+        { header: 'شاخص خالص احساس (−۱۰۰ تا +۱۰۰)', key: 'net', width: 26 },
+        { header: 'سوال‌های متنی', key: 'texts', width: 14 },
+    ];
+
+    for (const g of groups) {
+        const c = g.criterion;
+        ws.addRow({
+            idx: g.index ?? '-',
+            title: g.title,
+            count: c?.questionCount ?? g.questions.length,
+            rate: c?.averageAnswerRate ?? '-',
+            score: c?.averageScorePercent ?? '-',
+            net: c?.netSentiment ?? '-',
+            texts: g.questions.filter(q => !!q.textAnalytics).length,
+        });
+    }
+
+    styleHeaderRow(ws);
+    applyDefaultFont(ws);
+    autoFitColumns(ws);
+}
+
+// ==================== شیت: خلاصه سوالات ====================
 
 function appendQuestionsSummarySheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
-    const ws = createSheet(workbook, 'خلاصه سوالات');
-    ws.columns = [
+    let idx = 0;
+    appendGroupedSheet(workbook, analytics, 'خلاصه سوالات', [
         { header: 'ردیف', key: 'idx', width: 8 },
         { header: 'متن سوال', key: 'text', width: 50 },
         { header: 'نوع سوال', key: 'type', width: 22 },
@@ -231,258 +359,236 @@ function appendQuestionsSummarySheet(workbook: ExcelJS.Workbook, analytics: Surv
         { header: 'تعداد پاسخ', key: 'answered', width: 14 },
         { header: 'تعداد رد شده', key: 'skipped', width: 14 },
         { header: 'نرخ پاسخ‌دهی (%)', key: 'rate', width: 16 },
-    ];
-
-    sortedQuestions(analytics).forEach((q, idx) => {
-        ws.addRow({
-            idx: idx + 1,
-            text: q.questionText,
-            type: q.questionTypeName,
-            required: q.isRequired ? 'بله' : 'خیر',
-            answered: q.totalAnswered,
-            skipped: q.totalSkipped,
-            rate: q.answerRate,
-        });
-    });
-
-    styleHeaderRow(ws);
-    applyDefaultFont(ws);
-    autoFitColumns(ws);
+        { header: 'شاخص اصلی', key: 'headline', width: 30 },
+    ], q => [{
+        idx: ++idx,
+        text: q.questionText,
+        type: q.questionTypeName,
+        required: q.isRequired ? 'بله' : 'خیر',
+        answered: q.totalAnswered,
+        skipped: q.totalSkipped,
+        rate: q.answerRate,
+        headline: headlineFor(q),
+    }]);
 }
 
-// ==================== شیت ۳: آمار سوالات گزینه‌ای ====================
+/** یک شاخص خلاصه برای هر سوال (برای مرور سریع) */
+function headlineFor(q: QuestionAnalyticsDto): string {
+    if (q.numericStats) return `میانگین ${q.numericStats.average} · میانه ${q.numericStats.median}`;
+    if (q.optionStats && q.optionStats.length > 0) {
+        const top = [...q.optionStats].sort((a, b) => b.count - a.count)[0];
+        return `بیشترین: ${top.optionText} (${top.percentage}%)`;
+    }
+    if (q.textAnalytics) {
+        const s = q.textAnalytics.sentiment;
+        const net = s.netSentiment ?? (s.positivePercentage - s.negativePercentage);
+        const theme = q.textAnalytics.themes?.[0];
+        return `احساس ${formatSigned(net)}` + (theme ? ` · موضوع اصلی: ${theme.title}` : '');
+    }
+    if (q.rankingStats && q.rankingStats.length > 0) {
+        const top = [...q.rankingStats].sort((a, b) => a.averageRank - b.averageRank)[0];
+        return `رتبه اول: ${top.itemLabel}`;
+    }
+    if (q.fileUploadCount !== undefined && q.fileUploadCount !== null) return `${q.fileUploadCount} فایل`;
+    return '';
+}
+
+// ==================== شیت: آمار سوالات گزینه‌ای ====================
 
 function appendChoiceStatsSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
-    const rows: any[] = [];
-    for (const q of sortedQuestions(analytics)) {
-        if (!q.optionStats || q.optionStats.length === 0) continue;
-        for (const opt of q.optionStats) {
-            rows.push({
-                text: q.questionText,
-                type: q.questionTypeName,
-                option: opt.optionText,
-                count: opt.count,
-                percent: opt.percentage,
-            });
-        }
-    }
-    if (rows.length === 0) return;
-
-    const ws = createSheet(workbook, 'آمار گزینه‌ای');
-    ws.columns = [
+    appendGroupedSheet(workbook, analytics, 'آمار گزینه‌ای', [
         { header: 'متن سوال', key: 'text', width: 45 },
         { header: 'نوع سوال', key: 'type', width: 18 },
         { header: 'گزینه', key: 'option', width: 30 },
         { header: 'تعداد انتخاب', key: 'count', width: 14 },
         { header: 'درصد', key: 'percent', width: 10 },
-    ];
-    rows.forEach(r => ws.addRow(r));
-
-    styleHeaderRow(ws);
-    applyDefaultFont(ws);
-    autoFitColumns(ws);
+    ], q => (q.optionStats ?? []).map(opt => ({
+        text: q.questionText,
+        type: q.questionTypeName,
+        option: opt.optionText,
+        count: opt.count,
+        percent: opt.percentage,
+    })));
 }
 
-// ==================== شیت ۴: آمار سوالات عددی ====================
+// ==================== شیت: آمار سوالات عددی ====================
 
 function appendNumericStatsSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
-    const rows: any[] = [];
-    for (const q of sortedQuestions(analytics)) {
-        if (!q.numericStats) continue;
-        rows.push({
-            text: q.questionText,
-            type: q.questionTypeName,
-            avg: q.numericStats.average,
-            median: q.numericStats.median,
-            min: q.numericStats.min,
-            max: q.numericStats.max,
-        });
-    }
-    if (rows.length > 0) {
-        const ws = createSheet(workbook, 'آمار عددی');
-        ws.columns = [
-            { header: 'متن سوال', key: 'text', width: 45 },
-            { header: 'نوع سوال', key: 'type', width: 18 },
-            { header: 'میانگین', key: 'avg', width: 12 },
-            { header: 'میانه', key: 'median', width: 12 },
-            { header: 'حداقل', key: 'min', width: 12 },
-            { header: 'حداکثر', key: 'max', width: 12 },
-        ];
-        rows.forEach(r => ws.addRow(r));
-        styleHeaderRow(ws);
-        applyDefaultFont(ws);
-        autoFitColumns(ws);
-    }
-
-    // شیت جداگانه برای توزیع کامل هر سوال عددی (هیستوگرام)
-    const distRows: any[] = [];
-    for (const q of sortedQuestions(analytics)) {
-        if (!q.numericStats || q.numericStats.distribution.length === 0) continue;
-        for (const bucket of q.numericStats.distribution) {
-            distRows.push({ text: q.questionText, value: bucket.label, count: bucket.count });
-        }
-    }
-    if (distRows.length > 0) {
-        const wsDist = createSheet(workbook, 'توزیع پاسخ‌های عددی');
-        wsDist.columns = [
-            { header: 'متن سوال', key: 'text', width: 45 },
-            { header: 'مقدار', key: 'value', width: 14 },
-            { header: 'تعداد', key: 'count', width: 10 },
-        ];
-        distRows.forEach(r => wsDist.addRow(r));
-        styleHeaderRow(wsDist);
-        applyDefaultFont(wsDist);
-        autoFitColumns(wsDist);
-    }
-}
-
-// ==================== شیت ۵: تحلیل احساسات پاسخ‌های متنی ====================
-
-function appendTextSentimentSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
-    const rows: any[] = [];
-    for (const q of sortedQuestions(analytics)) {
-        if (!q.textAnalytics) continue;
-        const s = q.textAnalytics.sentiment;
-        rows.push({
-            text: q.questionText,
-            type: q.questionTypeName,
-            answered: q.totalAnswered,
-            posPct: s.positivePercentage,
-            negPct: s.negativePercentage,
-            neuPct: s.neutralPercentage,
-            posCnt: s.positiveCount,
-            negCnt: s.negativeCount,
-            neuCnt: s.neutralCount,
-            avgWords: q.textAnalytics.averageWordCount,
-            avgChars: q.textAnalytics.averageCharCount,
-        });
-    }
-    if (rows.length === 0) return;
-
-    const ws = createSheet(workbook, 'احساس‌سنجی متنی');
-    ws.columns = [
+    appendGroupedSheet(workbook, analytics, 'آمار عددی', [
         { header: 'متن سوال', key: 'text', width: 45 },
         { header: 'نوع سوال', key: 'type', width: 18 },
-        { header: 'تعداد پاسخ متنی', key: 'answered', width: 16 },
-        { header: 'درصد مثبت', key: 'posPct', width: 12 },
-        { header: 'درصد منفی', key: 'negPct', width: 12 },
-        { header: 'درصد خنثی', key: 'neuPct', width: 12 },
-        { header: 'تعداد مثبت', key: 'posCnt', width: 12 },
-        { header: 'تعداد منفی', key: 'negCnt', width: 12 },
-        { header: 'تعداد خنثی', key: 'neuCnt', width: 12 },
-        { header: 'میانگین تعداد کلمات', key: 'avgWords', width: 18 },
-        { header: 'میانگین تعداد کاراکتر', key: 'avgChars', width: 18 },
-    ];
-    rows.forEach(r => ws.addRow(r));
+        { header: 'تعداد پاسخ', key: 'answered', width: 12 },
+        { header: 'میانگین', key: 'avg', width: 12 },
+        { header: 'میانه', key: 'median', width: 12 },
+        { header: 'حداقل', key: 'min', width: 12 },
+        { header: 'حداکثر', key: 'max', width: 12 },
+    ], q => q.numericStats ? [{
+        text: q.questionText,
+        type: q.questionTypeName,
+        answered: q.totalAnswered,
+        avg: q.numericStats.average,
+        median: q.numericStats.median,
+        min: q.numericStats.min,
+        max: q.numericStats.max,
+    }] : []);
 
-    styleHeaderRow(ws);
-    applyDefaultFont(ws);
-    autoFitColumns(ws);
-}
-
-// ==================== شیت ۶: کلمات پرتکرار ====================
-
-function appendTopWordsSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
-    const rows: any[] = [];
-    for (const q of sortedQuestions(analytics)) {
-        if (!q.textAnalytics || q.textAnalytics.topWords.length === 0) continue;
-        for (const w of q.textAnalytics.topWords) {
-            rows.push({ text: q.questionText, word: w.word, count: w.count });
-        }
-    }
-    if (rows.length === 0) return;
-
-    const ws = createSheet(workbook, 'کلمات پرتکرار');
-    ws.columns = [
+    appendGroupedSheet(workbook, analytics, 'توزیع پاسخ‌های عددی', [
         { header: 'متن سوال', key: 'text', width: 45 },
-        { header: 'کلمه', key: 'word', width: 24 },
-        { header: 'تعداد تکرار', key: 'count', width: 14 },
-    ];
-    rows.forEach(r => ws.addRow(r));
-
-    styleHeaderRow(ws);
-    applyDefaultFont(ws);
-    autoFitColumns(ws);
+        { header: 'مقدار', key: 'value', width: 14 },
+        { header: 'تعداد', key: 'count', width: 10 },
+    ], q => (q.numericStats?.distribution ?? []).map(b => ({ text: q.questionText, value: b.label, count: b.count })));
 }
 
-// ==================== شیت ۷: نمونه پاسخ‌های متنی ====================
-
-function appendTextSamplesSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
-    const rows: any[] = [];
-    const sentimentLabel: Record<string, string> = {
-        positive: 'مثبت',
-        negative: 'منفی',
-        neutral: 'خنثی',
-    };
-
-    for (const q of sortedQuestions(analytics)) {
-        if (!q.textAnalytics) continue;
-
-        if (q.textAnalytics.sentiment.samples.length > 0) {
-            for (const sample of q.textAnalytics.sentiment.samples) {
-                rows.push({
-                    text: q.questionText,
-                    answer: sample.text,
-                    sentiment: sentimentLabel[sample.sentiment] || sample.sentiment,
-                });
-            }
-        } else {
-            for (const answer of q.textAnalytics.sampleAnswers) {
-                rows.push({ text: q.questionText, answer, sentiment: '-' });
-            }
-        }
-    }
-    if (rows.length === 0) return;
-
-    const ws = createSheet(workbook, 'نمونه پاسخ‌های متنی');
-    ws.columns = [
-        { header: 'متن سوال', key: 'text', width: 45 },
-        { header: 'پاسخ', key: 'answer', width: 60 },
-        { header: 'احساس', key: 'sentiment', width: 10 },
-    ];
-    rows.forEach(r => ws.addRow(r));
-
-    styleHeaderRow(ws);
-    applyDefaultFont(ws);
-    autoFitColumns(ws, 10, 80); // ستون پاسخ می‌تونه طولانی باشه
-}
-
-// ==================== شیت ۸: آمار رتبه‌بندی ====================
+// ==================== شیت: آمار رتبه‌بندی ====================
 
 function appendRankingSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
-    const rows: any[] = [];
-    for (const q of sortedQuestions(analytics)) {
-        if (!q.rankingStats || q.rankingStats.length === 0) continue;
-        for (const r of q.rankingStats) {
-            rows.push({
-                text: q.questionText,
-                item: r.itemLabel,
-                avgRank: r.averageRank,
-                count: r.count,
-            });
-        }
-    }
-    if (rows.length === 0) return;
-
-    const ws = createSheet(workbook, 'آمار رتبه‌بندی');
-    ws.columns = [
+    appendGroupedSheet(workbook, analytics, 'آمار رتبه‌بندی', [
         { header: 'متن سوال', key: 'text', width: 45 },
         { header: 'آیتم', key: 'item', width: 30 },
         { header: 'میانگین رتبه (کمتر = بهتر)', key: 'avgRank', width: 24 },
         { header: 'تعداد پاسخ', key: 'count', width: 14 },
-    ];
-    rows.forEach(r => ws.addRow(r));
+    ], q => (q.rankingStats ?? []).map(r => ({
+        text: q.questionText,
+        item: r.itemLabel,
+        avgRank: r.averageRank,
+        count: r.count,
+    })));
+}
 
-    styleHeaderRow(ws);
-    applyDefaultFont(ws);
-    autoFitColumns(ws);
+// ==================== شیت‌های تحلیل متنی ====================
+
+function appendTextSummarySheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
+    appendGroupedSheet(workbook, analytics, 'تحلیل متنی - خلاصه', [
+        { header: 'متن سوال', key: 'text', width: 45 },
+        { header: 'کل پاسخ‌های متنی', key: 'total', width: 14 },
+        { header: 'دارای محتوا', key: 'meaningful', width: 12 },
+        { header: 'بی‌محتوا', key: 'emptyLike', width: 10 },
+        { header: 'میانه کلمات', key: 'medianWords', width: 12 },
+        { header: 'میانگین کلمات', key: 'avgWords', width: 12 },
+        { header: 'مثبت', key: 'pos', width: 12 },
+        { header: 'دوگانه', key: 'mix', width: 12 },
+        { header: 'خنثی', key: 'neu', width: 12 },
+        { header: 'منفی', key: 'neg', width: 12 },
+        { header: 'شاخص خالص احساس', key: 'net', width: 16 },
+        { header: 'میانگین امتیاز احساس (−۵ تا +۵)', key: 'avgScore', width: 18 },
+        { header: 'تعداد پیشنهاد', key: 'sugg', width: 12 },
+        { header: 'موضوعات اصلی', key: 'themes', width: 40 },
+    ], q => {
+        const t = q.textAnalytics;
+        if (!t) return [];
+        const s = t.sentiment;
+        const fmt = (count: number | undefined, pct: number | undefined) => `${count ?? 0} (${pct ?? 0}%)`;
+        return [{
+            text: q.questionText,
+            total: t.totalTextAnswers ?? q.totalAnswered,
+            meaningful: t.meaningfulCount ?? '-',
+            emptyLike: t.emptyLikeCount ?? '-',
+            medianWords: t.medianWordCount ?? '-',
+            avgWords: t.averageWordCount,
+            pos: fmt(s.positiveCount, s.positivePercentage),
+            mix: fmt(s.mixedCount, s.mixedPercentage),
+            neu: fmt(s.neutralCount, s.neutralPercentage),
+            neg: fmt(s.negativeCount, s.negativePercentage),
+            net: s.netSentiment ?? Math.round((s.positivePercentage - s.negativePercentage) * 10) / 10,
+            avgScore: s.averageScore ?? '-',
+            sugg: t.suggestionCount ?? (t.suggestions?.length ?? 0),
+            themes: (t.themes ?? []).slice(0, 5).map(th => `${th.title} (${th.count})`).join('، '),
+        }];
+    });
+}
+
+function appendTextThemesSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
+    appendGroupedSheet(workbook, analytics, 'موضوعات پاسخ‌های متنی', [
+        { header: 'متن سوال', key: 'text', width: 40 },
+        { header: 'موضوع', key: 'theme', width: 22 },
+        { header: 'تعداد پاسخ', key: 'count', width: 12 },
+        { header: 'درصد', key: 'percent', width: 10 },
+        { header: 'مثبت', key: 'pos', width: 10 },
+        { header: 'منفی', key: 'neg', width: 10 },
+        { header: 'نمونه پاسخ‌ها', key: 'samples', width: 70 },
+    ], q => (q.textAnalytics?.themes ?? []).map(t => ({
+        text: q.questionText,
+        theme: t.title,
+        count: t.count,
+        percent: t.percentage,
+        pos: t.positiveCount,
+        neg: t.negativeCount,
+        samples: (t.samples ?? []).slice(0, 3).join('\n— '),
+    })), 80);
+}
+
+function appendTextKeywordsSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
+    appendGroupedSheet(workbook, analytics, 'کلیدواژه‌ها و عبارت‌ها', [
+        { header: 'متن سوال', key: 'text', width: 40 },
+        { header: 'نوع', key: 'kind', width: 12 },
+        { header: 'واژه / عبارت', key: 'term', width: 28 },
+        { header: 'تعداد پاسخ‌های شامل', key: 'docs', width: 18 },
+        { header: 'تعداد تکرار', key: 'count', width: 12 },
+    ], q => {
+        const t = q.textAnalytics;
+        if (!t) return [];
+        const kws = (t.keywords && t.keywords.length > 0)
+            ? t.keywords.map(k => ({ text: q.questionText, kind: 'کلیدواژه', term: k.term, docs: k.documentCount, count: k.count }))
+            : (t.topWords ?? []).map(w => ({ text: q.questionText, kind: 'کلمه پرتکرار', term: w.word, docs: '-', count: w.count }));
+        const phrases = (t.phrases ?? []).map(p => ({ text: q.questionText, kind: 'عبارت', term: p.term, docs: p.documentCount, count: p.count }));
+        return [...kws, ...phrases];
+    });
+}
+
+function appendSuggestionsSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
+    appendGroupedSheet(workbook, analytics, 'پیشنهادها', [
+        { header: 'متن سوال', key: 'text', width: 40 },
+        { header: 'ردیف', key: 'idx', width: 8 },
+        { header: 'پیشنهاد', key: 'suggestion', width: 80 },
+    ], q => (q.textAnalytics?.suggestions ?? []).map((s, i) => ({ text: q.questionText, idx: i + 1, suggestion: s })), 90);
+}
+
+function appendRepeatedAnswersSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
+    appendGroupedSheet(workbook, analytics, 'پاسخ‌های تکراری', [
+        { header: 'متن سوال', key: 'text', width: 40 },
+        { header: 'پاسخ', key: 'answer', width: 50 },
+        { header: 'تعداد تکرار', key: 'count', width: 12 },
+    ], q => (q.textAnalytics?.repeatedAnswers ?? []).map(r => ({ text: q.questionText, answer: r.word, count: r.count })));
+}
+
+function appendTextAnswersSheet(workbook: ExcelJS.Workbook, analytics: SurveyAnalyticsDto): void {
+    appendGroupedSheet(workbook, analytics, 'پاسخ‌های متنی', [
+        { header: 'متن سوال', key: 'text', width: 40 },
+        { header: 'پاسخ', key: 'answer', width: 70 },
+        { header: 'احساس', key: 'sentiment', width: 10 },
+        { header: 'امتیاز احساس', key: 'score', width: 12 },
+        { header: 'تعداد کلمات', key: 'words', width: 12 },
+        { header: 'موضوعات', key: 'themes', width: 26 },
+        { header: 'پیشنهاد؟', key: 'sugg', width: 10 },
+    ], q => {
+        const t = q.textAnalytics;
+        if (!t) return [];
+        if (t.answers && t.answers.length > 0) {
+            const titles = new Map((t.themes ?? []).map(th => [th.key, th.title] as const));
+            return t.answers.map(a => ({
+                text: q.questionText,
+                answer: a.text,
+                sentiment: sentimentLabelFa(a.sentiment),
+                score: a.score,
+                words: a.wordCount,
+                themes: (a.themes ?? []).map(k => titles.get(k) ?? k).join('، '),
+                sugg: a.isSuggestion ? 'بله' : '',
+            }));
+        }
+        // داده‌ی قدیمی: فقط نمونه‌ها
+        if (t.sentiment.samples.length > 0) {
+            return t.sentiment.samples.map(sm => ({
+                text: q.questionText, answer: sm.text, sentiment: sentimentLabelFa(sm.sentiment),
+                score: '-', words: '-', themes: '', sugg: '',
+            }));
+        }
+        return (t.sampleAnswers ?? []).map(a => ({
+            text: q.questionText, answer: a, sentiment: '-', score: '-', words: '-', themes: '', sugg: '',
+        }));
+    }, 90);
 }
 
 // ==================== Helpers ====================
-
-function sortedQuestions(analytics: SurveyAnalyticsDto): QuestionAnalyticsDto[] {
-    return [...analytics.questions].sort((a, b) => a.sortOrder - b.sortOrder);
-}
 
 function sanitizeFileName(name: string): string {
     return name.replace(/[\\/:*?"<>|]/g, '_').trim();

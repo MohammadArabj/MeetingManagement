@@ -1,0 +1,341 @@
+<div class="tap">
+
+    <!-- ===== شاخص‌های کلیدی ===== -->
+    <div class="tap-kpis">
+        <div class="tap-kpi">
+            <span class="tap-kpi__label">پاسخ‌های متنی</span>
+            <span class="tap-kpi__value">{{ totalText() }}</span>
+            <span class="tap-kpi__hint">کل پاسخ‌های ثبت‌شده</span>
+        </div>
+        <div class="tap-kpi">
+            <span class="tap-kpi__label">پاسخ‌های دارای محتوا</span>
+            <span class="tap-kpi__value">{{ meaningful() }} <small>({{ meaningfulPercent() }}%)</small></span>
+            <div class="tap-kpi__meter" role="img"
+                [attr.aria-label]="meaningfulPercent() + ' درصد پاسخ‌ها دارای محتوا'">
+                <span [style.width.%]="meaningfulPercent()"></span>
+            </div>
+            @if (emptyLike() > 0) {
+            <span class="tap-kpi__hint">{{ emptyLike() }} پاسخ بی‌محتوا (مثل «ندارم»، «-»)</span>
+            }
+        </div>
+        <div class="tap-kpi">
+            <span class="tap-kpi__label">طول پاسخ‌ها</span>
+            <span class="tap-kpi__value">{{ data().medianWordCount ?? data().averageWordCount }} <small>کلمه
+                    (میانه)</small></span>
+            <span class="tap-kpi__hint">میانگین {{ data().averageWordCount }} کلمه · {{ data().averageCharCount }}
+                نویسه</span>
+        </div>
+        <div class="tap-kpi">
+            <span class="tap-kpi__label">شاخص خالص احساس</span>
+            <span [class]="'tap-kpi__value tone-' + netTone()" dir="ltr">{{
+                fmtSigned(netSentiment(), 0) }}</span>
+            <span class="tap-kpi__hint">درصد مثبت منهای درصد منفی (−۱۰۰ تا +۱۰۰)
+                @if (data().sentiment.averageScore !== undefined && data().sentiment.averageScore !== null) {
+                · میانگین امتیاز <bdi dir="ltr">{{ fmtSigned(data().sentiment.averageScore, 1) }}</bdi>
+                }
+            </span>
+        </div>
+        @if (suggestionCount() > 0) {
+        <div class="tap-kpi">
+            <span class="tap-kpi__label">پیشنهادها</span>
+            <span class="tap-kpi__value">{{ suggestionCount() }}</span>
+            <button type="button" class="tap-link" (click)="showSuggestionsInTable()">نمایش در جدول پاسخ‌ها</button>
+        </div>
+        }
+    </div>
+
+    <!-- ===== احساس + توزیع طول ===== -->
+    <div class="tap-grid">
+        <section class="tap-card">
+            <header class="tap-card__head">
+                <h5><i class="fa fa-face-smile"></i> توزیع احساس</h5>
+                <span class="tap-muted">{{ sentimentTotal() }} پاسخ</span>
+            </header>
+            @if (sentimentTotal() > 0) {
+            <div class="tap-stack" role="img" aria-label="نمودار توزیع احساس پاسخ‌ها">
+                @for (seg of sentimentSegments(); track seg.key) {
+                @if (seg.count > 0) {
+                <span class="tap-stack__seg" [class]="'tap-stack__seg s-' + seg.key"
+                    [style.width.%]="pct(seg.count, sentimentTotal())"
+                    [title]="seg.label + ': ' + seg.count + ' (' + seg.percent + '%)'"></span>
+                }
+                }
+            </div>
+            <div class="tap-legend">
+                @for (seg of sentimentSegments(); track seg.key) {
+                <button type="button" class="tap-legend__item" [disabled]="seg.count === 0"
+                    (click)="filterBySentiment(seg.key)" title="فیلتر جدول پاسخ‌ها">
+                    <span class="dot" [class]="'dot s-' + seg.key"></span>
+                    <span class="lbl">{{ seg.label }}</span>
+                    <b>{{ seg.percent }}%</b>
+                    <span class="tap-muted">({{ seg.count }})</span>
+                </button>
+                }
+            </div>
+            } @else {
+            <p class="tap-empty">داده‌ای برای تحلیل احساس وجود ندارد.</p>
+            }
+        </section>
+
+        <section class="tap-card">
+            <header class="tap-card__head">
+                <h5><i class="fa fa-ruler-horizontal"></i> توزیع طول پاسخ‌ها</h5>
+            </header>
+            @if (lengthDist().length > 0) {
+            <div class="tap-hbars">
+                @for (b of lengthDist(); track b.label) {
+                <div class="tap-hbar">
+                    <span class="tap-hbar__label">{{ b.label }}</span>
+                    <span class="tap-hbar__track"><span class="tap-hbar__fill"
+                            [style.width.%]="pct(b.count, lengthDistMax())"></span></span>
+                    <span class="tap-hbar__value">{{ b.count }}</span>
+                </div>
+                }
+            </div>
+            } @else {
+            <p class="tap-empty">میانگین {{ data().averageWordCount }} کلمه در هر پاسخ.</p>
+            }
+        </section>
+    </div>
+
+    <!-- ===== موضوعات ===== -->
+    @if (themes().length > 0) {
+    <section class="tap-card">
+        <header class="tap-card__head">
+            <h5><i class="fa fa-tags"></i> موضوعات مطرح‌شده</h5>
+            <span class="tap-muted">{{ themes().length }} موضوع</span>
+        </header>
+        <ul class="tap-themes">
+            @for (t of themes(); track t.key) {
+            <li class="tap-theme" [class.open]="expandedTheme() === t.key">
+                <div class="tap-theme__row">
+                    <button type="button" class="tap-theme__toggle" (click)="toggleTheme(t.key)"
+                        [attr.aria-expanded]="expandedTheme() === t.key">
+                        <i class="fa" [class.fa-chevron-left]="expandedTheme() !== t.key"
+                            [class.fa-chevron-down]="expandedTheme() === t.key"></i>
+                        <span class="tap-theme__title">{{ t.title }}</span>
+                    </button>
+                    <div class="tap-theme__bar" [title]="t.count + ' پاسخ'">
+                        <span class="pos" [style.width.%]="pct(t.positiveCount, themeMaxCount())"></span>
+                        <span class="neu" [style.width.%]="pct(themeNeutral(t), themeMaxCount())"></span>
+                        <span class="neg" [style.width.%]="pct(t.negativeCount, themeMaxCount())"></span>
+                    </div>
+                    <span class="tap-theme__count">{{ t.count }} <small>({{ t.percentage }}%)</small></span>
+                    <span class="tap-theme__split">
+                        <span class="c-pos" title="مثبت">+{{ t.positiveCount }}</span>
+                        <span class="c-neg" title="منفی">−{{ t.negativeCount }}</span>
+                    </span>
+                    <button type="button" class="tap-iconBtn" (click)="filterByTheme(t.key)"
+                        title="نمایش پاسخ‌های این موضوع در جدول">
+                        <i class="fa fa-filter"></i>
+                    </button>
+                </div>
+                @if (expandedTheme() === t.key) {
+                <div class="tap-theme__samples">
+                    @for (s of t.samples; track $index) {
+                    <blockquote>{{ s }}</blockquote>
+                    } @empty {
+                    <p class="tap-empty">نمونه‌ای موجود نیست.</p>
+                    }
+                </div>
+                }
+            </li>
+            }
+        </ul>
+    </section>
+    }
+
+    <!-- ===== کلیدواژه‌ها + عبارت‌ها ===== -->
+    @if (keywords().length > 0 || phrases().length > 0) {
+    <div class="tap-grid">
+        @if (keywords().length > 0) {
+        <section class="tap-card">
+            <header class="tap-card__head">
+                <h5><i class="fa fa-key"></i> کلیدواژه‌های شاخص</h5>
+                <span class="tap-muted">اندازه = تعداد پاسخ‌های شامل واژه</span>
+            </header>
+            <div class="tap-cloud">
+                @for (k of visibleKeywords(); track k.term) {
+                <button type="button" class="tap-chip" [style.fontSize.em]="keywordSize(k)"
+                    [style.fontWeight]="keywordWeight(k)" (click)="filterByTerm(k.term)"
+                    [title]="'در ' + k.documentCount + ' پاسخ · ' + k.count + ' بار تکرار — کلیک برای جستجو'">
+                    {{ k.term }} <small>{{ k.documentCount }}</small>
+                </button>
+                }
+            </div>
+            @if (keywords().length > 30) {
+            <button type="button" class="tap-link" (click)="showAllKeywords.set(!showAllKeywords())">
+                {{ showAllKeywords() ? 'نمایش کمتر' : 'نمایش همه (' + keywords().length + ')' }}
+            </button>
+            }
+        </section>
+        }
+
+        @if (phrases().length > 0) {
+        <section class="tap-card">
+            <header class="tap-card__head">
+                <h5><i class="fa fa-quote-right"></i> عبارت‌های پرتکرار</h5>
+            </header>
+            <ol class="tap-list">
+                @for (p of phrases(); track p.term) {
+                <li>
+                    <button type="button" class="tap-list__text" (click)="filterByTerm(p.term)">«{{ p.term
+                        }}»</button>
+                    <span class="tap-badge">{{ p.documentCount }} پاسخ</span>
+                </li>
+                }
+            </ol>
+        </section>
+        }
+    </div>
+    }
+
+    <!-- ===== پیشنهادها + پاسخ‌های تکراری ===== -->
+    @if (suggestions().length > 0 || repeated().length > 0) {
+    <div class="tap-grid">
+        @if (suggestions().length > 0) {
+        <section class="tap-card">
+            <header class="tap-card__head">
+                <h5><i class="fa fa-lightbulb"></i> پیشنهادهای پاسخ‌دهندگان</h5>
+                <span class="tap-muted">{{ suggestionCount() }} پیشنهاد</span>
+            </header>
+            <ul class="tap-suggestions">
+                @for (s of visibleSuggestions(); track $index) {
+                <li>{{ s }}</li>
+                }
+            </ul>
+            @if (suggestions().length > 5) {
+            <button type="button" class="tap-link" (click)="showAllSuggestions.set(!showAllSuggestions())">
+                {{ showAllSuggestions() ? 'نمایش کمتر' : 'نمایش همه (' + suggestions().length + ')' }}
+            </button>
+            }
+        </section>
+        }
+
+        @if (repeated().length > 0) {
+        <section class="tap-card">
+            <header class="tap-card__head">
+                <h5><i class="fa fa-clone"></i> پاسخ‌های تکراری</h5>
+                <span class="tap-muted">پاسخ‌هایی که عیناً تکرار شده‌اند</span>
+            </header>
+            <ol class="tap-list">
+                @for (r of repeated(); track r.word) {
+                <li>
+                    <button type="button" class="tap-list__text" (click)="filterByTerm(r.word)">{{ r.word }}</button>
+                    <span class="tap-badge">{{ r.count }} بار</span>
+                </li>
+                }
+            </ol>
+        </section>
+        }
+    </div>
+    }
+
+    <!-- ===== کاوشگر پاسخ‌ها ===== -->
+    <section class="tap-card">
+        <header class="tap-card__head">
+            <h5><i class="fa fa-table-list"></i> همه پاسخ‌ها</h5>
+            <span class="tap-muted">
+                @if (filteredRows().length > 0) {
+                {{ pageStart() }}–{{ pageEnd() }} از {{ filteredRows().length }}
+                } @else { ۰ نتیجه }
+            </span>
+        </header>
+
+        <div class="tap-filters">
+            <label class="tap-search">
+                <i class="fa fa-search" aria-hidden="true"></i>
+                <input type="search" placeholder="جستجو در متن پاسخ‌ها..." [value]="searchTerm()"
+                    (input)="setSearch($any($event.target).value)" aria-label="جستجو در متن پاسخ‌ها">
+            </label>
+            <select class="tap-select" [value]="sentimentFilter()"
+                (change)="setSentimentFilter($any($event.target).value)" aria-label="فیلتر احساس">
+                <option value="all">همه احساس‌ها</option>
+                <option value="positive">مثبت</option>
+                <option value="negative">منفی</option>
+                <option value="mixed">دوگانه</option>
+                <option value="neutral">خنثی</option>
+                @if (hasRichAnswers()) { <option value="empty">بی‌محتوا</option> }
+            </select>
+            @if (themes().length > 0) {
+            <select class="tap-select" (change)="setThemeFilter($any($event.target).value)"
+                aria-label="فیلتر موضوع">
+                <option value="all" [selected]="themeFilter() === 'all'">همه موضوعات</option>
+                @for (t of themes(); track t.key) {
+                <option [value]="t.key" [selected]="themeFilter() === t.key">{{ t.title }} ({{ t.count }})</option>
+                }
+            </select>
+            }
+            @if (hasRichAnswers()) {
+            <label class="tap-check">
+                <input type="checkbox" [checked]="suggestionsOnly()"
+                    (change)="setSuggestionsOnly($any($event.target).checked)">
+                فقط پیشنهادها
+            </label>
+            }
+            @if (hasActiveFilter()) {
+            <button type="button" class="tap-link" (click)="clearFilters()"><i class="fa fa-xmark"></i> حذف
+                فیلترها</button>
+            }
+        </div>
+
+        @if (pageRows().length > 0) {
+        <div class="tap-tableWrap">
+            <table class="tap-table">
+                <thead>
+                    <tr>
+                        <th class="c-idx">#</th>
+                        <th>پاسخ</th>
+                        <th class="c-sent">احساس</th>
+                        <th class="c-words">کلمات</th>
+                        @if (themes().length > 0) { <th class="c-themes">موضوع</th> }
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (row of pageRows(); track row.index) {
+                    <tr>
+                        <td class="c-idx">{{ row.index }}</td>
+                        <td class="c-text">
+                            @if (row.item.isSuggestion) {
+                            <i class="fa fa-lightbulb sugIcon" title="پیشنهاد"></i>
+                            }
+                            @for (part of highlight(row); track $index) {
+                            @if (part.match) { <mark>{{ part.text }}</mark> } @else { {{ part.text }} }
+                            }
+                        </td>
+                        <td class="c-sent">
+                            <span class="tap-sent" [class]="'tap-sent s-' + row.item.sentiment">{{
+                                sentimentLabel(row.item.sentiment) }}</span>
+                        </td>
+                        <td class="c-words">{{ row.item.wordCount }}</td>
+                        @if (themes().length > 0) {
+                        <td class="c-themes">
+                            @for (k of row.item.themes; track k) {
+                            <span class="tap-themeTag">{{ themeTitle(k) }}</span>
+                            }
+                        </td>
+                        }
+                    </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (totalPages() > 1) {
+        <nav class="tap-pager" aria-label="صفحه‌بندی پاسخ‌ها">
+            <button type="button" class="tap-pager__btn" [disabled]="currentPage() === 1" (click)="goToPage(1)"
+                title="اولین صفحه"><i class="fa fa-angles-right"></i></button>
+            <button type="button" class="tap-pager__btn" [disabled]="currentPage() === 1"
+                (click)="goToPage(currentPage() - 1)" title="صفحه قبل"><i class="fa fa-angle-right"></i></button>
+            <span class="tap-pager__info">صفحه {{ currentPage() }} از {{ totalPages() }}</span>
+            <button type="button" class="tap-pager__btn" [disabled]="currentPage() === totalPages()"
+                (click)="goToPage(currentPage() + 1)" title="صفحه بعد"><i class="fa fa-angle-left"></i></button>
+            <button type="button" class="tap-pager__btn" [disabled]="currentPage() === totalPages()"
+                (click)="goToPage(totalPages())" title="آخرین صفحه"><i class="fa fa-angles-left"></i></button>
+        </nav>
+        }
+        } @else {
+        <p class="tap-empty">پاسخی با این فیلترها یافت نشد.</p>
+        }
+    </section>
+</div>

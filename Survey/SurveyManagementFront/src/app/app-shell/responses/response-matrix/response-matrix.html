@@ -58,8 +58,22 @@
     <div class="matrixTableScroll">
         <table class="matrixTable">
             <thead>
-                <tr>
+                @if (hasSteps()) {
+                <tr class="groupRow">
+                    <th class="col-sticky col-idx groupCell groupCell--meta" rowspan="2">#</th>
+                    <th class="groupCell groupCell--meta" colspan="11">اطلاعات پاسخ‌دهنده</th>
+                    @for (g of columnGroups(); track g.key) {
+                    <th class="groupCell groupCell--step" [attr.colspan]="g.columns.length" [title]="g.title">
+                        @if (g.index !== null) { <span class="groupCell__no">گام {{ g.index }}</span> }
+                        <span class="groupCell__title">{{ g.title }}</span>
+                    </th>
+                    }
+                </tr>
+                }
+                <tr [class.subRow]="hasSteps()">
+                    @if (!hasSteps()) {
                     <th class="col-sticky col-idx">#</th>
+                    }
                     <th class="col-demo">سن</th>
                     <th class="col-demo">جنسیت</th>
                     <th class="col-demo">امور</th>
@@ -72,7 +86,7 @@
                     <th class="col-date">تاریخ اتمام</th>
                     <th class="col-time">زمان</th>
                     @for (q of questions(); track q.questionGuid) {
-                    <th class="col-question" [title]="q.questionText">
+                    <th class="col-question" [class.stepStart]="isStepStart(q)" [title]="q.questionText">
                         <span class="qHeaderText">{{ q.questionText }}</span>
                         @if (q.isRequired) { <span class="qRequiredStar">*</span> }
                     </th>
@@ -95,7 +109,7 @@
                     <td class="col-date">{{ row.completedAt || '-' }}</td>
                     <td class="col-time">{{ row.timeSpentText || '-' }}</td>
                     @for (q of questions(); track q.questionGuid) {
-                    <td class="col-question">
+                    <td class="col-question" [class.stepStart]="isStepStart(q)">
                         <span [title]="answerFor(row, q.questionGuid)">{{ answerFor(row, q.questionGuid) }}</span>
                     </td>
                     }
@@ -159,7 +173,7 @@
                 <div class="exportColRow__info">
                     <span class="exportColRow__label">{{ col.label }}</span>
                     <span class="exportColRow__type" [class.question]="col.type === 'question'">
-                        {{ col.type === 'meta' ? 'اطلاعات پاسخ‌دهی' : 'سوال نظرسنجی' }}
+                        {{ col.type === 'meta' ? 'اطلاعات پاسخ‌دهی' : (col.step ? 'سوال · ' + col.step : 'سوال نظرسنجی') }}
                     </span>
                 </div>
             </div>

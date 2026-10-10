@@ -17,6 +17,7 @@ import {
   WizardQuestionData,
   WizardCriterionData,
   createEmptyCriterion,
+  QUESTION_TYPE_LABELS,
 } from '../../../../core/models/survey-wizard.model';
 import { SwalService } from '../../../../services/framework-services/swal.service';
 import { ToastService } from '../../../../services/framework-services/toast.service';
@@ -54,12 +55,15 @@ const UNASSIGNED_KEY = '__none__';
           </div>
 
           <div class="stickyHeader__actions">
-            <!-- <button type="button" class="iconBtn" (click)="downloadTemplate()" title="دانلود فایل نمونه اکسل">
-              <i class="fa fa-download"></i>
+            <button type="button" class="iconBtn" (click)="downloadTemplate()" title="دانلود فایل نمونه‌ی اکسل"
+              aria-label="دانلود فایل نمونه‌ی اکسل">
+              <i class="fa fa-download" aria-hidden="true"></i>
             </button>
-            <button type="button" class="iconBtn" (click)="triggerFileInput()" [disabled]="isImporting()" title="ایمپورت از اکسل">
-              @if (isImporting()) { <i class="fa fa-spinner fa-spin"></i> } @else { <i class="fa fa-file-excel"></i> }
-            </button> -->
+            <button type="button" class="secondaryBtn" (click)="triggerFileInput()" [disabled]="isImporting()"
+              title="ایمپورت سوالات از فایل اکسل">
+              @if (isImporting()) { <i class="fa fa-spinner fa-spin" aria-hidden="true"></i> } @else { <i class="fa fa-file-excel" aria-hidden="true"></i> }
+              <span>ایمپورت از اکسل</span>
+            </button>
 
             <button type="button" class="btn primary addQuestionBtn" (click)="openAddQuestionModal()">
               <i class="fa fa-plus"></i>
@@ -222,8 +226,11 @@ const UNASSIGNED_KEY = '__none__';
               <button type="button" class="btn primary lg" (click)="openAddQuestionModal()">
                 <i class="fa fa-plus"></i> اولین سوال را اضافه کنید
               </button>
-              <button type="button" class="btn outlined lg" (click)="triggerFileInput()">
-                <i class="fa fa-file-excel"></i> ایمپورت از اکسل
+              <button type="button" class="secondaryBtn lg" (click)="triggerFileInput()" [disabled]="isImporting()">
+                <i class="fa fa-file-excel" aria-hidden="true"></i> ایمپورت از اکسل
+              </button>
+              <button type="button" class="linkBtn" (click)="downloadTemplate()">
+                <i class="fa fa-download" aria-hidden="true"></i> دانلود فایل نمونه
               </button>
             </div>
           </div>
@@ -276,14 +283,24 @@ const UNASSIGNED_KEY = '__none__';
               <div class="questionCard__help"><i class="fa fa-info-circle"></i>{{ question.helpText }}</div>
             }
 
-            @if (question.options && question.options.length > 0) {
+            @if (activeOptions(question); as opts) {
+              @if (opts.length > 0) {
+                <div class="optionsPreview">
+                  @for (opt of opts.slice(0, 3); track opt.tempId) {
+                    <span class="optionTag">
+                      @if (opt.color) { <span class="optionTag__dot" [style.background]="opt.color" aria-hidden="true"></span> }
+                      {{ opt.optionText }}
+                    </span>
+                  }
+                  @if (opts.length > 3) {
+                    <span class="optionTag more">+{{ opts.length - 3 }} مورد دیگر</span>
+                  }
+                </div>
+              }
+            }
+            @if (question.questionType === 11 && question.matrixRows?.length) {
               <div class="optionsPreview">
-                @for (opt of question.options.slice(0, 3); track opt.tempId) {
-                  <span class="optionTag">{{ opt.optionText }}</span>
-                }
-                @if (question.options.length > 3) {
-                  <span class="optionTag more">+{{ question.options.length - 3 }} مورد دیگر</span>
-                }
+                <span class="optionTag"><i class="fa fa-table" aria-hidden="true"></i> {{ question.matrixRows?.length }} ردیف × {{ question.matrixColumns?.length || 0 }} ستون</span>
               </div>
             }
 
@@ -478,6 +495,28 @@ const UNASSIGNED_KEY = '__none__';
       box-shadow: 0 0 0 3px rgba(29,78,216,0.1);
     }
 
+    .secondaryBtn {
+      display: inline-flex; align-items: center; gap: 8px;
+      min-height: 36px; padding: 7px 14px;
+      border: 1px solid var(--wz-border, #e2e8f0); border-radius: 10px;
+      background: #fff; color: var(--wz-ink, #0f172a);
+      font: inherit; font-weight: 800; font-size: 0.82rem; cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    .secondaryBtn.lg { min-height: 44px; padding: 10px 20px; font-size: 0.9rem; }
+    .secondaryBtn:hover:not(:disabled) { background: var(--wz-subtle, #f8fafc); border-color: var(--wz-border-strong, #cbd5e1); }
+    .secondaryBtn:disabled { opacity: .5; cursor: not-allowed; }
+    .secondaryBtn i.fa-file-excel { color: #15803d; }
+    .secondaryBtn:focus-visible, .iconBtn:focus-visible, .linkBtn:focus-visible { outline: 2px solid var(--wz-primary, #1d4ed8); outline-offset: 2px; }
+    .linkBtn {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: none; background: none; padding: 6px 4px;
+      color: var(--wz-primary, #1d4ed8); font: inherit; font-weight: 800; font-size: 0.86rem; cursor: pointer;
+    }
+    .linkBtn:hover { text-decoration: underline; }
+    .optionTag { display: inline-flex; align-items: center; gap: 6px; }
+    .optionTag__dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+    @media (max-width: 640px) { .secondaryBtn span { display: none; } }
     .btn.sm { padding: 7px 14px; font-size: 0.8rem; }
 
     .criterionChip {
@@ -574,9 +613,9 @@ const UNASSIGNED_KEY = '__none__';
     .questionCard__drag:hover { color: var(--primary); }
 
     .questionCard__number {
-      width: 34px; height: 34px; background: linear-gradient(135deg, var(--primary), #3b82f6);
+      width: 34px; height: 34px; background: var(--wz-primary, var(--primary));
       color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center;
-      font-weight: 950; font-size: 1rem; flex-shrink: 0; box-shadow: 0 2px 8px rgba(29,78,216,0.3);
+      font-weight: 950; font-size: 1rem; flex-shrink: 0; 
     }
 
     .questionCard__content { flex: 1; min-width: 0; }
@@ -626,9 +665,9 @@ const UNASSIGNED_KEY = '__none__';
     .scrollFab { position: fixed; left: 20px; bottom: 96px; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 220; }
     .scrollFab__btn {
       width: 42px; height: 42px; border-radius: 50%; border: none;
-      background: linear-gradient(135deg, var(--primary), #3b82f6); color: white;
+      background: var(--wz-primary, var(--primary)); color: white;
       display: flex; align-items: center; justify-content: center; font-size: 0.95rem;
-      cursor: pointer; box-shadow: 0 6px 18px rgba(29,78,216,0.35); transition: all 0.2s ease;
+      cursor: pointer; box-shadow: 0 4px 12px rgba(15,23,42,0.18); transition: all 0.2s ease;
     }
     .scrollFab__btn:hover { transform: translateY(-2px) scale(1.05); }
     .scrollFab__count { width: 26px; height: 26px; border-radius: 50%; background: white; border: 1px solid var(--line); color: var(--ink); display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 900; }
@@ -972,7 +1011,7 @@ export class SurveyWizardStep2Component implements OnInit {
       sortOrder: this.questions().length + 1,
       imageGuid: undefined,
       videoGuid: undefined,
-      options: question.options?.map(opt => ({
+      options: question.options?.filter(opt => !opt.isRemoved).map(opt => ({
         ...opt,
         tempId: this.generateTempId(),
         guid: undefined,                        // ✅ گزینه‌های جدیدن، guid قبلی رو نداشته باشن
@@ -1030,18 +1069,18 @@ export class SurveyWizardStep2Component implements OnInit {
   }
 
   getQuestionTypeName(type: number): string {
-    const types: Record<number, string> = {
-      3: 'متن کوتاه', 4: 'متن بلند', 1: 'چند گزینه‌ای (تک)', 2: 'چند گزینه‌ای (چند)',
-      10: 'لیست کشویی', 5: 'امتیازدهی', 8: 'تاریخ', 9: 'آپلود فایل', 11: 'ماتریس'
-    };
-    return types[type] || 'نامشخص';
+    return QUESTION_TYPE_LABELS[Number(type)] || 'نامشخص';
   }
 
   getQuestionIcon(type: number): string {
     const icons: Record<number, string> = {
-      3: 'text-width', 4: 'align-left', 1: 'circle-dot', 2: 'check-square',
-      10: 'caret-square-down', 5: 'star', 8: 'calendar', 9: 'upload', 11: 'table'
+      3: 'font', 4: 'align-right', 1: 'dot-circle', 2: 'check-square',
+      10: 'caret-square-down', 5: 'star', 7: 'calendar', 8: 'clock', 9: 'upload', 11: 'table'
     };
-    return icons[type] || 'question';
+    return icons[Number(type)] || 'question';
+  }
+
+  activeOptions(question: WizardQuestionData) {
+    return (question.options ?? []).filter(o => !o.isRemoved);
   }
 }

@@ -128,6 +128,56 @@
 
         <div class="sp-16"></div>
 
+        <!-- ✅ خلاصه گام‌ها -->
+        @if (hasSteps()) {
+        <section class="stepOverview" aria-labelledby="stepOverviewTitle">
+            <div class="stepOverview__head">
+                <h3 id="stepOverviewTitle"><i class="fa fa-layer-group"></i> خلاصه گام‌ها</h3>
+                <span class="stepOverview__hint">برای مشاهده سوالات هر گام روی کارت آن کلیک کنید</span>
+            </div>
+            <div class="stepCards">
+                @for (g of allStepGroups(); track g.key) {
+                <button type="button" class="stepCard" [class.other]="g.index === null"
+                    (click)="jumpToStep(g.key, 'questions')">
+                    <div class="stepCard__top">
+                        <span class="stepNo">{{ g.index ?? '—' }}</span>
+                        <span class="stepCard__title">{{ g.title }}</span>
+                    </div>
+                    <div class="stepCard__meta">
+                        <span><i class="fa fa-list-ol"></i> {{ g.criterion?.questionCount ?? g.questions.length }}
+                            سوال</span>
+                        @if (g.criterion?.netSentiment !== null && g.criterion?.netSentiment !== undefined) {
+                        <span class="toneChip" [class]="'toneChip tone-' + sentimentTone(g.criterion!.netSentiment)"
+                            title="شاخص خالص احساس پاسخ‌های متنی">
+                            <i class="fa fa-comment-dots"></i>
+                            <bdi dir="ltr">{{ fmtSigned(g.criterion!.netSentiment) }}</bdi>
+                        </span>
+                        }
+                    </div>
+                    <div class="stepMetric">
+                        <span class="stepMetric__label">نرخ پاسخ‌دهی</span>
+                        <span class="stepMetric__track"><span class="stepMetric__fill rate"
+                                [style.width.%]="g.criterion?.averageAnswerRate ?? 0"></span></span>
+                        <span class="stepMetric__value">{{ g.criterion?.averageAnswerRate ?? 0 }}%</span>
+                    </div>
+                    <div class="stepMetric">
+                        <span class="stepMetric__label">امتیاز</span>
+                        @if (g.criterion?.averageScorePercent !== null && g.criterion?.averageScorePercent !==
+                        undefined) {
+                        <span class="stepMetric__track"><span class="stepMetric__fill"
+                                [class]="'stepMetric__fill tone-' + scoreTone(g.criterion!.averageScorePercent)"
+                                [style.width.%]="g.criterion!.averageScorePercent"></span></span>
+                        <span class="stepMetric__value">{{ g.criterion!.averageScorePercent }}%</span>
+                        } @else {
+                        <span class="stepMetric__na">سوال امتیازی ندارد</span>
+                        }
+                    </div>
+                </button>
+                }
+            </div>
+        </section>
+        <div class="sp-16"></div>
+        }
         <!-- نمودارهای دموگرافیک -->
         <div class="chartsGrid">
 
@@ -255,163 +305,171 @@
         </div>
 
         <div class="sp-12"></div>
-
-        @for (q of filteredQuestions(); track q.questionGuid) {
-        <div class="questionAnalyticsCard">
-
-            <div class="questionAnalyticsCard__head" (click)="toggleQuestion(q.questionGuid)">
-                <div class="questionAnalyticsCard__headMain">
-                    <span class="qTypeBadge">{{ q.questionTypeName }}</span>
-                    <h4>{{ q.questionText }}</h4>
-                </div>
-                <div class="questionAnalyticsCard__headMeta">
-                    <span class="answerRateBadge">
-                        <i class="fa fa-reply"></i>
-                        {{ q.totalAnswered }} پاسخ ({{ q.answerRate }}%)
-                    </span>
-                    @if (q.totalSkipped > 0) {
-                    <span class="skipBadge">
-                        <i class="fa fa-forward"></i>
-                        {{ q.totalSkipped }} رد شده
-                    </span>
-                    }
-                    <i class="fa" [class.fa-chevron-down]="!isExpanded(q.questionGuid)"
-                        [class.fa-chevron-up]="isExpanded(q.questionGuid)"></i>
-                </div>
+        @if (hasSteps()) {
+        <nav class="stepNav" aria-label="پرش به گام">
+            <div class="stepNav__chips">
+                @for (g of allStepGroups(); track g.key) {
+                <button type="button" class="stepNav__chip" (click)="jumpToStep(g.key)"
+                    [class.dim]="isStepCollapsed(g.key)" [title]="stepTitle(g)">
+                    <span class="stepNo sm">{{ g.index ?? '…' }}</span>
+                    <span class="stepNav__label">{{ g.title }}</span>
+                </button>
+                }
             </div>
+            <button type="button" class="stepNav__toggleAll" (click)="setAllStepsCollapsed(!allStepsCollapsed())">
+                <i class="fa" [class.fa-angles-down]="allStepsCollapsed()" [class.fa-angles-up]="!allStepsCollapsed()"></i>
+                {{ allStepsCollapsed() ? 'باز کردن همه' : 'بستن همه' }}
+            </button>
+        </nav>
+        <div class="sp-12"></div>
+        }
 
-            @if (isExpanded(q.questionGuid)) {
-            <div class="questionAnalyticsCard__body">
-
-                <!-- سوالات گزینه‌ای -->
-                @if (isChoiceQuestion(q)) {
-                <div class="choiceAnalytics">
-                    <div class="choiceAnalytics__chart">
-                        <app-chart-canvas type="doughnut" [data]="optionChartData(q)" [options]="doughnutOptions"
-                            [height]="260"></app-chart-canvas>
-                    </div>
-                    <div class="choiceAnalytics__list">
-                        @for (opt of q.optionStats; track opt.optionText) {
-                        <div class="choiceRow">
-                            <span class="choiceRow__dot" [style.background]="opt.color || '#1d4ed8'"></span>
-                            <span class="choiceRow__label">{{ opt.optionText }}</span>
-                            <div class="choiceRow__bar">
-                                <div class="choiceRow__barFill" [style.width.%]="opt.percentage"
-                                    [style.background]="opt.color || '#1d4ed8'"></div>
-                            </div>
-                            <span class="choiceRow__value">{{ opt.count }} ({{ opt.percentage }}%)</span>
-                        </div>
-                        }
-                    </div>
-                </div>
-                }
-
-                <!-- سوالات عددی/امتیازی -->
-                @if (isNumericQuestion(q)) {
-                <div class="numericAnalytics">
-                    <div class="numericStatsGrid">
-                        <div class="numStatCard">
-                            <span class="numStatCard__value">{{ q.numericStats!.average }}</span>
-                            <span class="numStatCard__label">میانگین</span>
-                        </div>
-                        <div class="numStatCard">
-                            <span class="numStatCard__value">{{ q.numericStats!.median }}</span>
-                            <span class="numStatCard__label">میانه</span>
-                        </div>
-                        <div class="numStatCard">
-                            <span class="numStatCard__value">{{ q.numericStats!.min }}</span>
-                            <span class="numStatCard__label">حداقل</span>
-                        </div>
-                        <div class="numStatCard">
-                            <span class="numStatCard__value">{{ q.numericStats!.max }}</span>
-                            <span class="numStatCard__label">حداکثر</span>
-                        </div>
-                    </div>
-                    <div class="sp-12"></div>
-                    <app-chart-canvas type="bar" [data]="numericHistogramData(q)" [options]="barOptions"
-                        [height]="220"></app-chart-canvas>
-                </div>
-                }
-
-                <!-- سوالات متنی -->
-                @if (isTextQuestion(q)) {
-                <div class="textAnalytics">
-
-                    <div class="textAnalytics__topRow">
-                        <div class="sentimentChart">
-                            <app-chart-canvas type="doughnut" [data]="sentimentChartData(q)" [options]="doughnutOptions"
-                                [height]="200"></app-chart-canvas>
-                        </div>
-                        <div class="sentimentStats">
-                            <div class="sentimentStat positive">
-                                <i class="fa fa-smile"></i>
-                                <span>{{ q.textAnalytics!.sentiment.positivePercentage }}% مثبت</span>
-                            </div>
-                            <div class="sentimentStat negative">
-                                <i class="fa fa-frown"></i>
-                                <span>{{ q.textAnalytics!.sentiment.negativePercentage }}% منفی</span>
-                            </div>
-                            <div class="sentimentStat neutral">
-                                <i class="fa fa-meh"></i>
-                                <span>{{ q.textAnalytics!.sentiment.neutralPercentage }}% خنثی</span>
-                            </div>
-                            <div class="textMetaRow">
-                                <span><i class="fa fa-font"></i> میانگین {{ q.textAnalytics!.averageWordCount }}
-                                    کلمه</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    @if (q.textAnalytics!.topWords.length > 0) {
-                    <div class="sp-16"></div>
-                    <div class="wordCloud">
-                        @for (w of q.textAnalytics!.topWords; track w.word) {
-                        <span class="wordTag" [style.fontSize.px]="wordFontSize(w.count, q)">
-                            {{ w.word }}
-                            <small>{{ w.count }}</small>
-                        </span>
-                        }
-                    </div>
+        @for (g of stepGroups(); track g.key) {
+        <section class="stepSection" [class.grouped]="hasSteps()" [id]="stepAnchor(g.key)">
+            @if (hasSteps()) {
+            <header class="stepHeader">
+                <button type="button" class="stepHeader__toggle" (click)="toggleStep(g.key)"
+                    [attr.aria-expanded]="!isStepCollapsed(g.key)">
+                    <i class="fa stepHeader__chev" [class.fa-chevron-down]="!isStepCollapsed(g.key)"
+                        [class.fa-chevron-left]="isStepCollapsed(g.key)"></i>
+                    <span class="stepNo">{{ g.index ?? '—' }}</span>
+                    <span class="stepHeader__title">{{ g.title }}</span>
+                </button>
+                <div class="stepHeader__stats">
+                    <span class="stepStat"><i class="fa fa-list-ol"></i> {{ g.questions.length }} سوال</span>
+                    @if (g.criterion; as c) {
+                    <span class="stepStat"><i class="fa fa-reply"></i> پاسخ‌دهی {{ c.averageAnswerRate }}%</span>
+                    @if (c.averageScorePercent !== null && c.averageScorePercent !== undefined) {
+                    <span class="stepStat scoreStat" [class]="'stepStat scoreStat tone-' + scoreTone(c.averageScorePercent)">
+                        <span class="miniGauge"><span [style.width.%]="c.averageScorePercent"></span></span>
+                        امتیاز {{ c.averageScorePercent }}%
+                    </span>
                     }
-
-                    @if (q.textAnalytics!.sentiment.samples.length > 0) {
-                    <div class="sp-16"></div>
-                    <div class="sentimentSamples">
-                        <h5>نمونه پاسخ‌ها</h5>
-                        @for (s of q.textAnalytics!.sentiment.samples; track s.text) {
-                        <div class="sentimentSampleRow" [class]="s.sentiment">
-                            <i class="fa" [class]="sentimentIcon(s.sentiment)"></i>
-                            <span>{{ s.text }}</span>
-                        </div>
-                        }
-                    </div>
+                    @if (c.netSentiment !== null && c.netSentiment !== undefined) {
+                    <span class="toneChip" [class]="'toneChip tone-' + sentimentTone(c.netSentiment)"
+                        title="شاخص خالص احساس پاسخ‌های متنی">
+                        <i class="fa fa-comment-dots"></i> <bdi dir="ltr">{{ fmtSigned(c.netSentiment) }}</bdi>
+                    </span>
+                    }
                     }
                 </div>
-                }
+            </header>
+            }
 
-                <!-- سوالات تاریخ -->
-                @if (isDateQuestion(q)) {
-                <app-chart-canvas type="bar" [data]="dateChartData(q)" [options]="barOptions"
-                    [height]="220"></app-chart-canvas>
-                }
+            @if (!hasSteps() || !isStepCollapsed(g.key)) {
+            <div class="stepSection__body">
+                @for (q of g.questions; track q.questionGuid) {
+                <div class="questionAnalyticsCard">
 
-                <!-- سوالات رتبه‌بندی -->
-                @if (isRankingQuestion(q)) {
-                <app-chart-canvas type="bar" [data]="rankingChartData(q)" [options]="barOptions"
-                    [height]="240"></app-chart-canvas>
-                }
+                    <div class="questionAnalyticsCard__head" role="button" tabindex="0" [attr.aria-expanded]="isExpanded(q.questionGuid)"
+                        (click)="toggleQuestion(q.questionGuid)" (keydown.enter)="toggleQuestion(q.questionGuid)"
+                        (keydown.space)="$event.preventDefault(); toggleQuestion(q.questionGuid)">
+                        <div class="questionAnalyticsCard__headMain">
+                            <span class="qOrder">{{ q.sortOrder }}</span>
+                            <span class="qTypeBadge">{{ q.questionTypeName }}</span>
+                            <h4>{{ q.questionText }}</h4>
+                        </div>
+                        <div class="questionAnalyticsCard__headMeta">
+                            <span class="answerRateBadge">
+                                <i class="fa fa-reply"></i>
+                                {{ q.totalAnswered }} پاسخ ({{ q.answerRate }}%)
+                            </span>
+                            @if (q.totalSkipped > 0) {
+                            <span class="skipBadge">
+                                <i class="fa fa-forward"></i>
+                                {{ q.totalSkipped }} رد شده
+                            </span>
+                            }
+                            <i class="fa" [class.fa-chevron-down]="!isExpanded(q.questionGuid)"
+                                [class.fa-chevron-up]="isExpanded(q.questionGuid)"></i>
+                        </div>
+                    </div>
 
-                <!-- سوالات آپلود فایل -->
-                @if (isFileQuestion(q)) {
-                <div class="fileAnalytics">
-                    <i class="fa fa-file-upload"></i>
-                    <span>{{ q.fileUploadCount }} فایل آپلود شده</span>
+                    @if (isExpanded(q.questionGuid)) {
+                    <div class="questionAnalyticsCard__body">
+
+                        <!-- سوالات گزینه‌ای -->
+                        @if (isChoiceQuestion(q)) {
+                        <div class="choiceAnalytics">
+                            <div class="choiceAnalytics__chart">
+                                <app-chart-canvas type="doughnut" [data]="optionChartData(q)" [options]="doughnutOptions"
+                                    [height]="260"></app-chart-canvas>
+                            </div>
+                            <div class="choiceAnalytics__list">
+                                @for (opt of q.optionStats; track opt.optionText) {
+                                <div class="choiceRow">
+                                    <span class="choiceRow__dot" [style.background]="opt.color || '#1d4ed8'"></span>
+                                    <span class="choiceRow__label">{{ opt.optionText }}</span>
+                                    <div class="choiceRow__bar">
+                                        <div class="choiceRow__barFill" [style.width.%]="opt.percentage"
+                                            [style.background]="opt.color || '#1d4ed8'"></div>
+                                    </div>
+                                    <span class="choiceRow__value">{{ opt.count }} ({{ opt.percentage }}%)</span>
+                                </div>
+                                }
+                            </div>
+                        </div>
+                        }
+
+                        <!-- سوالات عددی/امتیازی -->
+                        @if (isNumericQuestion(q)) {
+                        <div class="numericAnalytics">
+                            <div class="numericStatsGrid">
+                                <div class="numStatCard">
+                                    <span class="numStatCard__value">{{ q.numericStats!.average }}</span>
+                                    <span class="numStatCard__label">میانگین</span>
+                                </div>
+                                <div class="numStatCard">
+                                    <span class="numStatCard__value">{{ q.numericStats!.median }}</span>
+                                    <span class="numStatCard__label">میانه</span>
+                                </div>
+                                <div class="numStatCard">
+                                    <span class="numStatCard__value">{{ q.numericStats!.min }}</span>
+                                    <span class="numStatCard__label">حداقل</span>
+                                </div>
+                                <div class="numStatCard">
+                                    <span class="numStatCard__value">{{ q.numericStats!.max }}</span>
+                                    <span class="numStatCard__label">حداکثر</span>
+                                </div>
+                            </div>
+                            <div class="sp-12"></div>
+                            <app-chart-canvas type="bar" [data]="numericHistogramData(q)" [options]="barOptions"
+                                [height]="220"></app-chart-canvas>
+                        </div>
+                        }
+
+                        <!-- سوالات متنی -->
+                        @if (isTextQuestion(q)) {
+                        <app-text-analytics-panel [data]="q.textAnalytics!" [totalAnswered]="q.totalAnswered" />
+                        }
+
+                        <!-- سوالات تاریخ -->
+                        @if (isDateQuestion(q)) {
+                        <app-chart-canvas type="bar" [data]="dateChartData(q)" [options]="barOptions"
+                            [height]="220"></app-chart-canvas>
+                        }
+
+                        <!-- سوالات رتبه‌بندی -->
+                        @if (isRankingQuestion(q)) {
+                        <app-chart-canvas type="bar" [data]="rankingChartData(q)" [options]="barOptions"
+                            [height]="240"></app-chart-canvas>
+                        }
+
+                        <!-- سوالات آپلود فایل -->
+                        @if (isFileQuestion(q)) {
+                        <div class="fileAnalytics">
+                            <i class="fa fa-file-upload"></i>
+                            <span>{{ q.fileUploadCount }} فایل آپلود شده</span>
+                        </div>
+                        }
+
+                    </div>
+                    }
                 </div>
                 }
-
             </div>
             }
-        </div>
+        </section>
         }
 
         @if (filteredQuestions().length === 0) {
@@ -478,144 +536,212 @@
 
         <div class="sp-12"></div>
 
-        <div class="dashboardGrid" [class]="'density-' + dashboardDensity()">
-            <!-- بقیه @for همان قبلی بدون تغییر، فقط dashCard هم کلاس density می‌گیرد -->
-            @for (q of filteredQuestions(); track q.questionGuid) {
-            <div class="dashCard" [class]="'type-' + typeColorClass(q) + ' density-' + dashboardDensity()">
-                <!-- محتوای کارت دقیقاً همان قبلی -->
+        @if (hasSteps()) {
+        <nav class="stepNav" aria-label="پرش به گام">
+            <div class="stepNav__chips">
+                @for (g of allStepGroups(); track g.key) {
+                <button type="button" class="stepNav__chip" (click)="jumpToStep(g.key)"
+                    [class.dim]="isStepCollapsed(g.key)" [title]="stepTitle(g)">
+                    <span class="stepNo sm">{{ g.index ?? '…' }}</span>
+                    <span class="stepNav__label">{{ g.title }}</span>
+                </button>
+                }
+            </div>
+            <button type="button" class="stepNav__toggleAll" (click)="setAllStepsCollapsed(!allStepsCollapsed())">
+                <i class="fa" [class.fa-angles-down]="allStepsCollapsed()" [class.fa-angles-up]="!allStepsCollapsed()"></i>
+                {{ allStepsCollapsed() ? 'باز کردن همه' : 'بستن همه' }}
+            </button>
+        </nav>
+        <div class="sp-12"></div>
+        }
 
-                <div class="dashCard__head">
-                    <div class="dashCard__headIcon"><i class="fa" [class]="typeIcon(q)"></i></div>
-                    <div class="dashCard__headText">
-                        <span class="dashCard__order">سوال {{ q.sortOrder }}</span>
-                        <h4>{{ q.questionText }}</h4>
-                    </div>
-                    @if (q.isRequired) {
-                    <span class="reqDot" title="سوال الزامی"></span>
+        @for (g of stepGroups(); track g.key) {
+        <section class="stepSection" [class.grouped]="hasSteps()" [id]="stepAnchor(g.key)">
+            @if (hasSteps()) {
+            <header class="stepHeader">
+                <button type="button" class="stepHeader__toggle" (click)="toggleStep(g.key)"
+                    [attr.aria-expanded]="!isStepCollapsed(g.key)">
+                    <i class="fa stepHeader__chev" [class.fa-chevron-down]="!isStepCollapsed(g.key)"
+                        [class.fa-chevron-left]="isStepCollapsed(g.key)"></i>
+                    <span class="stepNo">{{ g.index ?? '—' }}</span>
+                    <span class="stepHeader__title">{{ g.title }}</span>
+                </button>
+                <div class="stepHeader__stats">
+                    <span class="stepStat"><i class="fa fa-list-ol"></i> {{ g.questions.length }} سوال</span>
+                    @if (g.criterion; as c) {
+                    <span class="stepStat"><i class="fa fa-reply"></i> پاسخ‌دهی {{ c.averageAnswerRate }}%</span>
+                    @if (c.averageScorePercent !== null && c.averageScorePercent !== undefined) {
+                    <span class="stepStat scoreStat" [class]="'stepStat scoreStat tone-' + scoreTone(c.averageScorePercent)">
+                        <span class="miniGauge"><span [style.width.%]="c.averageScorePercent"></span></span>
+                        امتیاز {{ c.averageScorePercent }}%
+                    </span>
+                    }
+                    @if (c.netSentiment !== null && c.netSentiment !== undefined) {
+                    <span class="toneChip" [class]="'toneChip tone-' + sentimentTone(c.netSentiment)"
+                        title="شاخص خالص احساس پاسخ‌های متنی">
+                        <i class="fa fa-comment-dots"></i> <bdi dir="ltr">{{ fmtSigned(c.netSentiment) }}</bdi>
+                    </span>
+                    }
                     }
                 </div>
+            </header>
+            }
 
-                <div class="dashCard__metaRow">
-                    <span class="qTypeBadge">{{ q.questionTypeName }}</span>
-                    <span class="answerRateBadge"><i class="fa fa-reply"></i> {{ q.totalAnswered }} پاسخ</span>
-                    @if (q.totalSkipped > 0) {
-                    <span class="skipBadge"><i class="fa fa-forward"></i> {{ q.totalSkipped }}</span>
-                    }
-                    <span class="answerRateMini" [class.low]="q.answerRate < 50">{{ q.answerRate }}%</span>
-                </div>
-
-                <div class="dashCard__progressTrack">
-                    <div class="dashCard__progressFill" [style.width.%]="q.answerRate"></div>
-                </div>
-
-                <div class="dashCard__body">
-
-                    <!-- سوالات گزینه‌ای -->
-                    @if (isChoiceQuestion(q)) {
-                    <div class="dashChoice">
-                        <div class="dashChoice__chart">
-                            <app-chart-canvas type="doughnut" [data]="optionChartData(q)"
-                                [options]="miniDoughnutOptions" [height]="140"></app-chart-canvas>
+            @if (!hasSteps() || !isStepCollapsed(g.key)) {
+            <div class="dashboardGrid" [class]="'dashboardGrid density-' + dashboardDensity()">
+                @for (q of g.questions; track q.questionGuid) {
+                <div class="dashCard" [class]="'dashCard type-' + typeColorClass(q) + ' density-' + dashboardDensity()">
+                    <div class="dashCard__head">
+                        <div class="dashCard__headIcon"><i class="fa" [class]="typeIcon(q)"></i></div>
+                        <div class="dashCard__headText">
+                            <span class="dashCard__order">سوال {{ q.sortOrder }}</span>
+                            <h4>{{ q.questionText }}</h4>
                         </div>
-                        <div class="dashChoice__list">
-                            @for (opt of q.optionStats!.slice(0, 4); track opt.optionText) {
-                            <div class="dashChoiceRow">
-                                <span class="dashChoiceRow__dot" [style.background]="opt.color || '#1d4ed8'"></span>
-                                <span class="dashChoiceRow__label">{{ opt.optionText }}</span>
-                                <span class="dashChoiceRow__value">{{ opt.percentage }}%</span>
+                        @if (q.isRequired) {
+                        <span class="reqDot" title="سوال الزامی"></span>
+                        }
+                    </div>
+
+                    <div class="dashCard__metaRow">
+                        <span class="qTypeBadge">{{ q.questionTypeName }}</span>
+                        <span class="answerRateBadge"><i class="fa fa-reply"></i> {{ q.totalAnswered }} پاسخ</span>
+                        @if (q.totalSkipped > 0) {
+                        <span class="skipBadge"><i class="fa fa-forward"></i> {{ q.totalSkipped }}</span>
+                        }
+                        <span class="answerRateMini" [class.low]="q.answerRate < 50">{{ q.answerRate }}%</span>
+                    </div>
+
+                    <div class="dashCard__progressTrack">
+                        <div class="dashCard__progressFill" [style.width.%]="q.answerRate"></div>
+                    </div>
+
+                    <div class="dashCard__body">
+
+                        <!-- سوالات گزینه‌ای -->
+                        @if (isChoiceQuestion(q)) {
+                        <div class="dashChoice">
+                            <div class="dashChoice__chart">
+                                <app-chart-canvas type="doughnut" [data]="optionChartData(q)"
+                                    [options]="miniDoughnutOptions" [height]="140"></app-chart-canvas>
+                            </div>
+                            <div class="dashChoice__list">
+                                @for (opt of q.optionStats!.slice(0, 4); track opt.optionText) {
+                                <div class="dashChoiceRow">
+                                    <span class="dashChoiceRow__dot" [style.background]="opt.color || '#1d4ed8'"></span>
+                                    <span class="dashChoiceRow__label">{{ opt.optionText }}</span>
+                                    <span class="dashChoiceRow__value">{{ opt.percentage }}%</span>
+                                </div>
+                                }
+                                @if (q.optionStats!.length > 4) {
+                                <div class="dashChoiceRow__more">+{{ q.optionStats!.length - 4 }} گزینه دیگر</div>
+                                }
+                            </div>
+                        </div>
+                        }
+
+                        <!-- سوالات عددی -->
+                        @if (isNumericQuestion(q)) {
+                        <div class="dashNumeric">
+                            <div class="dashNumeric__stats">
+                                <div class="dashNumeric__stat">
+                                    <span>{{ q.numericStats!.average }}</span>
+                                    <small>میانگین</small>
+                                </div>
+                                <div class="dashNumeric__stat">
+                                    <span>{{ q.numericStats!.min }}</span>
+                                    <small>حداقل</small>
+                                </div>
+                                <div class="dashNumeric__stat">
+                                    <span>{{ q.numericStats!.max }}</span>
+                                    <small>حداکثر</small>
+                                </div>
+                            </div>
+                            <app-chart-canvas type="bar" [data]="numericHistogramData(q)" [options]="miniBarOptions"
+                                [height]="110"></app-chart-canvas>
+                        </div>
+                        }
+
+                        <!-- سوالات متنی -->
+                        @if (isTextQuestion(q)) {
+                        <div class="dashText">
+                            <div class="sentimentBarMini">
+                                <span class="seg positive"
+                                    [style.width.%]="q.textAnalytics!.sentiment.positivePercentage"></span>
+                                <span class="seg mixed"
+                                    [style.width.%]="q.textAnalytics!.sentiment.mixedPercentage ?? 0"></span>
+                                <span class="seg neutral"
+                                    [style.width.%]="q.textAnalytics!.sentiment.neutralPercentage"></span>
+                                <span class="seg negative"
+                                    [style.width.%]="q.textAnalytics!.sentiment.negativePercentage"></span>
+                            </div>
+                            <div class="sentimentLegendMini">
+                                <span class="positive">مثبت {{ q.textAnalytics!.sentiment.positivePercentage }}%</span>
+                                @if ((q.textAnalytics!.sentiment.mixedCount ?? 0) > 0) {
+                                <span class="mixed">دوگانه {{ q.textAnalytics!.sentiment.mixedPercentage }}%</span>
+                                }
+                                <span class="neutral">خنثی {{ q.textAnalytics!.sentiment.neutralPercentage }}%</span>
+                                <span class="negative">منفی {{ q.textAnalytics!.sentiment.negativePercentage }}%</span>
+                                <span class="netMini" [class]="'netMini tone-' + sentimentTone(questionNetSentiment(q))"
+                                    title="شاخص خالص احساس"><bdi dir="ltr">{{ fmtSigned(questionNetSentiment(q))
+                                        }}</bdi></span>
+                            </div>
+
+                            @if ((q.textAnalytics!.themes?.length ?? 0) > 0) {
+                            <div class="dashThemes">
+                                @for (t of q.textAnalytics!.themes!.slice(0, 3); track t.key) {
+                                <span class="dashTheme">{{ t.title }} <b>{{ t.count }}</b></span>
+                                }
                             </div>
                             }
-                            @if (q.optionStats!.length > 4) {
-                            <div class="dashChoiceRow__more">+{{ q.optionStats!.length - 4 }} گزینه دیگر</div>
+
+                            @if (topTerms(q).length > 0) {
+                            <div class="dashWordCloud">
+                                @for (w of topTerms(q); track w) {
+                                <span class="miniWordTag">{{ w }}</span>
+                                }
+                            </div>
                             }
-                        </div>
-                    </div>
-                    }
-
-                    <!-- سوالات عددی -->
-                    @if (isNumericQuestion(q)) {
-                    <div class="dashNumeric">
-                        <div class="dashNumeric__stats">
-                            <div class="dashNumeric__stat">
-                                <span>{{ q.numericStats!.average }}</span>
-                                <small>میانگین</small>
-                            </div>
-                            <div class="dashNumeric__stat">
-                                <span>{{ q.numericStats!.min }}</span>
-                                <small>حداقل</small>
-                            </div>
-                            <div class="dashNumeric__stat">
-                                <span>{{ q.numericStats!.max }}</span>
-                                <small>حداکثر</small>
-                            </div>
-                        </div>
-                        <app-chart-canvas type="bar" [data]="numericHistogramData(q)" [options]="miniBarOptions"
-                            [height]="110"></app-chart-canvas>
-                    </div>
-                    }
-
-                    <!-- سوالات متنی -->
-                    @if (isTextQuestion(q)) {
-                    <div class="dashText">
-                        <div class="sentimentBarMini">
-                            <span class="seg positive"
-                                [style.width.%]="q.textAnalytics!.sentiment.positivePercentage"></span>
-                            <span class="seg negative"
-                                [style.width.%]="q.textAnalytics!.sentiment.negativePercentage"></span>
-                            <span class="seg neutral"
-                                [style.width.%]="q.textAnalytics!.sentiment.neutralPercentage"></span>
-                        </div>
-                        <div class="sentimentLegendMini">
-                            <span class="positive"><i class="fa fa-smile"></i> {{
-                                q.textAnalytics!.sentiment.positivePercentage }}%</span>
-                            <span class="negative"><i class="fa fa-frown"></i> {{
-                                q.textAnalytics!.sentiment.negativePercentage }}%</span>
-                            <span class="neutral"><i class="fa fa-meh"></i> {{
-                                q.textAnalytics!.sentiment.neutralPercentage
-                                }}%</span>
-                        </div>
-
-                        @if (q.textAnalytics!.topWords.length > 0) {
-                        <div class="dashWordCloud">
-                            @for (w of q.textAnalytics!.topWords.slice(0, 10); track w.word) {
-                            <span class="miniWordTag">{{ w.word }}</span>
+                            @if ((q.textAnalytics!.suggestionCount ?? 0) > 0) {
+                            <div class="dashSuggest"><i class="fa fa-lightbulb"></i> {{ q.textAnalytics!.suggestionCount }}
+                                پیشنهاد</div>
                             }
                         </div>
                         }
+
+                        <!-- سوالات تاریخ -->
+                        @if (isDateQuestion(q)) {
+                        <app-chart-canvas type="bar" [data]="dateChartData(q)" [options]="miniBarOptions"
+                            [height]="110"></app-chart-canvas>
+                        }
+
+                        <!-- سوالات رتبه‌بندی -->
+                        @if (isRankingQuestion(q)) {
+                        <app-chart-canvas type="bar" [data]="rankingChartData(q)" [options]="miniBarOptions"
+                            [height]="110"></app-chart-canvas>
+                        }
+
+                        <!-- سوالات آپلود فایل -->
+                        @if (isFileQuestion(q)) {
+                        <div class="dashFile">
+                            <i class="fa fa-file-arrow-up"></i>
+                            <span>{{ q.fileUploadCount }} فایل آپلود شده</span>
+                        </div>
+                        }
+
+                        @if (q.totalAnswered === 0) {
+                        <div class="dashEmpty">
+                            <i class="fa fa-inbox"></i>
+                            هنوز پاسخی ثبت نشده
+                        </div>
+                        }
+
                     </div>
-                    }
-
-                    <!-- سوالات تاریخ -->
-                    @if (isDateQuestion(q)) {
-                    <app-chart-canvas type="bar" [data]="dateChartData(q)" [options]="miniBarOptions"
-                        [height]="110"></app-chart-canvas>
-                    }
-
-                    <!-- سوالات رتبه‌بندی -->
-                    @if (isRankingQuestion(q)) {
-                    <app-chart-canvas type="bar" [data]="rankingChartData(q)" [options]="miniBarOptions"
-                        [height]="110"></app-chart-canvas>
-                    }
-
-                    <!-- سوالات آپلود فایل -->
-                    @if (isFileQuestion(q)) {
-                    <div class="dashFile">
-                        <i class="fa fa-file-arrow-up"></i>
-                        <span>{{ q.fileUploadCount }} فایل آپلود شده</span>
-                    </div>
-                    }
-
-                    @if (q.totalAnswered === 0) {
-                    <div class="dashEmpty">
-                        <i class="fa fa-inbox"></i>
-                        هنوز پاسخی ثبت نشده
-                    </div>
-                    }
-
                 </div>
+                }
             </div>
             }
-        </div>
+        </section>
+        }
 
         @if (filteredQuestions().length === 0) {
         <div class="analyticsEmpty">

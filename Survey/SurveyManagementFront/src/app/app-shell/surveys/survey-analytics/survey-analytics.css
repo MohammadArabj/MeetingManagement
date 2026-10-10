@@ -1067,3 +1067,429 @@
 }
 
 /* حالت فشرده: کارت‌های عددی/تاریخ/رتبه‌بندی چارت کوچک‌تر می‌گیرند (height را در تایپ‌اسکریپت هم می‌توان شرطی کرد) */
+/* ==================== گام‌ها (Steps) ==================== */
+
+.stepNo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    border-radius: 9px;
+    background: rgba(29, 78, 216, .1);
+    color: var(--primary, #1d4ed8);
+    font-weight: 900;
+    font-size: .85rem;
+    flex-shrink: 0;
+}
+
+.stepNo.sm {
+    min-width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    font-size: .72rem;
+}
+
+.toneChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: .74rem;
+    font-weight: 850;
+    white-space: nowrap;
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.toneChip.tone-good { background: rgba(22, 163, 74, .1); color: #15803d; }
+.toneChip.tone-bad { background: rgba(225, 29, 72, .09); color: #be123c; }
+.toneChip.tone-mid { background: #f1f5f9; color: #475569; }
+
+/* --- خلاصه گام‌ها (تب نمای کلی) --- */
+.stepOverview {
+    background: white;
+    border: 2px solid var(--line);
+    border-radius: 18px;
+    padding: 18px;
+}
+
+.stepOverview__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-bottom: 14px;
+}
+
+.stepOverview__head h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 900;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stepOverview__head h3 i { color: var(--primary); }
+
+.stepOverview__hint {
+    font-size: .76rem;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.stepCards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 12px;
+}
+
+.stepCard {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    background: #fbfcfe;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    text-align: right;
+    font-family: inherit;
+    color: var(--ink);
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+    min-width: 0;
+}
+
+.stepCard:hover {
+    border-color: rgba(29, 78, 216, .45);
+    box-shadow: 0 4px 14px rgba(15, 23, 42, .06);
+}
+
+.stepCard:focus-visible,
+.stepNav__chip:focus-visible,
+.stepHeader__toggle:focus-visible,
+.stepNav__toggleAll:focus-visible,
+.questionAnalyticsCard__head:focus-visible {
+    outline: 2px solid var(--primary, #1d4ed8);
+    outline-offset: 2px;
+}
+
+.stepCard.other { background: #fafafa; }
+.stepCard.other .stepNo { background: #f1f5f9; color: var(--muted); }
+
+.stepCard__top {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.stepCard__title {
+    font-weight: 850;
+    font-size: .92rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.stepCard__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: .76rem;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.stepCard__meta i { margin-left: 3px; }
+
+.stepMetric {
+    display: grid;
+    grid-template-columns: 70px 1fr 44px;
+    align-items: center;
+    gap: 8px;
+    font-size: .74rem;
+}
+
+.stepMetric__label { color: var(--muted); font-weight: 700; }
+
+.stepMetric__track {
+    height: 8px;
+    border-radius: 999px;
+    background: #e9eef5;
+    overflow: hidden;
+}
+
+.stepMetric__fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: #64748b;
+}
+
+.stepMetric__fill.rate { background: var(--primary, #1d4ed8); opacity: .8; }
+.stepMetric__fill.tone-good { background: #16a34a; }
+.stepMetric__fill.tone-mid { background: #d97706; }
+.stepMetric__fill.tone-bad { background: #e11d48; }
+
+.stepMetric__value { font-weight: 850; color: var(--ink); text-align: left; }
+
+.stepMetric__na {
+    grid-column: 2 / 4;
+    color: #94a3b8;
+    font-size: .72rem;
+}
+
+/* --- ناوبری گام‌ها (چسبان) --- */
+.stepNav {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, .94);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    backdrop-filter: blur(6px);
+}
+
+.stepNav__chips {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    flex: 1;
+    min-width: 0;
+    scrollbar-width: thin;
+    padding-bottom: 2px;
+}
+
+.stepNav__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: white;
+    font-family: inherit;
+    font-size: .8rem;
+    font-weight: 750;
+    color: var(--ink);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.stepNav__chip:hover { border-color: var(--primary); color: var(--primary); }
+.stepNav__chip.dim { opacity: .6; }
+
+.stepNav__label {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stepNav__toggleAll {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: .76rem;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.stepNav__toggleAll:hover { color: var(--primary); }
+
+/* --- بخش هر گام --- */
+.stepSection { scroll-margin-top: 72px; }
+
+.stepSection.grouped {
+    margin-bottom: 18px;
+}
+
+.stepHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    background: #f8fafc;
+    border: 1px solid var(--line);
+    border-right: 4px solid var(--primary, #1d4ed8);
+    border-radius: 12px;
+}
+
+.stepHeader__toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: right;
+    min-width: 0;
+}
+
+.stepHeader__chev {
+    color: var(--muted);
+    font-size: .75rem;
+    width: 12px;
+}
+
+.stepHeader__title {
+    font-size: 1rem;
+    font-weight: 900;
+    overflow-wrap: anywhere;
+}
+
+.stepHeader__stats {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.stepStat {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: white;
+    border: 1px solid var(--line);
+    font-size: .74rem;
+    font-weight: 800;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.miniGauge {
+    display: inline-block;
+    width: 44px;
+    height: 6px;
+    border-radius: 999px;
+    background: #e9eef5;
+    overflow: hidden;
+}
+
+.miniGauge span {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: currentColor;
+}
+
+.scoreStat.tone-good { color: #15803d; }
+.scoreStat.tone-mid { color: #b45309; }
+.scoreStat.tone-bad { color: #be123c; }
+
+.stepSection.grouped .stepSection__body {
+    padding-right: 6px;
+}
+
+.qOrder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: #f1f5f9;
+    color: var(--muted);
+    font-size: .76rem;
+    font-weight: 900;
+    flex-shrink: 0;
+}
+
+/* --- داشبورد: متنی --- */
+.sentimentBarMini { background: #e9eef5; }
+.sentimentBarMini .seg.positive { background: #16a34a; }
+.sentimentBarMini .seg.negative { background: #e11d48; }
+.sentimentBarMini .seg.mixed { background: #d97706; }
+.sentimentLegendMini { flex-wrap: wrap; align-items: center; }
+.sentimentLegendMini .mixed { color: #b45309; }
+.sentimentLegendMini .negative { color: #be123c; }
+
+.netMini {
+    margin-right: auto;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.netMini.tone-good { background: rgba(22, 163, 74, .1); color: #15803d; }
+.netMini.tone-bad { background: rgba(225, 29, 72, .09); color: #be123c; }
+
+.dashThemes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 8px;
+}
+
+.dashTheme {
+    font-size: .7rem;
+    font-weight: 750;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.dashTheme b { color: var(--primary, #1d4ed8); margin-right: 2px; }
+
+.dashSuggest {
+    margin-top: 8px;
+    font-size: .72rem;
+    font-weight: 800;
+    color: #b45309;
+}
+
+/* --- واکنش‌گرایی تا ۳۶۰px --- */
+@media (max-width: 640px) {
+    .analyticsToolbar__tabs { flex-wrap: wrap; }
+    .tabBtn { padding: 8px 14px; font-size: .85rem; }
+    .chartsGrid { grid-template-columns: 1fr; }
+    .questionAnalyticsCard__head { padding: 14px; }
+    .questionAnalyticsCard__headMain { min-width: 0; flex-basis: 100%; }
+    .questionAnalyticsCard__body { padding: 14px 12px 16px; }
+    .choiceAnalytics { grid-template-columns: 1fr; }
+    .stepCards { grid-template-columns: 1fr; }
+    .stepOverview { padding: 14px; }
+    .stepHeader { padding: 10px; }
+    .stepNav__label { max-width: 110px; }
+    .stepNav__toggleAll span { display: none; }
+    .dashCard { padding: 14px; }
+    .statCards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .analyticsWrap *,
+    .analyticsWrap *::before,
+    .analyticsWrap *::after {
+        transition: none !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+
+    .dashCard:hover { transform: none; }
+}

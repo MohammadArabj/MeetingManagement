@@ -553,3 +553,49 @@ thead .col-sticky {
         justify-content: space-between;
     }
 }
+/* ==================== گروه‌بندی ستون‌ها بر اساس گام ==================== */
+.matrixTable thead tr.groupRow th.groupCell {
+    height: 38px;
+    padding: 6px 14px;
+    font-size: .8rem;
+    background: #3730a3;
+    border-bottom: 1px solid rgba(255, 255, 255, .2);
+    max-width: none;
+}
+
+.matrixTable thead tr.groupRow th.groupCell--meta {
+    background: #475569;
+}
+
+.matrixTable thead tr.groupRow th.col-idx {
+    vertical-align: middle;
+}
+
+.matrixTable thead tr.subRow th {
+    top: 38px;
+}
+
+.groupCell--step {
+    border-left: 2px solid rgba(255, 255, 255, .55) !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.groupCell__no {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .18);
+    font-size: .72rem;
+    font-weight: 800;
+}
+
+.groupCell__title {
+    font-weight: 900;
+}
+
+.matrixTable th.stepStart,
+.matrixTable td.stepStart {
+    border-right: 2px solid rgba(79, 70, 229, .45);
+}

@@ -1,3 +1,4 @@
+import { surveyWizardCanDeactivateGuard } from './survey-wizard/survey-wizard.guard';
 import { permissionGuard } from '../../core/guards/permission.guard';
 import { Routes } from '@angular/router';
 
@@ -15,11 +16,13 @@ export const surveysRoutes: Routes = [
   {
     path: 'create',
     canActivate: [permissionGuard('SV_Surveys_Create')],
+    canDeactivate: [surveyWizardCanDeactivateGuard],
     loadComponent: () =>
       import('./survey-wizard/survey-wizard.component').then(m => m.SurveyWizardComponent)
   },
   {
     path: 'edit/:guid',
+    canDeactivate: [surveyWizardCanDeactivateGuard],
     loadComponent: () =>
       import('./survey-wizard/survey-wizard.component').then(m => m.SurveyWizardComponent)
   },

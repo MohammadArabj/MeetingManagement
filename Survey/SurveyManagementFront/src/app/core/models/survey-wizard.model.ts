@@ -25,6 +25,111 @@ export interface WizardSurveyData {
   logoGuid?: string;
   hasCriteria?: boolean;
   backgroundImageGuid?: string;
+  /** جلوه‌ی صفحه‌ی تشکر — null/undefined یعنی confetti */
+  completionEffect?: CompletionEffectType | null;
+}
+
+// ==================== Completion Effect ====================
+export type CompletionEffectType =
+  | 'confetti' | 'fireworks' | 'balloons' | 'stars' | 'hearts' | 'ribbons' | 'none';
+
+export const COMPLETION_EFFECTS: { value: CompletionEffectType; title: string; icon: string }[] = [
+  { value: 'confetti', title: 'کاغذ رنگی', icon: 'fa-star-of-life' },
+  { value: 'fireworks', title: 'آتش‌بازی', icon: 'fa-burst' },
+  { value: 'balloons', title: 'بادکنک', icon: 'fa-circle' },
+  { value: 'stars', title: 'ستاره‌های چشمک‌زن', icon: 'fa-star' },
+  { value: 'hearts', title: 'قلب‌های شناور', icon: 'fa-heart' },
+  { value: 'ribbons', title: 'روبان و نوار', icon: 'fa-ribbon' },
+  { value: 'none', title: 'بدون جلوه', icon: 'fa-ban' },
+];
+
+export function normalizeCompletionEffect(v: unknown): CompletionEffectType {
+  const s = typeof v === 'string' ? v.trim().toLowerCase() : '';
+  return (COMPLETION_EFFECTS.some(e => e.value === s) ? s : 'confetti') as CompletionEffectType;
+}
+
+// ==================== Question Types ====================
+/** مطابق enum QuestionType در بک‌اند (Date = 7, Time = 8) */
+export const QUESTION_TYPE_LABELS: Record<number, string> = {
+  1: 'چند گزینه‌ای (تک انتخابی)',
+  2: 'چند گزینه‌ای (چند انتخابی)',
+  3: 'متن کوتاه',
+  4: 'متن بلند',
+  5: 'امتیازدهی',
+  7: 'تاریخ',
+  8: 'زمان/تاریخ (قدیمی)',
+  9: 'آپلود فایل',
+  10: 'لیست کشویی',
+  11: 'ماتریس',
+};
+
+/** مطابق enum ValidationType در بک‌اند */
+export const VALIDATION_TYPE_LABELS: Record<number, string> = {
+  0: 'بدون اعتبارسنجی',
+  1: 'ایمیل',
+  2: 'شماره تلفن',
+  3: 'کد ملی',
+  4: 'عدد',
+  5: 'بازه‌ی عددی',
+  6: 'طول متن',
+  7: 'الگوی سفارشی (عبارت باقاعده)',
+  8: 'نشانی وب',
+};
+
+// ==================== Matrix helpers ====================
+/**
+ * تبدیل ورودی متنی/آرایه/JSON به لیست تمیز:
+ * جداسازی با کاما، کامای فارسی «،» و خط جدید؛ trim؛ حذف موارد خالی.
+ */
+export function parseList(value: unknown): string[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) {
+    return value.map(v => String(v ?? '').trim()).filter(v => !!v);
+  }
+  const str = String(value).trim();
+  if (!str) return [];
+  if (str.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) return parseList(parsed);
+    } catch { /* ادامه با جداسازی ساده */ }
+  }
+  return str.split(/[,،\n\r]+/).map(v => v.trim()).filter(v => !!v);
+}
+
+/**
+ * نرمال‌سازی سوال دریافتی از GetDetailWithQuestions به مدل ویزارد
+ * (نام‌های متفاوت بک‌اند: MatrixRowsJson, ValidationRegex, MinSelection, ...)
+ */
+export function normalizeQuestionFromServer(raw: any): WizardQuestionData {
+  const q = { ...(raw ?? {}) } as any;
+  q.matrixRows = parseList(q.matrixRows ?? q.matrixRowsJson);
+  q.matrixColumns = parseList(q.matrixColumns ?? q.matrixColumnsJson);
+  delete q.matrixRowsJson;
+  delete q.matrixColumnsJson;
+  q.customValidationRegex = q.customValidationRegex ?? q.validationRegex ?? undefined;
+  q.minSelections = q.minSelections ?? q.minSelection ?? null;
+  q.maxSelections = q.maxSelections ?? q.maxSelection ?? null;
+  q.tempId = q.tempId || q.guid || `temp_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+  // سرور منطق‌ها را با نام logicRules برمی‌گرداند؛ بدون این نگاشت، ذخیره‌ی ویرایش منطق‌ها را از دست می‌داد
+  if (!q.logics && Array.isArray(q.logicRules)) {
+    q.logics = q.logicRules.map((l: any) => ({
+      guid: l.guid,
+      targetQuestionGuid: l.targetQuestionGuid && l.targetQuestionGuid !== '00000000-0000-0000-0000-000000000000' ? l.targetQuestionGuid : undefined,
+      logicType: Number(l.logicType),
+      conditionOperator: Number(l.conditionOperator),
+      conditionValue: l.conditionValue ?? undefined,
+      optionGuid: l.selectedOptionGuid ?? l.optionGuid ?? undefined,
+      priority: l.priority ?? 0,
+    }));
+  }
+  delete q.logicRules;
+  q.options = (q.options ?? []).map((o: any) => ({
+    ...o,
+    tempId: o.tempId || o.guid || `temp_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+    color: o.color || undefined,
+  }));
+  return q as WizardQuestionData;
 }
 
 // ==================== Question Data ====================
@@ -61,9 +166,9 @@ export interface WizardQuestionData {
   minScaleLabel?: string;
   maxScaleLabel?: string;
 
-  // Matrix
-  matrixRows?: string;
-  matrixColumns?: string;
+  // Matrix — مطابق List<string> در بک‌اند
+  matrixRows?: string[];
+  matrixColumns?: string[];
 
   // File upload
   maxFileSize?: number | null;
@@ -228,7 +333,7 @@ export const QUESTION_TYPE_MAP: Record<string, number> = {
   'متن کوتاه': 3,
   'متن بلند': 4,
   'امتیازدهی': 5,
-  'تاریخ': 8,
+  'تاریخ': 7,
   'آپلود فایل': 9,
   'لیست کشویی': 10,
   'ماتریس': 11,
@@ -241,7 +346,7 @@ export interface CreateSurveyWithQuestionsDto {
     guid?: string;
     logoGuid?: string | null;
     backgroundImageGuid?: string | null;
-  } & WizardSurveyData;
+  } & Omit<WizardSurveyData, 'logoGuid' | 'backgroundImageGuid'>;
 
   questions: (WizardQuestionData & {
     sortOrder: number;
