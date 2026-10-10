@@ -203,6 +203,22 @@
         </div>
     </div>
 
+    @* پیغام ارزیابی‌های تکمیل‌نشده‌ی سامانه فراگیر آموزش (یک بار پس از ورود؛ dashboard.js) *@
+    <div class="db-train" id="trainingEvalOverlay" role="alertdialog" aria-modal="true" aria-labelledby="trainingEvalTitle" aria-describedby="trainingEvalText" hidden>
+        <div class="db-train__card">
+            <div class="db-train__icon" aria-hidden="true"><i class="fa fa-list-check"></i></div>
+            <h3 class="db-train__title" id="trainingEvalTitle" tabindex="-1">ارزیابی‌های آموزشی تکمیل‌نشده</h3>
+            <p class="db-train__text" id="trainingEvalText">همکار گرامی، شما تعدادی ارزیابی تکمیل نشده در سامانه فراگیر آموزش دارید، خواهشمند است نسبت به تکمیل آنها اقدام نمائید.</p>
+            <div class="db-train__count" id="trainingEvalCount"></div>
+            <div class="db-train__foot">
+                <a class="p-btn p-btn--primary" id="trainingEvalGo" href="#" target="_blank" rel="noopener noreferrer">
+                    <i class="fa fa-up-right-from-square"></i> ورود به سامانه فراگیر آموزش
+                </a>
+                <button type="button" class="p-btn" id="trainingEvalClose"><i class="fa fa-xmark"></i> بستن</button>
+            </div>
+        </div>
+    </div>
+
     <button type="button" class="db-fab" id="pageTourFab"><i class="fa fa-circle-question"></i><span>راهنمای صفحه</span></button>
 }
 

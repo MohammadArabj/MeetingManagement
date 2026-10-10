@@ -46,6 +46,7 @@ public class GrantsController(
     IAppCache cache,
     IIpAccessRestrictionService ipAccessRestrictionService,
     ExternalApiClientService externalApiClient,
+    TrainingEvaluationService trainingEvaluation,
     ILogger<GrantsController> logger)
     : Controller
 {
@@ -124,6 +125,19 @@ public class GrantsController(
     [HttpGet]
     public async Task<IActionResult> GetWindowsApps()
         => Json(await Safe(async () => (List<WindowsAppViewModel>?)await dashboardData.GetWindowsAppsAsync(User.FindFirst("PersonnelCode")?.Value)));
+
+    /// <summary>
+    /// ارزیابی‌های تکمیل‌نشده‌ی کاربر در سامانه فراگیر آموزش (برای پیغام پس از ورود).
+    /// در حالت «ورود به جای کاربر» نمایش داده نمی‌شود (پیغام متعلق به خود کاربر است، نه مدیر).
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> GetTrainingEvaluations()
+    {
+        if (!trainingEvaluation.Enabled || !string.IsNullOrEmpty(User.FindFirst("ImpersonatedBy")?.Value))
+            return Json(new { count = 0, url = (string?)null });
+        var count = await trainingEvaluation.GetPendingCountAsync(User.FindFirst("PersonnelCode")?.Value, HttpContext.RequestAborted);
+        return Json(new { count, url = trainingEvaluation.PortalUrl });
+    }
 
     [HttpGet]
     public async Task<IActionResult> GetOtherPrograms()

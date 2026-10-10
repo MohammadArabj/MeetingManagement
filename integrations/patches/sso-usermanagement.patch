@@ -1633,10 +1633,10 @@ index 5e46522..903f364 100644
 +                                  && !t.Equals("binary/octet-stream", StringComparison.OrdinalIgnoreCase));
 +}
 diff --git a/EPC.SSO/Quickstart/Grants/GrantsController.cs b/EPC.SSO/Quickstart/Grants/GrantsController.cs
-index fb94d73..0f009ee 100644
+index fb94d73..d04048b 100644
 --- a/EPC.SSO/Quickstart/Grants/GrantsController.cs
 +++ b/EPC.SSO/Quickstart/Grants/GrantsController.cs
-@@ -1,444 +1,437 @@
+@@ -1,444 +1,451 @@
 -using System.Globalization;
 -using System.Security.Claims;
 -using System.Text.Json;
@@ -2126,6 +2126,7 @@ index fb94d73..0f009ee 100644
 +    IAppCache cache,
 +    IIpAccessRestrictionService ipAccessRestrictionService,
 +    ExternalApiClientService externalApiClient,
++    TrainingEvaluationService trainingEvaluation,
 +    ILogger<GrantsController> logger)
 +    : Controller
 +{
@@ -2204,6 +2205,19 @@ index fb94d73..0f009ee 100644
 +    [HttpGet]
 +    public async Task<IActionResult> GetWindowsApps()
 +        => Json(await Safe(async () => (List<WindowsAppViewModel>?)await dashboardData.GetWindowsAppsAsync(User.FindFirst("PersonnelCode")?.Value)));
++
++    /// <summary>
++    /// ارزیابی‌های تکمیل‌نشده‌ی کاربر در سامانه فراگیر آموزش (برای پیغام پس از ورود).
++    /// در حالت «ورود به جای کاربر» نمایش داده نمی‌شود (پیغام متعلق به خود کاربر است، نه مدیر).
++    /// </summary>
++    [HttpGet]
++    public async Task<IActionResult> GetTrainingEvaluations()
++    {
++        if (!trainingEvaluation.Enabled || !string.IsNullOrEmpty(User.FindFirst("ImpersonatedBy")?.Value))
++            return Json(new { count = 0, url = (string?)null });
++        var count = await trainingEvaluation.GetPendingCountAsync(User.FindFirst("PersonnelCode")?.Value, HttpContext.RequestAborted);
++        return Json(new { count, url = trainingEvaluation.PortalUrl });
++    }
 +
 +    [HttpGet]
 +    public async Task<IActionResult> GetOtherPrograms()
@@ -2515,7 +2529,7 @@ index fb94d73..0f009ee 100644
      [HttpPost]
      [ValidateAntiForgeryToken]
      public async Task<IActionResult> LaunchOtherProgram([FromBody] LaunchOtherProgramModel model)
-@@ -454,213 +447,225 @@ public class GrantsController(
+@@ -454,213 +461,225 @@ public class GrantsController(
          return Json(new { success = true, type = r.Type, url = r.Url });
      }
  
@@ -4207,6 +4221,95 @@ index 278945c..eee74ad 100644
          }
  
          // ✅ ساخت آدرس تصویر بر اساس کد پرسنلی — نیازی به کوئری یا API اضافه نیست
+diff --git a/EPC.SSO/Services/TrainingEvaluationService.cs b/EPC.SSO/Services/TrainingEvaluationService.cs
+new file mode 100644
+index 0000000..6a7340a
+--- /dev/null
++++ b/EPC.SSO/Services/TrainingEvaluationService.cs
+@@ -0,0 +1,83 @@
++﻿using Microsoft.Data.SqlClient;
++using Microsoft.Extensions.Caching.Memory;
++using System.Data;
++
++namespace EPC.SSO.Services;
++
++/// <summary>
++/// تعداد ارزیابی‌های تکمیل‌نشده‌ی کاربر در «سامانه فراگیر آموزش» (پایگاه داده‌ی IdeaDB).
++/// ─────────────────────────────────────────────────────────────────────────
++/// • کوئری: <c>SELECT dbo.getEvalCount(@PersonnelCode)</c> — پارامتری (بدون الحاق رشته، ایمن در برابر SQL Injection).
++/// • هرگز ورود یا داشبورد را کند/خراب نمی‌کند: اتصال و اجرا حداکثر چند ثانیه، و هر خطا = «۰» (پیغامی نمایش داده نمی‌شود).
++/// • نتیجه برای هر کاربر چند دقیقه کش می‌شود (رفرش‌های پیاپی داشبورد به IdeaDB درخواست نمی‌زنند).
++/// • اگر ConnectionStrings:Training یا TrainingEvaluation:Enabled=false تنظیم نشده باشد، قابلیت خاموش است.
++/// </summary>
++public class TrainingEvaluationService(
++    IConfiguration configuration,
++    IMemoryCache cache,
++    ILogger<TrainingEvaluationService> logger)
++{
++    private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(5);
++    private static readonly TimeSpan FailureCacheFor = TimeSpan.FromMinutes(1);
++
++    public bool Enabled =>
++        configuration.GetValue("TrainingEvaluation:Enabled", true)
++        && !string.IsNullOrWhiteSpace(configuration.GetConnectionString("Training"));
++
++    /// <summary>آدرس ورود به سامانه فراگیر آموزش (برای دکمه‌ی پیغام)</summary>
++    public string? PortalUrl
++    {
++        get
++        {
++            var url = configuration["TrainingEvaluation:PortalUrl"]?.Trim();
++            return Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps)
++                ? u.ToString()
++                : null;
++        }
++    }
++
++    public async Task<int> GetPendingCountAsync(string? personnelCode, CancellationToken ct = default)
++    {
++        personnelCode = personnelCode?.Trim();
++        if (!Enabled || string.IsNullOrEmpty(personnelCode) || personnelCode == "0" || personnelCode.Length > 20)
++            return 0;
++
++        var key = $"training-eval:{personnelCode}";
++        if (cache.TryGetValue(key, out int cached)) return cached;
++
++        int count;
++        var cacheFor = CacheFor;
++        try
++        {
++            count = await LoadAsync(personnelCode, ct);
++        }
++        catch (OperationCanceledException) when (ct.IsCancellationRequested)
++        {
++            throw;
++        }
++        catch (Exception ex)
++        {
++            // IdeaDB در دسترس نیست: پیغامی نمایش داده نمی‌شود و کمی بعد دوباره امتحان می‌شود
++            logger.LogWarning(ex, "[TrainingEvaluation] خواندن تعداد ارزیابی‌ها برای {PersonnelCode} انجام نشد", personnelCode);
++            count = 0;
++            cacheFor = FailureCacheFor;
++        }
++
++        cache.Set(key, count, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = cacheFor, Size = 1 });
++        return count;
++    }
++
++    private async Task<int> LoadAsync(string personnelCode, CancellationToken ct)
++    {
++        var builder = new SqlConnectionStringBuilder(configuration.GetConnectionString("Training"));
++        if (builder.ConnectTimeout > 5) builder.ConnectTimeout = 5;
++
++        await using var conn = new SqlConnection(builder.ConnectionString);
++        await conn.OpenAsync(ct);
++        await using var cmd = new SqlCommand("SELECT dbo.getEvalCount(@PersonnelCode) AS countp", conn) { CommandTimeout = 5 };
++        cmd.Parameters.Add("@PersonnelCode", SqlDbType.NVarChar, 20).Value = personnelCode;
++
++        var value = await cmd.ExecuteScalarAsync(ct);
++        return value is null or DBNull ? 0 : Math.Max(0, Convert.ToInt32(value));
++    }
++}
 diff --git a/EPC.SSO/Services/WindowsProgramService.cs b/EPC.SSO/Services/WindowsProgramService.cs
 index 0e4438d..94aa7eb 100644
 --- a/EPC.SSO/Services/WindowsProgramService.cs
@@ -4258,7 +4361,7 @@ index 0e4438d..94aa7eb 100644
  
      private async Task<List<WindowsAppViewModel>> LoadAccessibleAppsAsync(string personnelCode)
 diff --git a/EPC.SSO/Startup.cs b/EPC.SSO/Startup.cs
-index 9ce3ea0..0e91140 100644
+index 9ce3ea0..7408f42 100644
 --- a/EPC.SSO/Startup.cs
 +++ b/EPC.SSO/Startup.cs
 @@ -78,7 +78,8 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
@@ -4271,10 +4374,11 @@ index 9ce3ea0..0e91140 100644
  
          // ✅ قبلاً services.BuildServiceProvider() داخل ConfigureServices صدا زده می‌شد (یک Container دوم
          //    با Singletonهای تکراری). حالا فقط یک DbContext موقت ساخته و Dispose می‌شود.
-@@ -149,12 +150,18 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
+@@ -149,12 +150,19 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
          services.AddScoped<SuggestionService>();
          services.AddScoped<OtherProgramService>();
          services.AddScoped<WindowsProgramService>();
++        services.AddScoped<TrainingEvaluationService>();
 +        services.AddScoped<DashboardDataService>();
 +        services.AddSingleton<DashboardPrefetcher>();
  
@@ -4290,7 +4394,7 @@ index 9ce3ea0..0e91140 100644
          if (environment.IsDevelopment())
              services.AddDatabaseDeveloperPageExceptionFilter();
      }
-@@ -217,6 +224,7 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
+@@ -217,6 +225,7 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
          {
              endpoints.MapHealthChecks("/health");
              endpoints.MapControllers();
@@ -4617,7 +4721,7 @@ index e7585bb..15f75d6 100644
  }
 \ No newline at end of file
 diff --git a/EPC.SSO/Views/Grants/Index.cshtml b/EPC.SSO/Views/Grants/Index.cshtml
-index 9a76af2..d1847ff 100644
+index 9a76af2..f2a96a7 100644
 --- a/EPC.SSO/Views/Grants/Index.cshtml
 +++ b/EPC.SSO/Views/Grants/Index.cshtml
 @@ -13,7 +13,8 @@
@@ -4652,7 +4756,30 @@ index 9a76af2..d1847ff 100644
              <div class="db-force__body" id="forceBody"></div>
              <div class="db-force__foot">
                  <div class="db-force__steps" id="forceSteps"></div>
-@@ -209,5 +210,7 @@
+@@ -202,6 +203,22 @@
+         </div>
+     </div>
+ 
++    @* پیغام ارزیابی‌های تکمیل‌نشده‌ی سامانه فراگیر آموزش (یک بار پس از ورود؛ dashboard.js) *@
++    <div class="db-train" id="trainingEvalOverlay" role="alertdialog" aria-modal="true" aria-labelledby="trainingEvalTitle" aria-describedby="trainingEvalText" hidden>
++        <div class="db-train__card">
++            <div class="db-train__icon" aria-hidden="true"><i class="fa fa-list-check"></i></div>
++            <h3 class="db-train__title" id="trainingEvalTitle" tabindex="-1">ارزیابی‌های آموزشی تکمیل‌نشده</h3>
++            <p class="db-train__text" id="trainingEvalText">همکار گرامی، شما تعدادی ارزیابی تکمیل نشده در سامانه فراگیر آموزش دارید، خواهشمند است نسبت به تکمیل آنها اقدام نمائید.</p>
++            <div class="db-train__count" id="trainingEvalCount"></div>
++            <div class="db-train__foot">
++                <a class="p-btn p-btn--primary" id="trainingEvalGo" href="#" target="_blank" rel="noopener noreferrer">
++                    <i class="fa fa-up-right-from-square"></i> ورود به سامانه فراگیر آموزش
++                </a>
++                <button type="button" class="p-btn" id="trainingEvalClose"><i class="fa fa-xmark"></i> بستن</button>
++            </div>
++        </div>
++    </div>
++
+     <button type="button" class="db-fab" id="pageTourFab"><i class="fa fa-circle-question"></i><span>راهنمای صفحه</span></button>
+ }
+ 
+@@ -209,5 +226,7 @@
      <script src="~/js/jalali-picker.js" asp-append-version="true"></script>
      <script src="~/js/page-tour.js" asp-append-version="true"></script>
      <script src="~/js/announcement-common.js" asp-append-version="true"></script>
@@ -4812,6 +4939,34 @@ index 0000000..8840190
 +<script src="~/lib/jquery/jquery.min.js" asp-append-version="true"></script>
 +<script src="~/lib/jquery-validation/jquery.validate.min.js" asp-append-version="true"></script>
 +<script src="~/lib/jquery-validation/jquery.validate.unobtrusive.min.js" asp-append-version="true"></script>
+diff --git a/EPC.SSO/wwwroot/css/dashboard.css b/EPC.SSO/wwwroot/css/dashboard.css
+index 75414a0..3ca9802 100644
+--- a/EPC.SSO/wwwroot/css/dashboard.css
++++ b/EPC.SSO/wwwroot/css/dashboard.css
+@@ -209,3 +209,23 @@ html[data-theme="dark"] .db-ann:hover { background: rgba(37,49,99,.45); }
+ /* خطا با دکمه‌ی تلاش دوباره */
+ .db-retry { display: inline-flex; gap: 6px; align-items: center; margin-top: 8px; height: 30px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--card-solid); color: var(--text-mid); font-family: var(--font); font-size: 12px; cursor: pointer; }
+ .db-retry:hover { color: var(--orange); border-color: var(--orange); }
++
++/* ═══ پیغام ارزیابی‌های سامانه فراگیر آموزش ═══ */
++.db-train { position: fixed; inset: 0; z-index: 1085; display: grid; place-items: center; padding: 16px;
++  background: rgba(15, 23, 42, .55); backdrop-filter: blur(3px); animation: db-train-fade .2s ease; }
++.db-train[hidden] { display: none; }
++.db-train__card { width: min(460px, 100%); background: var(--card, #fff); color: inherit; border-radius: 18px;
++  padding: 28px 24px 20px; text-align: center; box-shadow: 0 24px 60px rgba(0, 0, 0, .25); animation: db-train-pop .25s ease; }
++.db-train__icon { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center;
++  font-size: 1.6rem; color: #fff; background: linear-gradient(135deg, var(--orange, #f97316), #f59e0b);
++  box-shadow: 0 10px 24px rgba(249, 115, 22, .35); }
++.db-train__title { font-size: 1.1rem; font-weight: 800; margin: 0 0 10px; outline: none; }
++.db-train__text { line-height: 2; margin: 0 0 10px; }
++.db-train__count { display: inline-block; margin-bottom: 18px; padding: 4px 14px; border-radius: 99px; font-weight: 700;
++  font-size: .85rem; background: rgba(249, 115, 22, .12); color: var(--orange, #c2410c); }
++.db-train__count:empty { display: none; }
++.db-train__foot { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
++.db-train__foot .p-btn { min-width: 120px; justify-content: center; }
++@keyframes db-train-fade { from { opacity: 0; } }
++@keyframes db-train-pop { from { opacity: 0; transform: translateY(12px) scale(.97); } }
++@media (prefers-reduced-motion: reduce) { .db-train, .db-train__card { animation: none; } }
 diff --git a/EPC.SSO/wwwroot/css/login-v2.css b/EPC.SSO/wwwroot/css/login-v2.css
 index 42af830..48a6db1 100644
 --- a/EPC.SSO/wwwroot/css/login-v2.css
@@ -5022,7 +5177,7 @@ index c6ee269..e0cb896 100644
  }
 \ No newline at end of file
 diff --git a/EPC.SSO/wwwroot/js/dashboard.js b/EPC.SSO/wwwroot/js/dashboard.js
-index 8f009e3..49e3a5a 100644
+index 8f009e3..26f37d6 100644
 --- a/EPC.SSO/wwwroot/js/dashboard.js
 +++ b/EPC.SSO/wwwroot/js/dashboard.js
 @@ -2,18 +2,22 @@
@@ -5337,7 +5492,7 @@ index 8f009e3..49e3a5a 100644
      }
      const resetUsers = () => { UP.page = 1; UP.items = []; UP.hasMore = true; $('#upBody').innerHTML = '<div class="p-skel" style="height:56px;margin:8px"></div>'.repeat(4); loadUsers(false); };
      $('#btnProfiles')?.addEventListener('click', () => { bootstrap.Modal.getOrCreateInstance($('#userProfileModal')).show(); resetUsers(); });
-@@ -478,31 +543,99 @@
+@@ -478,31 +543,149 @@
      // ═══ Load all ════════════════════════════════════════════════════════
      applyPins($('#systemsGrid'));
  
@@ -5444,8 +5599,8 @@ index 8f009e3..49e3a5a 100644
          } catch {
 -            renderMeetings(null); renderAnnouncements(null); renderSurveys(null); renderSuggesters(null);
 +            if (!cached) paint(widget, null);
-         }
-     }
++        }
++    }
 +
 +    function load() {
 +        // نمایش فوری از نشست قبلی (بدون انتظار برای شبکه)
@@ -5455,6 +5610,56 @@ index 8f009e3..49e3a5a 100644
 +    }
 +
 +    load();
++    checkTrainingEvaluations();
++
++    /*  ارزیابی‌های تکمیل‌نشده‌ی سامانه فراگیر آموزش
++        ─────────────────────────────────────────────────────────────────────
++        • فقط یک بار در هر ورود (هر نشست مرورگر) نمایش داده می‌شود، نه با هر رفرش.
++        • اگر اطلاعیه‌ی «مطالعه‌ی اجباری» باز است، پیغام پس از بسته شدن آن نمایش داده می‌شود.
++        • خطا یا کندی پایگاه داده‌ی آموزش هیچ اثری بر داشبورد ندارد (درخواست مستقل، بدون پیغام خطا). */
++    async function checkTrainingEvaluations() {
++        const overlay = $('#trainingEvalOverlay');
++        if (!overlay || !personnelCode) return;
++        const seenKey = `epc-train-shown:${personnelCode}`;
++        try { if (sessionStorage.getItem(seenKey)) return; } catch { /* حالت خصوصی */ }
++
++        let res;
++        try { res = await getJson('/Grants/GetTrainingEvaluations'); } catch { return; }
++        const count = Number(res?.count) || 0;
++        if (count <= 0) return;
++
++        // صبر تا بسته شدن اطلاعیه‌ی اجباری (حداکثر چند دقیقه)
++        for (let i = 0; i < 600 && $('#forceReadOverlay')?.classList.contains('is-open'); i++) {
++            await new Promise(r => setTimeout(r, 500));
+         }
++        try { sessionStorage.setItem(seenKey, '1'); } catch { }
++
++        const go = $('#trainingEvalGo');
++        if (res.url) go.href = res.url; else go.hidden = true;
++        $('#trainingEvalCount').textContent = `${fa(count)} ارزیابی تکمیل‌نشده`;
++
++        const previous = document.activeElement;
++        const close = () => {
++            overlay.hidden = true;
++            document.removeEventListener('keydown', onKey);
++            previous?.focus?.();
++        };
++        const onKey = e => {
++            if (e.key === 'Escape') close();
++            if (e.key === 'Tab') { // نگه داشتن فوکوس داخل پیغام
++                const items = $$('a:not([hidden]), button', overlay);
++                const first = items[0], last = items[items.length - 1];
++                if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
++                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
++            }
++        };
++        $('#trainingEvalClose').onclick = close;
++        go.onclick = () => setTimeout(close, 0);
++        overlay.onclick = e => { if (e.target === overlay) close(); };
++        document.addEventListener('keydown', onKey);
++        overlay.hidden = false;
++        (res.url ? go : $('#trainingEvalClose')).focus();
+     }
  })();
 diff --git a/EPC.SSO/wwwroot/js/document-browser.js b/EPC.SSO/wwwroot/js/document-browser.js
 index 980b1f2..2a139d5 100644

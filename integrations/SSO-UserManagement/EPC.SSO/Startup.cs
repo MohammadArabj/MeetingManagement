@@ -150,6 +150,7 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
         services.AddScoped<SuggestionService>();
         services.AddScoped<OtherProgramService>();
         services.AddScoped<WindowsProgramService>();
+        services.AddScoped<TrainingEvaluationService>();
         services.AddScoped<DashboardDataService>();
         services.AddSingleton<DashboardPrefetcher>();
 

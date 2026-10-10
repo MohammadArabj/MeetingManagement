@@ -106,6 +106,29 @@
 
 > در IIS برای WebSocket باید قابلیت **WebSocket Protocol** نصب باشد؛ در غیر این صورت SignalR خودکار به Long Polling برمی‌گردد.
 
+### پیغام ارزیابی‌های تکمیل‌نشده‌ی سامانه فراگیر آموزش
+- **زمان نمایش:** پس از ورود، داشبورد پرتال تعداد ارزیابی‌های تکمیل‌نشده‌ی کاربر را از IdeaDB می‌خواند. کوئری `SELECT dbo.getEvalCount(@PersonnelCode)` است و کد پرسنلی از Claim «PersonnelCode» گرفته می‌شود.
+- **پیغام:** اگر تعداد بیشتر از صفر باشد، پیغام «همکار گرامی، شما تعدادی ارزیابی تکمیل نشده در سامانه فراگیر آموزش دارید…» با دو دکمه نمایش داده می‌شود: «ورود به سامانه فراگیر آموزش» و «بستن».
+- **دفعات نمایش:** پیغام در هر ورود فقط یک بار نمایش داده می‌شود، نه با هر رفرش. اگر اطلاعیه‌ی «مطالعه‌ی اجباری» باز باشد، پیغام بعد از آن نمایش داده می‌شود. در حالت «ورود به جای کاربر» پیغامی نمایش داده نمی‌شود.
+- **کارایی و امنیت:**
+  - درخواست مستقل از بقیه‌ی داشبورد اجرا می‌شود.
+  - زمان اتصال و اجرا حداکثر ۵ ثانیه است.
+  - نتیجه ۵ دقیقه کش می‌شود.
+  - هر خطا یعنی «بدون پیغام»، بنابراین کندی یا قطعی IdeaDB ورود و داشبورد را کند نمی‌کند.
+  - کوئری پارامتری است.
+- **فایل‌ها:** `Services/TrainingEvaluationService.cs`، `GrantsController.GetTrainingEvaluations`، `Views/Grants/Index.cshtml`، `wwwroot/js/dashboard.js` و `wwwroot/css/dashboard.css`
+- **تنظیمات `appsettings.json` پرتال** (رمز را در فایل تنظیمات سرور یا Environment Variable `ConnectionStrings__Training` بگذارید، نه در مخزن):
+```json
+"ConnectionStrings": {
+  "Training": "Server=172.17.10.80;Database=IdeaDB;User Id=<کاربر>;Password=<رمز>;TrustServerCertificate=True;Application Name=EPC.SSO;Connect Timeout=5"
+},
+"TrainingEvaluation": {
+  "Enabled": true,
+  "PortalUrl": "https://<آدرس سامانه فراگیر آموزش>"
+}
+```
+اگر `ConnectionStrings:Training` تعریف نشده باشد یا `Enabled` برابر `false` باشد، این قابلیت خاموش است. اگر `PortalUrl` خالی باشد، فقط دکمه‌ی «بستن» نمایش داده می‌شود. کاربر SQL فقط به اجرای `dbo.getEvalCount` نیاز دارد (`GRANT EXECUTE`).
+
 ### سرعت بارگذاری داشبورد پرتال
 
 **علت‌های کندی که پیدا شد:**

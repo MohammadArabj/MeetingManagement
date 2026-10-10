@@ -638,4 +638,54 @@
     }
 
     load();
+    checkTrainingEvaluations();
+
+    /*  ارزیابی‌های تکمیل‌نشده‌ی سامانه فراگیر آموزش
+        ─────────────────────────────────────────────────────────────────────
+        • فقط یک بار در هر ورود (هر نشست مرورگر) نمایش داده می‌شود، نه با هر رفرش.
+        • اگر اطلاعیه‌ی «مطالعه‌ی اجباری» باز است، پیغام پس از بسته شدن آن نمایش داده می‌شود.
+        • خطا یا کندی پایگاه داده‌ی آموزش هیچ اثری بر داشبورد ندارد (درخواست مستقل، بدون پیغام خطا). */
+    async function checkTrainingEvaluations() {
+        const overlay = $('#trainingEvalOverlay');
+        if (!overlay || !personnelCode) return;
+        const seenKey = `epc-train-shown:${personnelCode}`;
+        try { if (sessionStorage.getItem(seenKey)) return; } catch { /* حالت خصوصی */ }
+
+        let res;
+        try { res = await getJson('/Grants/GetTrainingEvaluations'); } catch { return; }
+        const count = Number(res?.count) || 0;
+        if (count <= 0) return;
+
+        // صبر تا بسته شدن اطلاعیه‌ی اجباری (حداکثر چند دقیقه)
+        for (let i = 0; i < 600 && $('#forceReadOverlay')?.classList.contains('is-open'); i++) {
+            await new Promise(r => setTimeout(r, 500));
+        }
+        try { sessionStorage.setItem(seenKey, '1'); } catch { }
+
+        const go = $('#trainingEvalGo');
+        if (res.url) go.href = res.url; else go.hidden = true;
+        $('#trainingEvalCount').textContent = `${fa(count)} ارزیابی تکمیل‌نشده`;
+
+        const previous = document.activeElement;
+        const close = () => {
+            overlay.hidden = true;
+            document.removeEventListener('keydown', onKey);
+            previous?.focus?.();
+        };
+        const onKey = e => {
+            if (e.key === 'Escape') close();
+            if (e.key === 'Tab') { // نگه داشتن فوکوس داخل پیغام
+                const items = $$('a:not([hidden]), button', overlay);
+                const first = items[0], last = items[items.length - 1];
+                if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+        };
+        $('#trainingEvalClose').onclick = close;
+        go.onclick = () => setTimeout(close, 0);
+        overlay.onclick = e => { if (e.target === overlay) close(); };
+        document.addEventListener('keydown', onKey);
+        overlay.hidden = false;
+        (res.url ? go : $('#trainingEvalClose')).focus();
+    }
 })();
