@@ -6,6 +6,8 @@ import { SessionStore } from './session.store';
 
 const RETURN_URL_KEY = 'survey.auth.returnUrl';
 const LOGIN_ATTEMPT_KEY = 'survey.auth.loginAttempt';
+/** زمان آخرین «ورود دوباره‌ی بی‌صدا» (برای جلوگیری از حلقه) */
+const RELOGIN_KEY = 'survey.auth.relogin';
 const DEFAULT_RETURN_URL = '/dashboard';
 
 /**
@@ -25,6 +27,13 @@ export class AuthService {
 
   private readonly _user = signal<User | null>(null);
   private loginInProgress = false;
+  /**
+   * در حال خروج: هیچ ورود دیگری شروع نمی‌شود.
+   * ✅ علت «با زدن خروج دوباره وارد می‌شود»: بعد از پاک شدن توکن، درخواست‌های در جریان (داشبورد،
+   *    اعلان‌ها، SignalR) 401 می‌گرفتند و authInterceptor فوراً login() را صدا می‌زد؛ این ریدایرکت با
+   *    ریدایرکت خروج مسابقه می‌داد و اگر زودتر می‌رسید، چون نشست SSO هنوز باز بود کاربر بی‌درنگ برمی‌گشت.
+   */
+  private loggingOut = false;
 
   readonly user = this._user.asReadonly();
   readonly isAuthenticated = computed(() => {
@@ -78,7 +87,7 @@ export class AuthService {
 
   /** هدایت به SSO؛ مسیر فعلی (hash route) پس از بازگشت بازیابی می‌شود. */
   async login(returnUrl: string = currentRoute(), extraQueryParams?: Record<string, string>): Promise<void> {
-    if (this.loginInProgress) return;
+    if (this.loginInProgress || this.loggingOut) return;
     this.loginInProgress = true;
     const safe = sanitizeReturnUrl(returnUrl);
     sessionStorage.setItem(RETURN_URL_KEY, safe);
@@ -88,20 +97,47 @@ export class AuthService {
 
   /** خروج کامل (SSO + محلی) */
   async logout(): Promise<void> {
+    if (this.loggingOut) return;
+    this.loggingOut = true;
     const user = this._user() ?? (await this.manager.getUser());
-    this.session.clear();
-    this._user.set(null);
+    sessionStorage.removeItem(RELOGIN_KEY);
     try {
-      if (user) {
-        await this.manager.signoutRedirect({ id_token_hint: user.id_token });
-        return;
-      }
+      // ابتدا ریدایرکت خروج SSO آماده می‌شود؛ تا آن لحظه توکن حذف نمی‌شود تا درخواست‌های در جریان 401 نگیرند
+      await this.manager.signoutRedirect({ id_token_hint: user?.id_token });
+      this.session.clear();
+      return;
     } catch (error) {
       console.error('[Auth] signout failed', error);
     }
-    await this.manager.removeUser();
-    await this.login(DEFAULT_RETURN_URL);
+    // ✅ قبلاً در خطا login() صدا زده می‌شد و چون نشست SSO باز بود کاربر بی‌درنگ دوباره وارد می‌شد.
+    //    حالا مستقیم صفحه‌ی خروج SSO (که نشست را می‌بندد و صفحه‌ی ورود را نشان می‌دهد) باز می‌شود.
+    this.session.clear();
+    this._user.set(null);
+    await this.manager.removeUser().catch(() => undefined);
+    window.location.assign(`${environment.identityEndpoint.replace(/\/+$/, '')}/Account/Logout`);
   }
+
+  /**
+   * ورود دوباره‌ی بی‌صدا با نشست فعلی SSO (بدون پرسیدن رمز).
+   * ✅ وقتی کاربر از داشبورد SSO وارد مدیریت جلسات می‌شد، توکن و شناسه‌ی نشست ذخیره‌شده از ورود قبلی
+   *    (که SSO آن را بسته بود) باعث می‌شد sessionGuard «خروج کامل» بزند و نشست تازه‌ی SSO را هم ببندد؛
+   *    کاربر مجبور بود دوباره رمز بزند. حالا فقط توکن محلی کنار گذاشته و از نشست فعلی SSO توکن تازه گرفته
+   *    می‌شود. اگر همین کار در دو دقیقه‌ی اخیر انجام شده و باز نشست نامعتبر است، خروج کامل انجام می‌شود.
+   */
+  async relogin(returnUrl: string = currentRoute()): Promise<void> {
+    const last = Number(sessionStorage.getItem(RELOGIN_KEY) ?? 0);
+    if (Date.now() - last < 120_000) {
+      await this.logout();
+      return;
+    }
+    sessionStorage.setItem(RELOGIN_KEY, String(Date.now()));
+    this.session.clear();
+    this._user.set(null);
+    await this.manager.removeUser().catch(() => undefined);
+    await this.login(returnUrl);
+  }
+
+  get isLoggingOut(): boolean { return this.loggingOut; }
 
   accessToken(): string | null {
     const u = this._user();

@@ -136,83 +136,45 @@ public class PhoneDirectoryQueryHandler(
     }
 
     // ── دفترچه تلفن عمومی — برای استفاده سایر سامانه‌ها پس از SSO ───────
+    // از نسخه‌ی آماده‌ی حافظه (PhoneDirectorySnapshot)؛ قبلاً هر جستجو کل جدول + UserManagement را می‌خواند.
     public async Task<Result<List<PhoneDirectoryPublicModel>>> Handle(PhoneDirectorySearchDto condition)
     {
-        var query = context.PhoneDirectoryEntries
-            .Include(x => x.Numbers)
-            .Where(x => !x.IsRemoved && x.IsActive == 1)
-            .AsQueryable();
-
-        if (condition.Type.HasValue)
-            query = query.Where(x => (int)x.Type == condition.Type.Value);
-
-        var rawItems = await query
-            .Select(x => new
+        var entries = await PhoneDirectorySnapshot.GetAsync(BuildSnapshotAsync);
+        var items = PhoneDirectorySnapshot.Filter(entries, condition.Search, condition.Type, full: false)
+            .Select(e => new PhoneDirectoryPublicModel
             {
-                x.Guid,
-                x.Type,
-                x.PositionGuid,
-                x.LocationTitle,
-                Numbers = x.Numbers.OrderBy(n => n.DisplayOrder).Select(n => n.Number).ToList()
-            })
-            .ToListAsync();
-
-        var positionGuids = rawItems.Where(x => x.PositionGuid.HasValue).Select(x => x.PositionGuid).Distinct().ToList();
-        var holders = positionGuids.Any()
-            ? await userManagementAclService.GetUserAndPositionsByGuidsAsync(positionGuids)
-            : [];
-        var holdersDict = holders
-                               .GroupBy(h => h.PositionGuid)
-                               .ToDictionary(g => g.Key, g => g.First());
-        var items = rawItems.Select(x =>
-        {
-            var holder = x.PositionGuid.HasValue && holdersDict.TryGetValue(x.PositionGuid.Value, out var h) ? h : null;
-
-            return new PhoneDirectoryPublicModel
-            {
-                Guid = x.Guid,
-                Type = (int)x.Type,
-                TypeLabel = TypeLabels[x.Type],
-                DisplayTitle = x.Type == PhoneDirectoryEntryType.Position
-                    ? holder?.Position ?? "(سمت نامشخص)"
-                    : x.LocationTitle ?? "(بدون عنوان)",
-                SubTitle = x.Type == PhoneDirectoryEntryType.Position
-                    ? (holder?.Name is not null
-                        ? holder.Name
-                        : "(فاقد متصدی)")
+                Guid = e.Model.Guid,
+                Type = e.Model.Type,
+                TypeLabel = e.Model.TypeLabel,
+                DisplayTitle = e.Model.DisplayTitle,
+                // عمومی: فقط نام متصدی (بدون کد پرسنلی)، مانند قبل
+                SubTitle = e.Model.Type == (int)PhoneDirectoryEntryType.Position
+                    ? (e.Model.PositionTitle is null && e.Model.UserName == "" ? "(فاقد متصدی)" : e.HolderName ?? "(فاقد متصدی)")
                     : null,
-                UserName=holder?.UserName??"",
-                Unit = holder?.Unit ?? "",
-                Numbers = x.Numbers
-            };
-        }).ToList();
-
-        if (!string.IsNullOrWhiteSpace(condition.Search))
-        {
-            var s = condition.Search.Trim();
-            items = items.Where(x =>
-                x.DisplayTitle.Contains(s) ||
-                (x.SubTitle != null && x.SubTitle.Contains(s)) ||
-                x.Numbers.Any(n => n.Contains(s))).ToList();
-        }
-
+                UserName = e.Model.UserName ?? "",
+                Unit = e.Unit ?? "",
+                Numbers = e.Model.Numbers
+            })
+            .ToList();
         return Result<List<PhoneDirectoryPublicModel>>.Success(items);
     }
 
     // ── جستجوی کامل برای صفحه‌ی شماره‌گیری داخلی (نیاز به احراز هویت) ────
-    // شبیه GetList از نظر غنای مدل، اما بدون صفحه‌بندی و بدون Description
-    // (Description فقط مخصوص پنل ادمین است) — فقط رکوردهای فعال برمی‌گردد.
     public async Task<Result<List<PhoneDirectoryDialerModel>>> Handle(PhoneDirectoryDialerSearchDto condition)
     {
-        var query = context.PhoneDirectoryEntries
-            .Include(x => x.Numbers)
+        var entries = await PhoneDirectorySnapshot.GetAsync(BuildSnapshotAsync);
+        var items = PhoneDirectorySnapshot.Filter(entries, condition.Search, condition.Type, full: true)
+            .Select(e => e.Model)
+            .ToList();
+        return Result<List<PhoneDirectoryDialerModel>>.EmptyMessage(items);
+    }
+
+    /// <summary>ساخت نسخه‌ی کامل: یک Query سبک (بدون ردیابی) + یک درخواست به UserManagement</summary>
+    private async Task<List<PhoneDirectorySnapshot.Entry>> BuildSnapshotAsync()
+    {
+        var rawItems = await context.PhoneDirectoryEntries
+            .AsNoTracking()
             .Where(x => !x.IsRemoved && x.IsActive == 1)
-            .AsQueryable();
-
-        if (condition.Type.HasValue)
-            query = query.Where(x => (int)x.Type == condition.Type.Value);
-
-        var rawItems = await query
             .Select(x => new
             {
                 x.Guid,
@@ -232,11 +194,11 @@ public class PhoneDirectoryQueryHandler(
             .GroupBy(h => h.PositionGuid)
             .ToDictionary(g => g.Key, g => g.First());
 
-        var items = rawItems.Select(x =>
+        return rawItems.Select(x =>
         {
             var holder = x.PositionGuid.HasValue && holdersDict.TryGetValue(x.PositionGuid.Value, out var h) ? h : null;
-
-            return new PhoneDirectoryDialerModel
+            var isPosition = x.Type == PhoneDirectoryEntryType.Position;
+            var model = new PhoneDirectoryDialerModel
             {
                 Guid = x.Guid,
                 Type = (int)x.Type,
@@ -244,35 +206,24 @@ public class PhoneDirectoryQueryHandler(
                 PositionGuid = x.PositionGuid,
                 PositionTitle = holder?.Position,
                 LocationTitle = x.LocationTitle,
-                DisplayTitle = x.Type == PhoneDirectoryEntryType.Position
-                    ? holder?.Position ?? "(سمت نامشخص)"
-                    : x.LocationTitle ?? "(بدون عنوان)",
-                SubTitle = x.Type == PhoneDirectoryEntryType.Position
+                DisplayTitle = isPosition ? holder?.Position ?? "(سمت نامشخص)" : x.LocationTitle ?? "(بدون عنوان)",
+                SubTitle = isPosition
                     ? (holder?.Name is not null
                         ? $"{holder.Name}{(holder.UserName is not null ? " — " + holder.UserName : "")}"
                         : "(فاقد متصدی)")
-                        :null,
-                UserName = holder?.UserName??"",
+                    : null,
+                UserName = holder?.UserName ?? "",
                 Mobile = holder?.Mobile,
-                Description=x.Description,
+                Description = x.Description,
                 Numbers = x.Numbers
             };
+            var digits = string.Join(' ', x.Numbers.Select(PhoneDirectorySnapshot.Digits));
+            var publicText = PhoneDirectorySnapshot.Normalize(string.Join(' ',
+                model.DisplayTitle, holder?.Name, holder?.Unit, string.Join(' ', x.Numbers), digits));
+            var fullText = PhoneDirectorySnapshot.Normalize(string.Join(' ',
+                publicText, model.PositionTitle, model.LocationTitle, model.Mobile, model.Description, holder?.UserName));
+            return new PhoneDirectorySnapshot.Entry(model, holder?.Unit, holder?.Name, publicText, fullText);
         }).ToList();
-
-        // جستجو روی نام/سمت/مکان/موبایل/شماره‌های داخلی — دقیقاً طبق نیاز صفحه‌ی شماره‌گیری
-        if (!string.IsNullOrWhiteSpace(condition.Search))
-        {
-            var s = condition.Search.Trim();
-            items = [.. items.Where(x =>
-                x.DisplayTitle.Contains(s) ||
-                (x.PositionTitle != null && x.PositionTitle.Contains(s)) ||
-                (x.LocationTitle != null && x.LocationTitle.Contains(s)) ||
-                (x.Mobile != null && x.Mobile.Contains(s)) ||
-                (x.Description != null && x.Description.Contains(s))||
-                x.Numbers.Any(n => n.Contains(s)))];
-        }
-
-        return Result<List<PhoneDirectoryDialerModel>>.EmptyMessage(items);
     }
 
     public async Task<Result<bool>> Handle(CheckDuplicateLocationDto condition)

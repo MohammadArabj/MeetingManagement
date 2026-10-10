@@ -18,7 +18,6 @@ builder.Services.AddRazorPages();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddLogging();
-builder.Services.AddRazorPages();
 builder.Services.Configure<GzipCompressionProviderOptions>
     (options => options.Level = CompressionLevel.Fastest);
 
@@ -54,7 +53,7 @@ var authorities = builder.Configuration.GetSection("IdentityAuthorities");
 builder.Services.AddAuthentication("Bearer")
     .AddJwtBearer("Bearer", options =>
     {
-        options.RequireHttpsMetadata = false;
+        options.RequireHttpsMetadata = builder.Configuration.GetValue("Jwt:RequireHttpsMetadata", false);
         options.Authority = authorities["0"];
         options.MapInboundClaims = false;
 
@@ -113,8 +112,12 @@ ServiceLocator.SetCurrent(new AutofacServiceLocator(autofacContainer));
 app.UseResponseCompression();
 
 app.UseStaticFiles();
-app.UseDeveloperExceptionPage();
-IdentityModelEventSource.ShowPII = true;
+// ✅ جزئیات خطا و اطلاعات توکن فقط در محیط توسعه (قبلاً در محیط عملیاتی هم نمایش داده می‌شد)
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+    IdentityModelEventSource.ShowPII = true;
+}
 
 app.UseHttpsRedirection();
 

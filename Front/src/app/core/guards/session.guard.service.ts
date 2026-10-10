@@ -9,11 +9,13 @@ import { SessionBootstrapService } from '../auth/session-bootstrap.service';
  * ✅ قبلاً در «هر» جابجایی صفحه یک درخواست به سرور ارسال می‌شد (runGuardsAndResolvers: 'always')؛
  * حالا نتیجه برای sessionCheckIntervalMs کش می‌شود و خطای شبکه کاربر را بیرون نمی‌اندازد.
  */
-export const sessionGuard: CanActivateFn = async () => {
+export const sessionGuard: CanActivateFn = async (_route, state) => {
   const bootstrap = inject(SessionBootstrapService);
   const auth = inject(AuthService);
 
   if (await bootstrap.isSessionActive(environment.auth.sessionCheckIntervalMs)) return true;
-  await auth.logout();
+  // نشست ذخیره‌شده (از ورود قبلی) بسته شده است: با نشست فعلی SSO بی‌صدا دوباره وارد می‌شویم
+  // (نه خروج کامل که نشست تازه‌ی SSO کاربر را هم می‌بست و رمز را دوباره می‌خواست)
+  await auth.relogin(state.url);
   return false;
 };

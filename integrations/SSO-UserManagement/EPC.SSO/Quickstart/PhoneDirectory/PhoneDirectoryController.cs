@@ -23,11 +23,26 @@ public class PhoneDirectoryController(
     private readonly IDataProtector _photoProtector =
         dataProtectionProvider.CreateProtector(PhotoPurpose);
 
+    /// <summary>
+    /// صفحه‌ی اول نتایج همراه خود صفحه ارسال می‌شود (بدون درخواست دوم و بدون اسکلت بارگذاری).
+    /// داده از کش حافظه‌ی SSO است؛ اگر کش هنوز خالی باشد حداکثر ۱٫۵ ثانیه صبر می‌شود و بعد صفحه
+    /// بدون نتایج ارسال می‌شود تا مرورگر خودش بگیرد (صفحه هرگز منتظر API کند نمی‌ماند).
+    /// </summary>
     [HttpGet]
-    public IActionResult Index()
+    public async Task<IActionResult> Index()
     {
-        return View();
+        PhoneDirectoryPaginatedResult? first = null;
+        var load = directoryService.SearchPaginatedAsync(string.Empty, null, 1, InitialPageSize, HttpContext.RequestAborted);
+        if (await Task.WhenAny(load, Task.Delay(1500, HttpContext.RequestAborted)) == load)
+        {
+            var result = await load;
+            if (!result.HasError) first = result;
+        }
+        return View(first);
     }
+
+    /// <summary>هم‌اندازه با PAGE_SIZE در اسکریپت صفحه</summary>
+    public const int InitialPageSize = 12;
 
     [HttpPost]
     [EnableRateLimiting(RateLimitPolicies.PublicDirectory)]

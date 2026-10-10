@@ -370,11 +370,19 @@ index 0000000..638c305
 +    }
 +}
 diff --git a/EPC.SSO/IdentitySettings/IdentityServiceConfiguration.cs b/EPC.SSO/IdentitySettings/IdentityServiceConfiguration.cs
-index 4104301..fb61964 100644
+index 4104301..40f5f0a 100644
 --- a/EPC.SSO/IdentitySettings/IdentityServiceConfiguration.cs
 +++ b/EPC.SSO/IdentitySettings/IdentityServiceConfiguration.cs
-@@ -79,7 +79,8 @@ public class IdentityServiceConfiguration(UserManagementCommandContext context)
-                 PostLogoutRedirectUris = { system.Url },
+@@ -75,11 +75,14 @@ public class IdentityServiceConfiguration(UserManagementCommandContext context)
+                 ClientId = system.ClientId,
+                 ClientName = system.Title,
+                 AllowedGrantTypes = GrantTypes.Code,  // ← برگشت به Code
+-                RedirectUris = { $"{system.Url}/#/challenge" },
+-                PostLogoutRedirectUris = { system.Url },
++                // هر دو شکل بازگشت پذیرفته می‌شود: /#/challenge (قدیمی) و /challenge (نسخه‌ی عملیاتی برنامه‌ها)؛
++                // تطبیق IdentityServer دقیق است و با یک شکل، ورود یا خروج برنامه‌ی دیگر شکست می‌خورد.
++                RedirectUris = { $"{SystemUrl(system.Url)}/#/challenge", $"{SystemUrl(system.Url)}/challenge" },
++                PostLogoutRedirectUris = { SystemUrl(system.Url), $"{SystemUrl(system.Url)}/" },
                  RequireClientSecret = false,
                  IdentityTokenLifetime = tokenExpiryTime,
 -                AuthorizationCodeLifetime = tokenExpiryTime,
@@ -383,6 +391,14 @@ index 4104301..fb61964 100644
                  AccessTokenLifetime = tokenExpiryTime,
                  AllowedCorsOrigins = allowedOrigins,
                  AllowOfflineAccess = false,
+@@ -135,5 +138,6 @@ public class IdentityServiceConfiguration(UserManagementCommandContext context)
+             new IdentityResources.Email()
+         };
+     }
+-}
+ 
++    private static string SystemUrl(string? url) => (url ?? string.Empty).Trim().TrimEnd('/');
++}
 diff --git a/EPC.SSO/Infrastructure/AppCache.cs b/EPC.SSO/Infrastructure/AppCache.cs
 index b857f70..dcc3049 100644
 --- a/EPC.SSO/Infrastructure/AppCache.cs
@@ -2967,7 +2983,7 @@ index fb94d73..3b1b491 100644
 +    public Guid PositionGuid { get; set; }
 +}
 diff --git a/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs b/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs
-index 25463b5..afe9824 100644
+index 25463b5..84c2526 100644
 --- a/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs
 +++ b/EPC.SSO/Quickstart/PhoneDirectory/PhoneDirectoryController.cs
 @@ -1,7 +1,9 @@
@@ -2980,9 +2996,33 @@ index 25463b5..afe9824 100644
  using Microsoft.Extensions.Caching.Memory;
  
  namespace EPC.SSO.Quickstart.PhoneDirectory;
-@@ -28,18 +30,21 @@ public class PhoneDirectoryController(
+@@ -21,25 +23,43 @@ public class PhoneDirectoryController(
+     private readonly IDataProtector _photoProtector =
+         dataProtectionProvider.CreateProtector(PhotoPurpose);
+ 
++    /// <summary>
++    /// صفحه‌ی اول نتایج همراه خود صفحه ارسال می‌شود (بدون درخواست دوم و بدون اسکلت بارگذاری).
++    /// داده از کش حافظه‌ی SSO است؛ اگر کش هنوز خالی باشد حداکثر ۱٫۵ ثانیه صبر می‌شود و بعد صفحه
++    /// بدون نتایج ارسال می‌شود تا مرورگر خودش بگیرد (صفحه هرگز منتظر API کند نمی‌ماند).
++    /// </summary>
+     [HttpGet]
+-    public IActionResult Index()
++    public async Task<IActionResult> Index()
+     {
+-        return View();
++        PhoneDirectoryPaginatedResult? first = null;
++        var load = directoryService.SearchPaginatedAsync(string.Empty, null, 1, InitialPageSize, HttpContext.RequestAborted);
++        if (await Task.WhenAny(load, Task.Delay(1500, HttpContext.RequestAborted)) == load)
++        {
++            var result = await load;
++            if (!result.HasError) first = result;
++        }
++        return View(first);
      }
  
++    /// <summary>هم‌اندازه با PAGE_SIZE در اسکریپت صفحه</summary>
++    public const int InitialPageSize = 12;
++
      [HttpPost]
 +    [EnableRateLimiting(RateLimitPolicies.PublicDirectory)]
      public async Task<IActionResult> Search(
@@ -3003,7 +3043,7 @@ index 25463b5..afe9824 100644
      public async Task<IActionResult> SearchPaginated(
          [FromForm] string? search,
          [FromForm] int? type,
-@@ -53,7 +58,8 @@ public class PhoneDirectoryController(
+@@ -53,7 +73,8 @@ public class PhoneDirectoryController(
              search?.Trim() ?? string.Empty,
              type,
              page,
@@ -3013,7 +3053,7 @@ index 25463b5..afe9824 100644
  
          // ارتباط با API برقرار نشده: به‌جای «نتیجه‌ی خالی»، خطا برمی‌گردانیم
          // تا مرورگر خودکار چند بار دوباره تلاش کند.
-@@ -69,6 +75,7 @@ public class PhoneDirectoryController(
+@@ -69,6 +90,7 @@ public class PhoneDirectoryController(
      /// و باز کردن مستقیم آدرس در تب جدید جواب نمی‌دهد.
      /// </summary>
      [HttpGet]
@@ -3021,7 +3061,7 @@ index 25463b5..afe9824 100644
      [ResponseCache(Duration = 3600, Location = ResponseCacheLocation.Client)]
      public async Task<IActionResult> Photo(string? t, CancellationToken ct)
      {
-@@ -98,8 +105,9 @@ public class PhoneDirectoryController(
+@@ -98,8 +120,9 @@ public class PhoneDirectoryController(
              var cacheEntryOptions = new MemoryCacheEntryOptions
              {
                  AbsoluteExpirationRelativeToNow = bytes is null ? TimeSpan.FromMinutes(5) : TimeSpan.FromHours(1),
@@ -3033,7 +3073,7 @@ index 25463b5..afe9824 100644
              };
              cache.Set(cacheKey, bytes, cacheEntryOptions);
          }
-@@ -111,6 +119,23 @@ public class PhoneDirectoryController(
+@@ -111,6 +134,23 @@ public class PhoneDirectoryController(
          return File(bytes, "image/jpeg");
      }
  
@@ -3057,7 +3097,7 @@ index 25463b5..afe9824 100644
      private async Task<byte[]?> FetchPhotoAsync(string userName, CancellationToken ct)
      {
          var baseUrl = configuration["PhoneDirectory:ImageBaseUrl"]
-@@ -123,7 +148,7 @@ public class PhoneDirectoryController(
+@@ -123,7 +163,7 @@ public class PhoneDirectoryController(
              return null;
  
          // عکس کوچک (۹۶ پیکسل): برای نمایش کافی است و برای ذخیره کم‌ارزش
@@ -3066,7 +3106,7 @@ index 25463b5..afe9824 100644
  
          try
          {
-@@ -136,8 +161,9 @@ public class PhoneDirectoryController(
+@@ -136,8 +176,9 @@ public class PhoneDirectoryController(
  
              return await response.Content.ReadAsByteArrayAsync(ct);
          }
@@ -3619,7 +3659,7 @@ index e296923..a0e9369 100644
      public async Task<string> GetSystemUrlAsync(int systemId)
      {
 diff --git a/EPC.SSO/Services/ExternalApiWarmupService.cs b/EPC.SSO/Services/ExternalApiWarmupService.cs
-index 74fe3f5..a7f2caa 100644
+index 74fe3f5..b0ca22b 100644
 --- a/EPC.SSO/Services/ExternalApiWarmupService.cs
 +++ b/EPC.SSO/Services/ExternalApiWarmupService.cs
 @@ -14,6 +14,7 @@ namespace EPC.SSO.Services;
@@ -3640,7 +3680,7 @@ index 74fe3f5..a7f2caa 100644
          }
          catch (OperationCanceledException) when (ct.IsCancellationRequested)
          {
-@@ -56,6 +58,24 @@ public sealed class ExternalApiWarmupService(
+@@ -56,6 +58,26 @@ public sealed class ExternalApiWarmupService(
          }
      }
  
@@ -3654,7 +3694,9 @@ index 74fe3f5..a7f2caa 100644
 +        {
 +            await using var scope = scopeFactory.CreateAsyncScope();
 +            var data = scope.ServiceProvider.GetRequiredService<DashboardDataService>();
-+            await Task.WhenAll(data.GetSuggestionsAsync(), data.GetOtherProgramsAsync());
++            // دفترچه‌ی تلفن هم پیش از اولین کاربر و هر ۳ دقیقه تازه می‌شود (جستجو همیشه از حافظه)
++            var phoneDirectory = scope.ServiceProvider.GetRequiredService<PhoneDirectoryApiService>();
++            await Task.WhenAll(data.GetSuggestionsAsync(), data.GetOtherProgramsAsync(), phoneDirectory.GetAllAsync());
 +        }
 +        catch (Exception ex)
 +        {
@@ -4081,10 +4123,18 @@ index 8b531f6..b34572e 100644
  
      /// آماده‌سازی اجرا: نوع را از DB تشخیص می‌دهد (نه از کلاینت)، برای SSO بلیط می‌سازد و ذخیره می‌کند.
 diff --git a/EPC.SSO/Services/PhoneDirectoryApiService.cs b/EPC.SSO/Services/PhoneDirectoryApiService.cs
-index 5daffd0..0bda796 100644
+index 5daffd0..7dd5feb 100644
 --- a/EPC.SSO/Services/PhoneDirectoryApiService.cs
 +++ b/EPC.SSO/Services/PhoneDirectoryApiService.cs
-@@ -29,7 +29,9 @@ public class PhoneDirectoryApiService(
+@@ -3,6 +3,7 @@
+ public class PhoneDirectoryApiService(
+     ExternalApiClientService externalApiClientService,
+     IConfiguration configuration,
++    EPC.SSO.Infrastructure.IAppCache cache,
+     ILogger<PhoneDirectoryApiService> logger)
+ {
+     private const string ApiName = "PhoneDirectoryApi";
+@@ -29,7 +30,9 @@ public class PhoneDirectoryApiService(
      /// فراخوانی API با تلاش مجدد. Ok=false یعنی واقعاً ارتباط/پاسخ ناموفق بوده
      /// (نه اینکه نتیجه‌ی جستجو خالی باشد).
      /// </summary>
@@ -4095,7 +4145,7 @@ index 5daffd0..0bda796 100644
          where TData : class
      {
          var apiConfig = GetApiConfig();
-@@ -38,26 +40,32 @@ public class PhoneDirectoryApiService(
+@@ -38,41 +41,79 @@ public class PhoneDirectoryApiService(
          {
              var result = await externalApiClientService.PostAsync<
                  object,
@@ -4123,16 +4173,53 @@ index 5daffd0..0bda796 100644
      }
  
 -    public async Task<List<PhoneDirectoryPublicModel>> SearchAsync(string searchTerm, int? type = null)
-+    public async Task<List<PhoneDirectoryPublicModel>> SearchAsync(string searchTerm, int? type = null, CancellationToken cancellationToken = default)
++    // ════════════════════════════════════════════════════════════════════
++    //  کش کامل دفترچه + جستجو در حافظه
++    // ════════════════════════════════════════════════════════════════════
++    // قبلاً هر جستجو/ورق‌زدن/هر حرف تایپ‌شده یک درخواست به API دفترچه می‌زد و آن API هم هر بار کل جدول را
++    // می‌خواند و برای «همه‌ی» سمت‌ها از UserManagement نام متصدی می‌گرفت (چند ثانیه برای هر جستجو).
++    // حالا کل دفترچه (چند هزار ردیف، چند صد کیلوبایت) در SSO نگه داشته می‌شود:
++    //  • ۳ دقیقه تازه؛ پس از آن نسخه‌ی قبلی فوراً برگردانده و در پس‌زمینه تازه می‌شود (تا ۲۴ ساعت پشتیبان)
++    //  • در شروع برنامه و هر ۳ دقیقه گرم می‌شود (ExternalApiWarmupService) ← هیچ کاربری منتظر API نمی‌ماند
++    //  • جستجو و صفحه‌بندی در حافظه با یکسان‌سازی حروف فارسی/عربی و ارقام (چند میلی‌ثانیه)
++
++    private const string CacheKey = "phone-directory:all:v2";
++    private static readonly TimeSpan FreshFor = TimeSpan.FromMinutes(3);
++    private static readonly TimeSpan StaleFor = TimeSpan.FromHours(24);
++
++    /// <summary>کل دفترچه‌ی فعال (همراه متن جستجوی یکسان‌سازی‌شده)؛ null = در دسترس نیست و نسخه‌ی قبلی هم نداریم</summary>
++    public Task<IndexedDirectory?> GetAllAsync(CancellationToken cancellationToken = default) =>
++        cache.GetOrCreateAsync(CacheKey, LoadAllAsync, FreshFor, StaleFor, cancellationToken);
++
++    private async Task<IndexedDirectory?> LoadAllAsync(CancellationToken ct)
      {
          var (ok, data) = await PostWithRetryAsync<List<PhoneDirectoryPublicModel>>(
-             "/api/PhoneDirectory/Search",
+-            "/api/PhoneDirectory/Search",
 -            new { Search = searchTerm, Type = type });
-+            new { Search = searchTerm, Type = type }, cancellationToken);
++            "/api/PhoneDirectory/Search", new { Search = string.Empty, Type = (int?)null }, ct);
++        if (!ok || data is null) return null;
++
++        var items = data
++            .Select(x => new IndexedEntry(x, Normalize(string.Join(' ',
++                x.DisplayTitle, x.SubTitle, x.Unit, x.UserName, x.TypeLabel, string.Join(' ', x.Numbers ?? []),
++                // شماره‌ها بدون خط تیره/فاصله هم قابل جستجو باشند (۰۲۱۱۲۳۴ ↔ ۰۲۱-۱۲۳۴)
++                string.Join(' ', (x.Numbers ?? []).Select(n => new string(Normalize(n).Where(char.IsAsciiDigit).ToArray())))))))
++            // ترتیب ثابت و قابل‌پیش‌بینی: سمت‌ها سپس مکان‌ها، هر کدام بر اساس نام
++            .OrderBy(x => x.Model.Type)
++            .ThenBy(x => x.Model.Type == 1 ? x.Model.SubTitle ?? x.Model.DisplayTitle : x.Model.DisplayTitle, StringComparer.Create(FaCulture, true))
++            .ToList();
++        logger.LogInformation("[{ApiName}] دفترچه‌ی تلفن بارگذاری شد: {Count} مورد", ApiName, items.Count);
++        return new IndexedDirectory(items);
++    }
  
-         return ok ? data ?? [] : [];
+-        return ok ? data ?? [] : [];
++    public async Task<List<PhoneDirectoryPublicModel>> SearchAsync(string searchTerm, int? type = null, CancellationToken cancellationToken = default)
++    {
++        var all = await GetAllAsync(cancellationToken);
++        return all is null ? [] : Filter(all, searchTerm, type).Select(x => x.Model).ToList();
      }
-@@ -66,11 +74,12 @@ public class PhoneDirectoryApiService(
+ 
+     public async Task<PhoneDirectoryPaginatedResult> SearchPaginatedAsync(
          string searchTerm,
          int? type,
          int page,
@@ -4140,13 +4227,84 @@ index 5daffd0..0bda796 100644
 +        int pageSize,
 +        CancellationToken cancellationToken = default)
      {
-         var (ok, data) = await PostWithRetryAsync<PhoneDirectoryPaginatedResult>(
-             "/api/PhoneDirectory/SearchPaginated",
+-        var (ok, data) = await PostWithRetryAsync<PhoneDirectoryPaginatedResult>(
+-            "/api/PhoneDirectory/SearchPaginated",
 -            new { Search = searchTerm, Type = type, Page = page, PageSize = pageSize });
-+            new { Search = searchTerm, Type = type, Page = page, PageSize = pageSize }, cancellationToken);
- 
-         if (!ok)
+-
+-        if (!ok)
++        var all = await GetAllAsync(cancellationToken);
++        if (all is null)
          {
+             return new PhoneDirectoryPaginatedResult
+             {
+@@ -84,11 +125,63 @@ public class PhoneDirectoryApiService(
+             };
+         }
+ 
+-        var result = data ?? new PhoneDirectoryPaginatedResult();
+-        if (result.Page <= 0) result.Page = page;
+-        if (result.PageSize <= 0) result.PageSize = pageSize;
+-        return result;
++        var matches = Filter(all, searchTerm, type);
++        var totalPages = Math.Max(1, (int)Math.Ceiling(matches.Count / (double)pageSize));
++        page = Math.Clamp(page, 1, totalPages);
++
++        return new PhoneDirectoryPaginatedResult
++        {
++            Items = matches.Skip((page - 1) * pageSize).Take(pageSize).Select(x => x.Model).ToList(),
++            Total = matches.Count,
++            Page = page,
++            PageSize = pageSize,
++        };
++    }
++
++    /// <summary>همه‌ی کلمات جستجو باید پیدا شوند (به هر ترتیب)؛ «علی رضایی ۲۱۴» هم پیدا می‌شود</summary>
++    private static List<IndexedEntry> Filter(IndexedDirectory all, string? searchTerm, int? type)
++    {
++        var terms = Normalize(searchTerm ?? string.Empty)
++            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
++        IEnumerable<IndexedEntry> q = all.Items;
++        if (type is 1 or 2) q = q.Where(x => x.Model.Type == type);
++        if (terms.Length > 0) q = q.Where(x => terms.All(t => x.Haystack.Contains(t, StringComparison.Ordinal)));
++        return q.ToList();
+     }
++
++    private static readonly System.Globalization.CultureInfo FaCulture = new("fa-IR");
++
++    /// <summary>یکسان‌سازی: ي/ی، ك/ک، ة/ه، أإآ/ا، ارقام فارسی/عربی به لاتین، حذف نیم‌فاصله و اعراب، حروف کوچک</summary>
++    public static string Normalize(string? text)
++    {
++        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
++        var sb = new System.Text.StringBuilder(text.Length);
++        foreach (var ch in text)
++        {
++            var c = ch switch
++            {
++                'ي' or 'ى' => 'ی',
++                'ك' => 'ک',
++                'ة' => 'ه',
++                'أ' or 'إ' or 'آ' or 'ٱ' => 'ا',
++                'ؤ' => 'و',
++                '\u200c' or '\u200f' or '\u200e' or '-' or '_' or '/' => ' ',
++                >= '۰' and <= '۹' => (char)('0' + (ch - '۰')),
++                >= '٠' and <= '٩' => (char)('0' + (ch - '٠')),
++                _ => char.ToLowerInvariant(ch)
++            };
++            if (c is >= '\u064B' and <= '\u065F') continue; // اعراب
++            sb.Append(c);
++        }
++        return System.Text.RegularExpressions.Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
++    }
++}
++
++public sealed record IndexedEntry(PhoneDirectoryPublicModel Model, string Haystack);
++
++public sealed class IndexedDirectory(List<IndexedEntry> items)
++{
++    public IReadOnlyList<IndexedEntry> Items { get; } = items;
+ }
+ 
+ // === کلاس‌های مدل مورد نیاز ===
 diff --git a/EPC.SSO/Services/SuggestionService.cs b/EPC.SSO/Services/SuggestionService.cs
 index 278945c..eee74ad 100644
 --- a/EPC.SSO/Services/SuggestionService.cs
@@ -4874,6 +5032,94 @@ index 903565d..a23df30 100644
              })();
      </script>
  </body>
+diff --git a/EPC.SSO/Views/PhoneDirectory/Index.cshtml b/EPC.SSO/Views/PhoneDirectory/Index.cshtml
+index 1346d5d..e1db219 100644
+--- a/EPC.SSO/Views/PhoneDirectory/Index.cshtml
++++ b/EPC.SSO/Views/PhoneDirectory/Index.cshtml
+@@ -1,4 +1,6 @@
+-﻿@{
++﻿@using EPC.SSO.Services
++@model PhoneDirectoryPaginatedResult?
++@{
+     Layout = "_Layout";
+     ViewData["Title"] = "دفترچه تلفن عمومی";
+ }
+@@ -80,6 +82,11 @@
+ 
+         <!-- نتایج -->
+         <main class="pd-results" id="resultsContainer" aria-live="polite"></main>
++        @if (Model is not null)
++        {
++            @* صفحه‌ی اول آماده (از کش SSO) — اسکریپت بدون درخواست دوم نمایشش می‌دهد *@
++            <template id="pdInitial"><partial name="_DirectoryResults" model="Model" /></template>
++        }
+ 
+         <!-- صفحه‌بندی -->
+         <nav class="pd-pager-host" id="paginationContainer" aria-label="صفحه‌بندی"></nav>
+@@ -264,19 +271,7 @@
+                 fd.set('pageSize', String(PAGE_SIZE));
+ 
+                 try {
+-                    const doc = await fetchResults(fd, signal);
+-
+-                    results.innerHTML = doc.querySelector('#results-partial').innerHTML;
+-                    pager.innerHTML = doc.querySelector('#pagination-partial')?.innerHTML ?? '';
+-
+-                    const total = doc.querySelector('#total-count-value')?.dataset.total;
+-                    totalEl.textContent = fa(total ?? 0);
+-
+-                    // اگر سرور شماره‌ی صفحه را اصلاح کرده باشد
+-                    const activePage = pager.querySelector('[aria-current="page"]')?.dataset.page;
+-                    if (activePage) page = Number(activePage);
+-
+-                    hydratePhotos();
++                    applyResults(await fetchResults(fd, signal));
+                 } catch (err) {
+                     if (err?.name === 'AbortError') return;
+                     console.error('PhoneDirectory:', err);
+@@ -285,6 +280,17 @@
+                 }
+             }
+ 
++            function applyResults(doc) {
++                results.innerHTML = doc.querySelector('#results-partial').innerHTML;
++                pager.innerHTML = doc.querySelector('#pagination-partial')?.innerHTML ?? '';
++                const total = doc.querySelector('#total-count-value')?.dataset.total;
++                totalEl.textContent = fa(total ?? 0);
++                // اگر سرور شماره‌ی صفحه را اصلاح کرده باشد
++                const activePage = pager.querySelector('[aria-current="page"]')?.dataset.page;
++                if (activePage) page = Number(activePage);
++                hydratePhotos();
++            }
++
+             // ─────────────── عکس‌ها ───────────────
+             // عکس داخل <img> نمی‌آید: با fetch گرفته و روی canvas کشیده می‌شود
+             // تا آدرس مستقیمی در صفحه نماند و «ذخیره‌ی تصویر» در دسترس نباشد.
+@@ -352,7 +358,7 @@
+             function scheduleSearch() {
+                 page = 1;
+                 clearTimeout(timer);
+-                timer = setTimeout(load, 300);
++                timer = setTimeout(load, 180);
+             }
+ 
+             form.addEventListener('submit', e => {
+@@ -445,7 +451,14 @@
+                 }
+             });
+ 
+-            load();
++            // صفحه‌ی اول همراه صفحه آمده است؛ فقط اگر نیامده (کش سرد) درخواست زده می‌شود
++            const initial = document.getElementById('pdInitial');
++            if (initial && initial.content.querySelector('#results-partial')) {
++                applyResults(initial.content);
++                initial.remove();
++            } else {
++                load();
++            }
+         }
+ 
+         if (document.readyState === 'loading') {
 diff --git a/EPC.SSO/Views/Shared/_Layout.cshtml b/EPC.SSO/Views/Shared/_Layout.cshtml
 index 5e3cffa..cfa9793 100644
 --- a/EPC.SSO/Views/Shared/_Layout.cshtml

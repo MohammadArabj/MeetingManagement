@@ -75,8 +75,10 @@ public class IdentityServiceConfiguration(UserManagementCommandContext context)
                 ClientId = system.ClientId,
                 ClientName = system.Title,
                 AllowedGrantTypes = GrantTypes.Code,  // ← برگشت به Code
-                RedirectUris = { $"{system.Url}/#/challenge" },
-                PostLogoutRedirectUris = { system.Url },
+                // هر دو شکل بازگشت پذیرفته می‌شود: /#/challenge (قدیمی) و /challenge (نسخه‌ی عملیاتی برنامه‌ها)؛
+                // تطبیق IdentityServer دقیق است و با یک شکل، ورود یا خروج برنامه‌ی دیگر شکست می‌خورد.
+                RedirectUris = { $"{SystemUrl(system.Url)}/#/challenge", $"{SystemUrl(system.Url)}/challenge" },
+                PostLogoutRedirectUris = { SystemUrl(system.Url), $"{SystemUrl(system.Url)}/" },
                 RequireClientSecret = false,
                 IdentityTokenLifetime = tokenExpiryTime,
                 // کد یک‌بارمصرف فقط برای چند ثانیه‌ی بین Redirect و Token لازم است (قبلاً هم‌اندازه‌ی توکن: ۸ ساعت)
@@ -136,5 +138,6 @@ public class IdentityServiceConfiguration(UserManagementCommandContext context)
             new IdentityResources.Email()
         };
     }
-}
 
+    private static string SystemUrl(string? url) => (url ?? string.Empty).Trim().TrimEnd('/');
+}

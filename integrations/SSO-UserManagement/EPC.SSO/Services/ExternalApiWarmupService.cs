@@ -68,7 +68,9 @@ public sealed class ExternalApiWarmupService(
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var data = scope.ServiceProvider.GetRequiredService<DashboardDataService>();
-            await Task.WhenAll(data.GetSuggestionsAsync(), data.GetOtherProgramsAsync());
+            // دفترچه‌ی تلفن هم پیش از اولین کاربر و هر ۳ دقیقه تازه می‌شود (جستجو همیشه از حافظه)
+            var phoneDirectory = scope.ServiceProvider.GetRequiredService<PhoneDirectoryApiService>();
+            await Task.WhenAll(data.GetSuggestionsAsync(), data.GetOtherProgramsAsync(), phoneDirectory.GetAllAsync());
         }
         catch (Exception ex)
         {

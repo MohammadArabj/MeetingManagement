@@ -7,11 +7,17 @@ using PhoneDirectoryManagement.Application.Contracts.PhoneDirectory;
 using PhoneDirectoryManagement.Common;
 using PhoneDirectoryManagement.Infrastructure.Query.Contracts.PhoneDirectory;
 using PhoneDirectoryManagement.Presentation.Facade.Contracts.PhoneDirectory;
+using PhoneDirectoryManagement.Infrastructure.Query;
 
 namespace PhoneDirectoryManagement.Presentation.Api.Controllers;
 
+/// <summary>
+/// ✅ قبلاً هیچ [Authorize]ی نبود (و FallbackPolicy هم تعریف نشده بود)؛ ایجاد/ویرایش/حذف بدون ورود ممکن بود.
+/// حالا همه‌ی عملیات نیاز به توکن دارند؛ فقط Search و SearchPaginated (دفترچه‌ی عمومی) آزادند.
+/// </summary>
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class PhoneDirectoryController(
     IPhoneDirectoryQueryFacade queryFacade,
     IPhoneDirectoryCommandFacade commandFacade) : ControllerBase
@@ -46,18 +52,22 @@ public class PhoneDirectoryController(
         if (!result.IsSuccess)
             return Result<object>.Failure(null, result.Message);
 
+        // قبلاً Page/PageSize صفر یا منفی خطا یا نتیجه‌ی نادرست می‌داد
+        var pageSize = Math.Clamp(condition.PageSize <= 0 ? 12 : condition.PageSize, 1, 200);
         var total = result.Data.Count;
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Clamp(condition.Page <= 0 ? 1 : condition.Page, 1, totalPages);
         var items = result.Data
-            .Skip((condition.Page - 1) * condition.PageSize)
-            .Take(condition.PageSize)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToList();
 
         return Result<object>.Success(new
         {
             items,
             total,
-            condition.Page,
-            condition.PageSize
+            Page = page,
+            PageSize = pageSize
         });
     }
     /// <summary>
@@ -73,23 +83,23 @@ public class PhoneDirectoryController(
     // ── Command ───────────────────────────────────────────────────────────
     [HttpPost("Create")]
     public async Task<Result<Guid>> Create([FromBody] CreatePhoneDirectoryEntryDto command) =>
-        await commandFacade.Create(command);
+        Changed(await commandFacade.Create(command));
 
     [HttpPost("Edit")]
     public async Task<Result<bool>> Edit([FromBody] EditPhoneDirectoryEntryDto command) =>
-        await commandFacade.Edit(command);
+        Changed(await commandFacade.Edit(command));
 
     [HttpPost("Delete/{guid:guid}")]
     public async Task<Result<bool>> Delete(Guid guid) =>
-        await commandFacade.Delete(guid);
+        Changed(await commandFacade.Delete(guid));
 
     [HttpPost("Activate/{guid:guid}")]
     public async Task<Result<bool>> Activate(Guid guid) =>
-        await commandFacade.Activate(guid);
+        Changed(await commandFacade.Activate(guid));
 
     [HttpPost("Deactivate/{guid:guid}")]
     public async Task<Result<bool>> Deactivate(Guid guid) =>
-        await commandFacade.Deactivate(guid);
+        Changed(await commandFacade.Deactivate(guid));
     [HttpPost("CheckDuplicatePosition")]
     public async Task<Result<bool>> CheckDuplicatePosition(
     [FromBody] CheckDuplicatePositionDto dto)
@@ -100,4 +110,10 @@ public class PhoneDirectoryController(
         [FromBody] CheckDuplicateLocationDto dto) =>
         await queryFacade.CheckDuplicateLocation(dto);
 
+    /// <summary>پس از تغییر موفق، نسخه‌ی آماده‌ی دفترچه باطل می‌شود تا تغییر فوراً در جستجوها دیده شود</summary>
+    private static Result<T> Changed<T>(Result<T> result)
+    {
+        if (result.IsSuccess) PhoneDirectorySnapshot.Invalidate();
+        return result;
+    }
 }

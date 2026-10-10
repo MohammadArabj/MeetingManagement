@@ -50,7 +50,10 @@ export class SessionBootstrapService {
       try {
         const current = await firstValueFrom(this.userService.getCurrentSession());
         if (!current?.sessionGuid) {
-          await this.auth.logout();
+          // توکن ذخیره‌شده متعلق به نشست بسته‌شده‌ی قبلی است → ورود بی‌صدا با نشست فعلی SSO؛
+          // فقط اگر ورود تازه هم نشست نداشت، خروج کامل
+          if (freshLogin) await this.auth.logout();
+          else await this.auth.relogin();
           return;
         }
         this.session.setSessionGuid(current.sessionGuid);
