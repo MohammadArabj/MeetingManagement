@@ -1,20 +1,20 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { PasswordFlowService } from '../../services/framework-services/password-flow.service';
+import { SessionStore } from '../auth/session.store';
 import { ToastService } from '../../services/framework-services/toast.service';
 
-/** مدیر سامانه (SV_Admin) به همه‌ی بخش‌ها دسترسی دارد. */
-export const SURVEY_ADMIN = 'SV_Admin';
-
 /**
- * گارد دسترسی بر اساس دسترسی‌های سمت فعال (حداقل یکی از موارد کافی است).
- * فقط برای تجربه‌ی کاربری است؛ تصمیم نهایی دسترسی همیشه سمت سرور گرفته می‌شود.
+ * محدودسازی مسیر به دارندگان حداقل یکی از دسترسی‌ها.
+ * ✅ قبلاً صفحات تنظیمات فقط در منو مخفی بودند و با تایپ آدرس قابل دسترس بودند.
+ *
+ * استفاده:  canActivate: [permissionGuard('MT_Settings')]
  */
 export function permissionGuard(...permissions: string[]): CanActivateFn {
-  return async () => {
-    const auth = inject(PasswordFlowService);
-    if (await auth.checkPermission([SURVEY_ADMIN, ...permissions])) return true;
-    inject(ToastService).error('شما مجوز دسترسی به این بخش را ندارید.', 'عدم دسترسی');
+  return () => {
+    const session = inject(SessionStore);
+    if (session.hasAnyPermission(permissions)) return true;
+
+    inject(ToastService).error('شما به این بخش دسترسی ندارید.');
     return inject(Router).createUrlTree(['/dashboard']);
   };
 }

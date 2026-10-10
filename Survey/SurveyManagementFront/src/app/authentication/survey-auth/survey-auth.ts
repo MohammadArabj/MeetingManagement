@@ -1,8 +1,7 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { CodeFlowService } from '../../services/framework-services/code-flow.service';
-import { safeReturnUrl } from '../../services/framework-services/auth-utils';
+import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
   selector: 'app-survey-auth',
@@ -43,38 +42,29 @@ import { safeReturnUrl } from '../../services/framework-services/auth-utils';
 export class SurveyAuthComponent implements OnInit {
   hasError = false;
 
-  constructor(
-    private readonly route: ActivatedRoute,
-    private readonly router: Router,
-    private readonly codeFlowService: CodeFlowService,
-  ) { }
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
 
   async ngOnInit(): Promise<void> {
     const params = this.route.snapshot.queryParams;
     const surveyUser = params['u'] as string | undefined;
     const surveyKey = params['k'] as string | undefined;
     const surveyGuid = params['guid'] as string | undefined;
-    // ✅ guid فقط به‌صورت GUID معتبر پذیرفته می‌شود و «to» فقط مسیر داخلی امن (بدون open redirect)
-    const destination = surveyGuid && GUID.test(surveyGuid)
-      ? `/survey/take/${surveyGuid}`
-      : safeReturnUrl(params['to']);
+    // guid فقط به‌صورت GUID معتبر پذیرفته می‌شود و «to» فقط مسیر داخلی (بدون open redirect)
+    const to = typeof params['to'] === 'string' && params['to'].startsWith('/') && !params['to'].startsWith('//') ? params['to'] : '/dashboard';
+    const destination = surveyGuid && GUID.test(surveyGuid) ? `/survey/take/${surveyGuid}` : to;
 
+    if (this.auth.isAuthenticated()) {
+      await this.router.navigateByUrl(destination, { replaceUrl: true });
+      return;
+    }
     if (!surveyUser || !surveyKey) {
       this.hasError = true;
       return;
     }
-
-    sessionStorage.setItem('survey_return_url', destination);
-
     try {
-      if (!await this.codeFlowService.isLoggedIn()) {
-        await this.codeFlowService.startSurveyAuthentication(surveyUser, surveyKey);
-        return;
-      }
-      // کاربر از قبل وارد شده: پروفایل/سمت در getCurrentUser ذخیره شده است؛
-      // نشست و دسترسی‌ها را گارد مقصد (authGuard / surveyAuthGuard) بررسی می‌کند.
-      sessionStorage.removeItem('survey_return_url');
-      await this.router.navigateByUrl(destination, { replaceUrl: true });
+      await this.auth.login(destination, { survey_user: surveyUser, survey_key: surveyKey });
     } catch (err) {
       console.error('[SurveyAuth] authentication failed', err);
       this.hasError = true;

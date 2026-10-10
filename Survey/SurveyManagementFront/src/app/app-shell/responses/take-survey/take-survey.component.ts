@@ -4,7 +4,7 @@ import {
 import { ActivatedRoute, Router } from '@angular/router';
 import { NgTemplateOutlet } from '@angular/common';
 import { firstValueFrom, timeout } from 'rxjs';
-import { CodeFlowService } from '../../../services/framework-services/code-flow.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { TusUploadService } from '../../../services/framework-services/tus-upload.service';
 import { CompletionEffectComponent } from '../../../shared/completion-effect/completion-effect.component';
 import { QuestionFieldComponent } from './question-field.component';
@@ -43,7 +43,7 @@ const LOCAL_PREFIX = 'survey.local-draft.';
 })
 export class TakeSurveyComponent implements OnInit {
   private readonly api = inject(TakeSurveyApi);
-  private readonly auth = inject(CodeFlowService);
+  private readonly auth = inject(AuthService);
   private readonly tus = inject(TusUploadService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -178,7 +178,7 @@ export class TakeSurveyComponent implements OnInit {
   private async load(): Promise<void> {
     this.phase.set('loading');
     if (!/^[0-9a-f-]{36}$/i.test(this.surveyGuid)) return this.fail('نشانی نظرسنجی معتبر نیست.');
-    try { this.loggedIn.set(await this.auth.isLoggedIn()); } catch { this.loggedIn.set(false); }
+    this.loggedIn.set(this.auth.isAuthenticated());
 
     let survey: PublicSurvey;
     try {
@@ -233,8 +233,7 @@ export class TakeSurveyComponent implements OnInit {
   retry(): void { void this.load(); }
 
   login(): void {
-    sessionStorage.setItem('survey_return_url', `/survey/take/${this.surveyGuid}`);
-    void this.auth.startAuthentication();
+    void this.auth.login(`/survey/take/${this.surveyGuid}`);
   }
 
   // ───────────────────────── شروع / ادامه ─────────────────────────

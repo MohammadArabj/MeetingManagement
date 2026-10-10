@@ -653,8 +653,8 @@ public class SurveyQueryHandler(
         if (!((await access.GetAsync(survey.Id))?.CanManage ?? false))
             return Result<SurveyPublicLinkDto>.Failure(null, NoAccess);
 
-        // فرانت مسیر معمولی (بدون #) دارد؛ قبلاً لینک با /#/ به داشبورد می‌رسید
-        var publicUrl = $"{configuration["EndPoint"]?.TrimEnd('/')}/survey/take/{survey.Guid}";
+        // فرانت مانند مدیریت جلسات با مسیر hash کار می‌کند (لینک‌های قدیمی بدون # هم در فرانت تبدیل می‌شوند)
+        var publicUrl = $"{configuration["EndPoint"]?.TrimEnd('/')}/#/survey/take/{survey.Guid}";
         var qrCodeBase64 = GenerateQRCode(publicUrl);
 
         var result = new SurveyPublicLinkDto

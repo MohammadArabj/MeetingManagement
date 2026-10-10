@@ -1,37 +1,22 @@
-const ssoAuthenticationFlow: 'code' | 'password' = 'code'
-// let serviceEndpoint = "http://172.17.10.60:2100";
-// let userManagementEndpoint = "http://172.17.10.13:2000";
-// let identityEndpoint = "http://sso.epciran.ir";
-// let fileManagementEndpoint = "http://172.17.10.16:2000";
-// let selfEndpoint = "http://meeting.epciran.ir";
+// ═══════════════════════════════════════════════════════════════════════════
+//  محیط توسعه — ساختار دقیقاً مطابق سامانه مدیریت جلسات
+// ═══════════════════════════════════════════════════════════════════════════
+const ssoAuthenticationFlow: 'code' | 'password' = 'code';
 
+const serviceEndpoint = "https://localhost:2301";
+const userManagementEndpoint = "https://localhost:6001";
+const identityEndpoint = "https://localhost:7001";
+const fileManagementEndpoint = "https://localhost:4001";
+const selfEndpoint = "http://localhost:4200";
 
-let serviceEndpoint = "https://localhost:2301";
-let userManagementEndpoint = "https://localhost:6001";
-let identityEndpoint = "https://localhost:7001";
-let fileManagementEndpoint = "https://localhost:4001";
-let selfEndpoint = "http://localhost:4200";
-
-export function getServiceUrl() {
-    return `${serviceEndpoint}/api/`;
-}
-export function getFileManagementUrl() {
-    return `${fileManagementEndpoint}/api/`;
-}
-export function getUserManagementUrl() {
-    return `${userManagementEndpoint}/api/`;
-}
-
-export function getIdentityUrl() {
-    return `${identityEndpoint}/api/`;
-}
-
-export function getLoginUrl() {
-    return `${identityEndpoint}/connect/token`;
-}
+export function getServiceUrl() { return `${serviceEndpoint}/api/`; }
+export function getFileManagementUrl() { return `${fileManagementEndpoint}/api/`; }
+export function getUserManagementUrl() { return `${userManagementEndpoint}/api/`; }
+export function getIdentityUrl() { return `${identityEndpoint}/api/`; }
+export function getLoginUrl() { return `${identityEndpoint}/connect/token`; }
 
 export const environment = {
-    appVersion: '1.0.0',
+    appVersion: '2.0.0',
     production: false,
     identityEndpoint,
     selfEndpoint,
@@ -41,5 +26,18 @@ export const environment = {
     getFileManagementUrl,
     getUserManagementUrl,
     getIdentityUrl,
-    getLoginUrl
+    getLoginUrl,
+
+    /** تنظیمات OIDC (oidc-client-ts + PKCE). کلاینت در SSO public است؛ secret لازم نیست. */
+    auth: {
+        clientId: 'SurveyCode',
+        scope: 'openid profile UserManagementApi FileManagementApi SurveyApi',
+        /** باید دقیقاً با RedirectUris ثبت‌شده در SSO یکی باشد: {system.Url}/challenge */
+        redirectPath: '/challenge',
+        /** فاصله بررسی نشست SSO (میلی‌ثانیه) */
+        sessionCheckIntervalMs: 120_000,
+    },
+
+    /** سرویس‌هایی که توکن به آن‌ها ارسال می‌شود (هیچ‌وقت توکن به آدرس دیگری فرستاده نمی‌شود) */
+    apiEndpoints: [serviceEndpoint, userManagementEndpoint, identityEndpoint, fileManagementEndpoint],
 };

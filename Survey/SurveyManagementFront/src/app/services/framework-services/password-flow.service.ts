@@ -1,29 +1,49 @@
-import { Injectable } from '@angular/core';
-import { Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
-import { CodeFlowService } from './code-flow.service';
-import { LocalStorageService } from './local.storage.service';
-import { PERMISSIONS_NAME } from '../../core/types/configuration';
-import { normalizePermissions } from './auth-utils';
-/** Compatibility adapter. Password grant is intentionally disabled; use Code + PKCE. */
-@Injectable({ providedIn: 'root' })
+import { inject, Injectable } from '@angular/core';
+import { AuthService } from '../../core/auth/auth.service';
+import { SessionStore } from '../../core/auth/session.store';
+import { BreadcrumbService } from './breadcrumb.service';
+
+/**
+ * لایه سازگاری: ۱۶ کامپوننت از checkPermission این سرویس استفاده می‌کنند.
+ * ✅ حذف Password Flow (client_secret کلاینت PhoenixClient داخل باندل بود و استفاده‌ای نداشت).
+ * ✅ checkPermission دیگر هر بار رشته CSV را با PapaParse پارس نمی‌کند؛ از SessionStore می‌خواند.
+ * @deprecated برای دسترسی‌ها از SessionStore و برای خروج از AuthService استفاده کنید.
+ */
+@Injectable({
+  providedIn: 'root'
+})
 export class PasswordFlowService {
-    readonly isLoading$ = of(false);
-    constructor(private readonly auth: CodeFlowService, private readonly storage: LocalStorageService,
-        private readonly router: Router) { }
-    authenticate(_username: string, _password: string, _dbName: string) {
-        return throwError(() => new Error('Password grant حذف شده است؛ از CodeFlowService.startAuthentication استفاده کنید.'));
-    }
-    navigateToDashboard(showSessions = false) { return this.router.navigateByUrl(showSessions ? '/dashboard/sessions' : '/dashboard'); }
-    logout(): Promise<void> { return this.auth.logout(); }
-    isLoggedIn(): boolean { return !!this.auth.user && !this.auth.user.expired; }
-    getToken(): string | null { return this.auth.getToken(); }
-    async checkPermission(needed: string | string[]): Promise<boolean> {
-        const required = Array.isArray(needed) ? needed : [needed];
-        if (!required.length || !needed) return true;
-        const available = normalizePermissions(this.getPermissions());
-        return required.some(p => available.includes(p));
-    }
-    hasNoAnyPermissions(): boolean { return normalizePermissions(this.getPermissions()).length === 0; }
-    getPermissions(): string | null { return this.storage.getItem(PERMISSIONS_NAME); }
+  private readonly auth = inject(AuthService);
+  private readonly session = inject(SessionStore);
+  private readonly breadcrumbService = inject(BreadcrumbService);
+
+  logout(): void {
+    this.breadcrumbService.reset();
+    void this.auth.logout();
+  }
+
+  isLoggedIn(): boolean {
+    return this.auth.isAuthenticated();
+  }
+
+  getToken(): string {
+    return this.auth.accessToken() ?? '';
+  }
+
+  async checkPermission(neededPermission: string | string[]): Promise<boolean> {
+    return this.hasPermission(neededPermission);
+  }
+
+  hasPermission(neededPermission: string | string[]): boolean {
+    if (!this.session.hasPermissionsLoaded() && !this.session.isSuperAdmin()) return false;
+    return this.session.hasAnyPermission(neededPermission);
+  }
+
+  hasNoAnyPermissions(): boolean {
+    return !this.session.hasPermissionsLoaded();
+  }
+
+  getPermissions(): string {
+    return Array.from(this.session.permissions()).join(',');
+  }
 }

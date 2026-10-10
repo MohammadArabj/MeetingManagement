@@ -1,3 +1,4 @@
+import { IdentityService } from '../../core/auth/identity.service';
 import {
   AfterViewInit,
   Component,
@@ -55,6 +56,7 @@ export class UserList extends AgGridBaseComponent implements OnInit, AfterViewIn
   private readonly breadcrumbService = inject(BreadcrumbService);
   private readonly route = inject(ActivatedRoute);
   private readonly passwordFlowService = inject(PasswordFlowService);
+  private readonly identity = inject(IdentityService);
   private readonly codeFlowService = inject(CodeFlowService);
   private readonly permissionService = inject(PermissionService);
 
@@ -272,47 +274,17 @@ export class UserList extends AgGridBaseComponent implements OnInit, AfterViewIn
     }
   }
 
+  /** ورود به جای کاربر — مانند مدیریت جلسات از IdentityService (سرور هم مستقلاً SV_Impersonate را بررسی می‌کند) */
   async impersonateUser(userGuid: string, positionGuid: string): Promise<void> {
-    try {
-      // تأیید از ادمین
-      const result = await this.swalService.fireSwal('آیا از ورود به عنوان این کاربر اطمینان دارید؟');
-      if (result.value !== true) return;
-
-      // فرض بر این است که UserService متد impersonateUser دارد که اطلاعات لاگین را برمی‌گرداند
-      // اگر وجود ندارد، باید اضافه شود: مثلاً POST به /Impersonate/{userGuid}/{positionGuid}
-      // const impersonateResponse = await this.userService.impersonateUser(userGuid, positionGuid).toPromise();
-      const user = this.records().find(x => x.positionGuid == positionGuid && x.guid == userGuid) as any;
-      if (user) {
-        // ذخیره اطلاعات مانند ChallengeComponent
-        this.localStorageService.setItem(USER_ID_NAME, userGuid);
-        this.localStorageService.setItem(POSITION_ID, positionGuid);
-        this.localStorageService.setItem(POSITION_NAME, user.positionTitle || '');
-        this.localStorageService.setItem(Main_USER_ID, userGuid);
-        this.localStorageService.setItem(IsDeletage, 'false'); // یا بر اساس response
-
-        // گرفتن مجوزها (بدون delegation، زیرا برای ادمین impersonate است)
-        const session = await this.userService.getCurrentSession().toPromise();
-        // if (!session.sessionGuid) {
-        //   this.codeFlowService.logout();
-        //   return;
-        // }
-        this.localStorageService.setItem(USER_CURRENT_ACTIVE_SESSION_NAME, session.sessionGuid);
-
-        // گرفتن مجوزها برای position
-        // const permissions = await this.permissionService.getPositionPermissions(positionGuid).toPromise();
-        // this.localStorageService.removeItem(PERMISSIONS_NAME);
-        // this.localStorageService.setItem(PERMISSIONS_NAME, permissions);
-
-        // هدایت به داشبورد
-        this.router.navigateByUrl('/dashboard');
-        this.toastService.success('ورود به عنوان کاربر با موفقیت انجام شد');
-      } else {
-        this.toastService.error('خطا در ورود به عنوان کاربر');
-      }
-    } catch (error) {
-      console.error('Error in impersonateUser:', error);
-      this.toastService.error('خطا در فرآیند ورود');
-    }
+    const result = await this.swalService.fireSwal('آیا از ورود به عنوان این کاربر اطمینان دارید؟');
+    if (result.value !== true) return;
+    const user = this.records().find(x => x.positionGuid == positionGuid && x.guid == userGuid) as any;
+    if (!user) { this.toastService.error('کاربر یافت نشد.'); return; }
+    await this.identity.impersonate({
+      userGuid, positionGuid,
+      userName: user.fullname || user.fullName || user.userName || '',
+      positionName: user.positionTitle || '',
+    });
   }
 
   // Navigation methods

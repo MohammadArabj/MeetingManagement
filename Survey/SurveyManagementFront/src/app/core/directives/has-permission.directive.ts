@@ -1,34 +1,37 @@
-import { Directive, Input, TemplateRef, ViewContainerRef, inject } from '@angular/core';
-import { PasswordFlowService } from '../../services/framework-services/password-flow.service';
-import { SURVEY_ADMIN } from '../guards/permission.guard';
+import { Directive, effect, inject, input, TemplateRef, ViewContainerRef } from '@angular/core';
+import { SessionStore } from '../auth/session.store';
 
 /**
- * نمایش بخشی از قالب فقط در صورت داشتن دسترسی (یکی از موارد کافی است؛ SV_Admin همه را دارد).
- * ✅ قبلاً «viewContainer.clear» بدون پرانتز صدا زده می‌شد و با هر تغییر ورودی نمای تکراری ساخته می‌شد.
+ * نمایش شرطی بر اساس دسترسی:  *hasPermission="['MT_Settings','MT_UserRoles']"
+ * ✅ واکنشی: با تغییر سمت/تفویض (و بارگذاری دسترسی‌ها) خودکار به‌روز می‌شود.
+ * ✅ قبلاً هر نمونه، رشته‌ی دسترسی‌ها را با PapaParse پارس می‌کرد (صدها بار در هر صفحه).
  */
-@Directive({ selector: '[hasPermission]', standalone: true })
+@Directive({
+  selector: '[hasPermission]',
+  standalone: true,
+})
 export class HasPermissionDirective {
   private readonly templateRef = inject(TemplateRef<unknown>);
   private readonly viewContainer = inject(ViewContainerRef);
-  private readonly auth = inject(PasswordFlowService);
-  private shown = false;
-  private version = 0;
+  private readonly session = inject(SessionStore);
 
-  @Input()
-  set hasPermission(value: string | string[] | null | undefined) {
-    void this.updateView(value, ++this.version);
-  }
+  readonly hasPermission = input<string | string[] | null | undefined>(null);
 
-  private async updateView(value: string | string[] | null | undefined, version: number): Promise<void> {
-    const needed = Array.isArray(value) ? value : value ? [value] : [];
-    const allowed = !needed.length || await this.auth.checkPermission([SURVEY_ADMIN, ...needed]);
-    if (version !== this.version) return; // پاسخ قدیمی‌تر
-    if (allowed && !this.shown) {
-      this.viewContainer.createEmbeddedView(this.templateRef);
-      this.shown = true;
-    } else if (!allowed && this.shown) {
-      this.viewContainer.clear();
-      this.shown = false;
-    }
+  private rendered = false;
+
+  constructor() {
+    effect(() => {
+      const needed = this.hasPermission();
+      const allowed = (this.session.hasPermissionsLoaded() || this.session.isSuperAdmin())
+        && this.session.hasAnyPermission(needed);
+
+      if (allowed && !this.rendered) {
+        this.viewContainer.createEmbeddedView(this.templateRef);
+        this.rendered = true;
+      } else if (!allowed && this.rendered) {
+        this.viewContainer.clear();
+        this.rendered = false;
+      }
+    });
   }
 }

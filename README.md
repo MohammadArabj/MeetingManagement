@@ -622,6 +622,19 @@ APIهای جدید: `POST api/Assignment/ReturnReferral` و `POST api/Assignment
 # بخش سوم: سامانه نظرسنجی (`Survey/`)
 
 ## ۱. امنیت و زیرساخت
+- **ورود دقیقاً مطابق مدیریت جلسات:** این فایل‌ها از سامانه مدیریت جلسات منتقل شده‌اند:
+  - `environment.ts`/`environment.prod.ts` (بخش `auth` و `apiEndpoints`)
+  - `core/auth` شامل `AuthService`، `SessionStore`، `SessionBootstrap` و `IdentityService`
+  - گاردهای `auth`، `clientAccess`، `session` و `permission`
+  - `interceptor`های `validation`، `loading`، `auth` و `error`
+  - `challenge` و لایه‌های سازگاری `CodeFlowService` و `PasswordFlowService`
+
+  مسیرها hash هستند (`#/...`) و لینک‌های قدیمی بدون `#` خودکار تبدیل می‌شوند. تفاوت‌ها با مدیریت جلسات فقط این‌هاست:
+  - کلاینت `SurveyCode` و scope `SurveyApi`
+  - دسترسی‌های `SV_Admin` و `SV_Impersonate`
+  - ورود با کلید نظرسنجی (`survey-auth`)
+  - صفحه‌ی شرکت ناشناس در نظرسنجی عمومی
+  - در SSO، آدرس `{Url}/challenge` باید برای کلاینت `SurveyCode` ثبت شده باشد.
 - **سرور:** دسترسی هر نظرسنجی سمت سرور بررسی می‌شود. افراد مجاز: مالک، `SV_Admin`، و کسانی که دسترسی کاربر/سمت/واحد/نقش (با تاریخ انقضا) دارند؛ نظرسنجی عمومی هم برای همه باز است. سمت و کاربر عامل از هدرهای `X-Position-Guid` و `X-Acting-User` خوانده و با UserManagement راستی‌آزمایی می‌شوند. همه‌ی پاسخ‌ها سمت سرور و بر اساس تعریف سوال اعتبارسنجی می‌شوند، و ظرفیت به‌صورت اتمیک کنترل می‌شود.
 - **فرانت:**
   - توکن فقط به APIهای خودمان فرستاده می‌شود.

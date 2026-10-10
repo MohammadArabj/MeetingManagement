@@ -3,26 +3,21 @@ import { AppShellComponent } from './app-shell/app-shell.component';
 import { DashboardComponent } from './app-shell/dashboard/dashboard';
 import { ChallengeComponent } from './authentication/challenge/challange';
 import { ThankYouComponent } from './app-shell/thank-you/thank-you.component';
-import { UserList } from './app-shell/user/user';
-import { authGuard } from './core/guards/auth.guard.service';
 import { SurveyAuthComponent } from './authentication/survey-auth/survey-auth';
-import { surveyAuthGuard } from './core/guards/survey-auth.guard';
+import { authGuard } from './core/guards/auth.guard.service';
+import { clientAccessGuard } from './core/guards/client.access.guard.service';
+import { sessionGuard } from './core/guards/session.guard.service';
 import { permissionGuard } from './core/guards/permission.guard';
-import { AuthErrorComponent } from './authentication/challenge/auth-error.component';
-import { SilentRenewComponent } from './authentication/challenge/silent-renew.component';
+import { surveyTakeGuard } from './core/guards/survey-take.guard';
 
+/** مسیرها و گاردها دقیقاً مطابق سامانه مدیریت جلسات (hash routing) */
 export const routes: Routes = [
-    // ─── Shell داخلی (نیاز به لاگین کامل) ──────────────────────────────────
     {
         path: '',
         component: AppShellComponent,
-        canActivate: [authGuard],
-        // runGuardsAndResolvers: 'always' حذف شد.
-        // این گزینه باعث می‌شد sessionGuard/clientAccessGuard در هر navigation
-        // داخل شل (نه فقط ورود اولیه) دوباره اجرا بشن و دو درخواست HTTP اضافه
-        // به SSO بزنن — همین باعث می‌شد یک لگ لحظه‌ای در کش سمت SSO
-        // (که خودتون با IMemoryCache/ConcurrentDictionary پیاده‌سازی کردید)
-        // کاربر رو وسط کار هم بیرون بندازه، نه فقط لحظه‌ی لاگین.
+        // ✅ نتایج session/clientAccess کش می‌شوند؛ دیگر در هر جابجایی صفحه دو درخواست ارسال نمی‌شود
+        canActivate: [authGuard, clientAccessGuard],
+        canActivateChild: [sessionGuard],
         children: [
             { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
             { path: 'dashboard', component: DashboardComponent },
@@ -41,17 +36,20 @@ export const routes: Routes = [
                 loadChildren: () =>
                     import('./app-shell/questions/questions.routes').then(m => m.questionsRoutes)
             },
-            { path: 'user', component: UserList, canActivate: [permissionGuard('SV_AccessControl')] },
+            {
+                path: 'user',
+                canActivate: [permissionGuard('SV_AccessControl')],
+                loadComponent: () => import('./app-shell/user/user').then(m => m.UserList)
+            },
         ]
     },
 
-    {
-        path: 'survey-auth',
-        component: SurveyAuthComponent,
-    },
+    // ورود با کلید نظرسنجی (لینک‌های u/k)
+    { path: 'survey-auth', component: SurveyAuthComponent },
+    // شرکت در نظرسنجی: کاربر واردشده یا (برای نظرسنجی عمومی) ناشناس
     {
         path: 'survey/take/:surveyGuid',
-        canActivate: [surveyAuthGuard],
+        canActivate: [surveyTakeGuard],
         loadComponent: () =>
             import('./app-shell/responses/take-survey/take-survey.component')
                 .then(m => m.TakeSurveyComponent)
@@ -60,9 +58,6 @@ export const routes: Routes = [
         path: 'challenge',
         component: ChallengeComponent
     },
-    // ✅ قبلاً این دو مسیر وجود نداشت و خطای ورود به '**' → dashboard → authGuard → ورود... (حلقه) می‌رسید
-    { path: 'auth-error', component: AuthErrorComponent },
-    { path: 'silent-renew', component: SilentRenewComponent },
     {
         path: 'thankyou',
         component: ThankYouComponent
