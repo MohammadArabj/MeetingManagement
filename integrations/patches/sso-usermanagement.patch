@@ -4874,10 +4874,10 @@ index e7585bb..15f75d6 100644
  }
 \ No newline at end of file
 diff --git a/EPC.SSO/Views/Grants/Index.cshtml b/EPC.SSO/Views/Grants/Index.cshtml
-index 9a76af2..1f80d0d 100644
+index 9a76af2..f5c663b 100644
 --- a/EPC.SSO/Views/Grants/Index.cshtml
 +++ b/EPC.SSO/Views/Grants/Index.cshtml
-@@ -13,7 +13,8 @@
+@@ -13,13 +13,14 @@
      <link href="~/css/dashboard.css" rel="stylesheet" asp-append-version="true" />
  }
  
@@ -4887,20 +4887,79 @@ index 9a76af2..1f80d0d 100644
      <div class="db-grid">
          @* ═══════════ ستون اصلی ═══════════ *@
          <div class="db-col">
-@@ -32,9 +33,9 @@
+             <section class="p-card" id="systemsCard">
+                 <div class="p-card__head">
+-                    <h2 class="p-card__title"><span class="p-card__icon"><i class="fa fa-rocket"></i></span> سامانه‌های در دسترس</h2>
++                    <h2 class="p-card__title"><span class="p-card__icon"><i class="fa fa-rocket"></i></span> برنامه‌ها و سامانه‌های من <span class="p-card__count" id="appsTotal" hidden></span></h2>
+                     <div class="db-actions">
+                         <a class="db-act" asp-controller="PhoneDirectory" asp-action="Index" target="_blank" rel="noopener" title="دفترچه تلفن"><i class="fa fa-address-book"></i><span>دفترچه تلفن</span></a>
+                         <button type="button" class="db-act login-history-btn" id="btnSessions" title="سوابق ورود"><i class="fa fa-clock-rotate-left"></i><span>سوابق ورود</span></button>
+@@ -30,48 +31,32 @@
+                     </div>
+                 </div>
  
++                @* همه‌ی برنامه‌ها (تحت وب، ویندوزی و سایر) در یک لانچر؛ کاربر لازم نیست نوع برنامه را بداند *@
                  <div class="db-toolbar">
-                     <div class="db-tabs" role="tablist">
+-                    <div class="db-tabs" role="tablist">
 -                        <button class="db-tab is-active" role="tab" data-tab="web"><i class="fa fa-globe"></i> تحت وب <span class="db-tab__n">@grants.Count</span></button>
 -                        <button class="db-tab" role="tab" data-tab="win" id="tabWin" hidden><i class="fa fa-desktop"></i> ویندوزی <span class="db-tab__n" id="countWin">0</span></button>
 -                        <button class="db-tab" role="tab" data-tab="other" id="tabOther" hidden><i class="fa fa-layer-group"></i> سایر <span class="db-tab__n" id="countOther">0</span></button>
-+                        <button type="button" class="db-tab is-active" role="tab" aria-selected="true" data-tab="web"><i class="fa fa-globe"></i> تحت وب <span class="db-tab__n">@grants.Count</span></button>
-+                        <button type="button" class="db-tab" role="tab" aria-selected="false" data-tab="win" id="tabWin" hidden><i class="fa fa-desktop"></i> ویندوزی <span class="db-tab__n" id="countWin">0</span></button>
-+                        <button type="button" class="db-tab" role="tab" aria-selected="false" data-tab="other" id="tabOther" hidden><i class="fa fa-layer-group"></i> سایر <span class="db-tab__n" id="countOther">0</span></button>
-                     </div>
+-                    </div>
                      <label class="db-search">
                          <i class="fa fa-magnifying-glass"></i>
-@@ -193,7 +194,7 @@
+-                        <input type="search" id="appSearch" placeholder="جستجوی سامانه..." autocomplete="off" aria-label="جستجوی سامانه" />
++                        <input type="search" id="appSearch" placeholder="جستجو در همه‌ی برنامه‌ها..." autocomplete="off" aria-label="جستجوی برنامه" />
+                         <kbd>/</kbd>
+                     </label>
+                 </div>
+ 
+-                <div class="db-pane" data-pane="web">
+-                    <div class="db-apps" id="systemsGrid">
+-                        @for (var i = 0; i < grants.Count; i++)
+-                        {
+-                            var g = grants[i];
+-                            var hasUrl = !string.IsNullOrWhiteSpace(g.ClientUrl);
+-                            var logo = g.ClientLogoUrl ?? "";
+-                            var isImg = logo.StartsWith("/") || logo.StartsWith("http", StringComparison.OrdinalIgnoreCase) || logo.StartsWith("data:");
+-                            <div class="db-app" tabindex="0" role="link" style="--_c:@palette[i % palette.Length];animation-delay:@(Math.Min(i, 24) * 15)ms"
+-                                 data-id="web:@g.ClientId" data-url="@g.ClientUrl" data-name="@g.ClientName" data-desc="@g.Description" title="@(string.IsNullOrWhiteSpace(g.Description) ? g.ClientName : g.Description)">
+-                                @if (!hasUrl) { <span class="db-app__soon">به‌زودی</span> }
+-                                <button type="button" class="db-app__pin" aria-label="سنجاق" title="سنجاق به ابتدای لیست"><i class="fa fa-star"></i></button>
+-                                <span class="db-app__icon">
+-                                    @if (isImg) { <img src="@logo" alt="" loading="lazy" /> }
+-                                    else if (!string.IsNullOrWhiteSpace(logo)) { <span>@logo</span> }
+-                                    else { <i class="fa fa-globe"></i> }
+-                                </span>
+-                                <span class="db-app__name">@g.ClientName</span>
+-                            </div>
+-                        }
+-                    </div>
+-                    @if (grants.Count == 0)
++                @* سامانه‌های تحت وب (سمت سرور)؛ اسکریپت آن‌ها را با بقیه‌ی برنامه‌ها در لانچر یکپارچه می‌چیند *@
++                <div class="db-apps" id="systemsGrid" data-source hidden>
++                    @for (var i = 0; i < grants.Count; i++)
+                     {
+-                        <div class="p-empty"><i class="fa fa-box-open"></i>سامانه‌ای برای سمت فعلی شما تعریف نشده است</div>
++                        var g = grants[i];
++                        var logo = g.ClientLogoUrl ?? "";
++                        var isImg = logo.StartsWith("/") || logo.StartsWith("http", StringComparison.OrdinalIgnoreCase) || logo.StartsWith("data:");
++                        <div class="db-app" data-kind="web" data-id="web:@g.ClientId" data-url="@g.ClientUrl" data-name="@g.ClientName" data-desc="@g.Description"
++                             data-color="@palette[i % palette.Length]" data-logo="@(isImg ? logo : "")" data-glyph="@(isImg ? "" : logo)"></div>
+                     }
+                 </div>
+-                <div class="db-pane" data-pane="win" hidden><div class="db-apps" id="windowsAppsGrid"></div></div>
+-                <div class="db-pane" data-pane="other" hidden><div class="db-apps" id="otherProgramsGrid"></div></div>
+-                <div class="p-empty" id="appsNoResult" hidden><i class="fa fa-magnifying-glass"></i>موردی با این عبارت پیدا نشد</div>
++
++                <div class="db-launch" id="appsLauncher">
++                    <div class="db-apps">@for (var i = 0; i < Math.Min(8, Math.Max(grants.Count, 4)); i++) { <div class="p-skel" style="height:96px"></div> }</div>
++                </div>
++                <div class="p-empty" id="appsNoResult" hidden><i class="fa fa-magnifying-glass"></i>برنامه‌ای با این عبارت پیدا نشد</div>
++                <div class="p-empty" id="appsEmpty" hidden><i class="fa fa-box-open"></i>برنامه‌ای برای سمت فعلی شما تعریف نشده است</div>
+             </section>
+ 
+             <section class="p-card" id="surveysCard">
+@@ -193,7 +178,7 @@
  
      <div class="db-force" id="forceReadOverlay" role="dialog" aria-modal="true" aria-labelledby="forceTitle">
          <div class="db-force__card">
@@ -4909,7 +4968,7 @@ index 9a76af2..1f80d0d 100644
              <div class="db-force__body" id="forceBody"></div>
              <div class="db-force__foot">
                  <div class="db-force__steps" id="forceSteps"></div>
-@@ -202,6 +203,22 @@
+@@ -202,6 +187,22 @@
          </div>
      </div>
  
@@ -4932,7 +4991,7 @@ index 9a76af2..1f80d0d 100644
      <button type="button" class="db-fab" id="pageTourFab"><i class="fa fa-circle-question"></i><span>راهنمای صفحه</span></button>
  }
  
-@@ -209,5 +226,7 @@
+@@ -209,5 +210,7 @@
      <script src="~/js/jalali-picker.js" asp-append-version="true"></script>
      <script src="~/js/page-tour.js" asp-append-version="true"></script>
      <script src="~/js/announcement-common.js" asp-append-version="true"></script>
@@ -5181,10 +5240,10 @@ index 0000000..8840190
 +<script src="~/lib/jquery-validation/jquery.validate.min.js" asp-append-version="true"></script>
 +<script src="~/lib/jquery-validation/jquery.validate.unobtrusive.min.js" asp-append-version="true"></script>
 diff --git a/EPC.SSO/wwwroot/css/dashboard.css b/EPC.SSO/wwwroot/css/dashboard.css
-index 75414a0..3ca9802 100644
+index 75414a0..ae1b693 100644
 --- a/EPC.SSO/wwwroot/css/dashboard.css
 +++ b/EPC.SSO/wwwroot/css/dashboard.css
-@@ -209,3 +209,23 @@ html[data-theme="dark"] .db-ann:hover { background: rgba(37,49,99,.45); }
+@@ -209,3 +209,50 @@ html[data-theme="dark"] .db-ann:hover { background: rgba(37,49,99,.45); }
  /* خطا با دکمه‌ی تلاش دوباره */
  .db-retry { display: inline-flex; gap: 6px; align-items: center; margin-top: 8px; height: 30px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--card-solid); color: var(--text-mid); font-family: var(--font); font-size: 12px; cursor: pointer; }
  .db-retry:hover { color: var(--orange); border-color: var(--orange); }
@@ -5208,6 +5267,33 @@ index 75414a0..3ca9802 100644
 +@keyframes db-train-fade { from { opacity: 0; } }
 +@keyframes db-train-pop { from { opacity: 0; transform: translateY(12px) scale(.97); } }
 +@media (prefers-reduced-motion: reduce) { .db-train, .db-train__card { animation: none; } }
++
++/* ═══ لانچر یکپارچه‌ی برنامه‌ها (سنجاق‌شده / پرکاربرد / همه) ═══ */
++.db-launch { display: grid; gap: 18px; }
++.db-launch__sec { display: grid; gap: 10px; }
++.db-launch__head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 800; color: var(--text-mid); }
++.db-launch__head > i { width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font-size: 11px;
++  background: var(--orange-dim); color: var(--orange); }
++.db-launch__head em { font-style: normal; font-size: 10.5px; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 99px;
++  display: inline-grid; place-items: center; background: var(--inner-bg); color: var(--text-light); }
++.db-launch__head small { margin-inline-start: auto; font-weight: 500; color: var(--text-light); font-size: 11px; }
++.db-launch__head::after { content: ""; flex: 1; height: 1px; background: var(--border); }
++
++.db-app__letter { font-size: 18px; font-weight: 900; line-height: 1; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.18); }
++.db-app.is-soon { opacity: .62; }
++.db-app.is-soon:hover { opacity: .85; }
++/* نشان کوچک «روی رایانه‌ی شما اجرا می‌شود» (بدون نیاز به دانستن نوع برنامه) */
++.db-app__where { position: absolute; bottom: 6px; left: 6px; width: 18px; height: 18px; border-radius: 6px; display: grid; place-items: center;
++  font-size: 9px; color: var(--text-light); background: var(--inner-bg); }
++/* در حال اجرا */
++.db-app__busy { position: absolute; inset: 0; display: none; place-items: center; border-radius: inherit;
++  background: color-mix(in srgb, var(--card-solid) 70%, transparent); }
++.db-app__busy::before { content: ""; width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--_c, var(--orange));
++  border-left-color: transparent; animation: db-spin .7s linear infinite; }
++.db-app.is-busy .db-app__busy { display: grid; }
++@keyframes db-spin { to { transform: rotate(360deg); } }
++@media (prefers-reduced-motion: reduce) { .db-app__busy::before { animation-duration: 2s; } }
++.db-launch.is-settled .db-app { animation: none; }
 diff --git a/EPC.SSO/wwwroot/css/login-v2.css b/EPC.SSO/wwwroot/css/login-v2.css
 index 42af830..48a6db1 100644
 --- a/EPC.SSO/wwwroot/css/login-v2.css
@@ -5418,7 +5504,7 @@ index c6ee269..e0cb896 100644
  }
 \ No newline at end of file
 diff --git a/EPC.SSO/wwwroot/js/dashboard.js b/EPC.SSO/wwwroot/js/dashboard.js
-index 8f009e3..549d81d 100644
+index 8f009e3..5112d0f 100644
 --- a/EPC.SSO/wwwroot/js/dashboard.js
 +++ b/EPC.SSO/wwwroot/js/dashboard.js
 @@ -2,18 +2,22 @@
@@ -5457,7 +5543,141 @@ index 8f009e3..549d81d 100644
  
      /** شمارنده‌ی کنار عنوان کارت؛ hideZero برای «خوانده‌نشده» که صفر بودنش نیاز به نمایش ندارد */
      function setCount(sel, n, hideZero = false) {
-@@ -72,13 +77,18 @@
+@@ -40,18 +45,109 @@
+         requestAnimationFrame(update);
+     }
+ 
+-    // ═══ Pins (سنجاق سامانه‌ها در مرورگر کاربر) ═══════════════════════════
++    // ═══ لانچر یکپارچه‌ی برنامه‌ها ═══════════════════════════════════════
++    /*  قبلاً برنامه‌ها در سه زبانه‌ی «تحت وب / ویندوزی / سایر» بودند و کاربر باید نوع هر برنامه را می‌دانست.
++        حالا همه در یک‌جا: «سنجاق‌شده» (ستاره)، «پرکاربرد» (بر اساس دفعات استفاده در همین مرورگر) و «همه‌ی
++        برنامه‌ها» به ترتیب الفبا؛ جستجو در همه. نحوه‌ی اجرا (مرورگر / رایانه / SSO) را خود کارت می‌داند. */
++    const search = $('#appSearch');
+     const PIN_KEY = 'epc-pins';
+-    const pins = new Set((() => { try { return JSON.parse(localStorage.getItem(PIN_KEY) || '[]'); } catch { return []; } })());
++    const USAGE_KEY = 'epc-app-usage';
++    const readJson = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? d; } catch { return d; } };
++    const pins = new Set(readJson(PIN_KEY, []));
++    const usage = readJson(USAGE_KEY, {});
+     const savePins = () => { try { localStorage.setItem(PIN_KEY, JSON.stringify([...pins])); } catch { } };
++    const recordUse = id => {
++        usage[id] = { n: (usage[id]?.n || 0) + 1, t: Date.now() };
++        try { localStorage.setItem(USAGE_KEY, JSON.stringify(usage)); } catch { }
++    };
++
++    /** همه‌ی برنامه‌ها: id → { id, kind: web|win|other, name, desc, url, pid, isWin, color, logo, glyph } */
++    const apps = new Map();
++    const normName = t => String(t || '').replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/\u200c/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
++
++    function addApps(list) {
++        const names = new Set([...apps.values()].map(a => normName(a.name)));
++        for (const a of list) {
++            // همان برنامه با یک نام در دو منبع (مثلاً سامانه‌ی وب و «سایر») فقط یک بار نمایش داده می‌شود
++            if (!a.name || (names.has(normName(a.name)) && !apps.has(a.id))) continue;
++            apps.set(a.id, a);
++            names.add(normName(a.name));
++        }
++        renderLauncher();
++    }
++
++    function iconHtml(a) {
++        if (a.logo) return `<img src="${escAttr(a.logo)}" alt="" loading="lazy" data-fallback-icon="${a.isWin ? 'fa-desktop' : 'fa-globe'}">`;
++        if (a.glyph) return `<span>${escHtml(a.glyph)}</span>`;
++        if (a.kind === 'win' && a.iconId) return `<img src="/Grants/AppIcon/${encodeURIComponent(a.iconId)}" alt="" loading="lazy" data-fallback-icon="fa-desktop">`;
++        // بدون آیکن: حرف اول نام روی رنگ کارت (خواناتر از یک آیکن تکراری برای همه)
++        return `<b class="db-app__letter">${escHtml((a.name || '؟').trim().charAt(0))}</b>`;
++    }
+ 
+-    function applyPins(grid) {
+-        if (!grid) return;
+-        const cards = $$('.db-app', grid);
+-        cards.forEach(c => $('.db-app__pin', c)?.classList.toggle('is-on', pins.has(c.dataset.id)));
+-        cards.filter(c => pins.has(c.dataset.id)).reverse().forEach(c => grid.prepend(c));
++    function tile(a, i) {
++        const soon = a.kind === 'web' && !a.url;
++        return `
++            <div class="db-app${soon ? ' is-soon' : ''}" tabindex="0" role="button" data-id="${escAttr(a.id)}" data-kind="${a.kind}"
++                 data-url="${escAttr(a.url || '')}" data-pid="${escAttr(a.pid || '')}" data-iswin="${!!a.isWin}" data-name="${escAttr(a.name)}"
++                 title="${escAttr(a.desc || a.name)}" style="--_c:${a.color};animation-delay:${Math.min(i, 24) * 14}ms">
++                ${soon ? '<span class="db-app__soon">به‌زودی</span>' : ''}
++                <button type="button" class="db-app__pin${pins.has(a.id) ? ' is-on' : ''}" aria-label="${pins.has(a.id) ? 'برداشتن سنجاق' : 'سنجاق به بالای فهرست'}" title="سنجاق"><i class="fa fa-star"></i></button>
++                <span class="db-app__icon">${iconHtml(a)}</span>
++                <span class="db-app__name">${escHtml(a.name)}</span>
++                ${a.isWin ? '<span class="db-app__where" title="روی رایانه‌ی شما اجرا می‌شود"><i class="fa fa-desktop"></i></span>' : ''}
++                <span class="db-app__busy" aria-hidden="true"></span>
++            </div>`;
++    }
++
++    const section = (title, icon, list, extra = '') => list.length ? `
++        <div class="db-launch__sec">
++            <div class="db-launch__head"><i class="fa ${icon}"></i><span>${title}</span><em>${fa(list.length)}</em>${extra}</div>
++            <div class="db-apps">${list.map(tile).join('')}</div>
++        </div>` : '';
++
++    const byName = (x, y) => x.name.localeCompare(y.name, 'fa');
++
++    let launcherRenders = 0;
++    function renderLauncher() {
++        const host = $('#appsLauncher');
++        if (!host) return;
++        // انیمیشن ورود فقط در نمایش اول (نه با هر سنجاق/جستجو/رسیدن برنامه‌های دیگر)
++        host.classList.toggle('is-settled', launcherRenders++ > 1);
++        const all = [...apps.values()];
++        const total = $('#appsTotal');
++        if (total) { total.textContent = fa(all.length); total.hidden = !all.length; }
++        $('#appsEmpty').hidden = !(launcherReady && !all.length);
++
++        const q = normName(search?.value);
++        if (q) {
++            const hits = all.filter(a => normName(a.name).includes(q) || normName(a.desc).includes(q)).sort(byName);
++            host.innerHTML = section('نتایج جستجو', 'fa-magnifying-glass', hits);
++            $('#appsNoResult').hidden = hits.length > 0;
++            return;
++        }
++        $('#appsNoResult').hidden = true;
++
++        const pinned = all.filter(a => pins.has(a.id)).sort(byName);
++        const frequent = all.filter(a => !pins.has(a.id) && usage[a.id]?.n >= 2)
++            .sort((x, y) => (usage[y.id].n - usage[x.id].n) || (usage[y.id].t - usage[x.id].t))
++            .slice(0, 6);
++        const rest = all.filter(a => !pins.has(a.id)).sort(byName);
++        host.innerHTML =
++            section('سنجاق‌شده', 'fa-star', pinned) +
++            section('پرکاربرد', 'fa-clock-rotate-left', frequent) +
++            section(pinned.length || frequent.length ? 'همه‌ی برنامه‌ها' : 'برنامه‌ها', 'fa-table-cells-large', rest,
++                !pinned.length ? '<small>با ستاره‌ی هر کارت، آن را بالای فهرست سنجاق کنید</small>' : '');
+     }
+ 
++    // سامانه‌های تحت وب (سمت سرور)
++    let launcherReady = false;
++    addApps($$('#systemsGrid .db-app').map(c => ({
++        id: c.dataset.id, kind: 'web', name: c.dataset.name, desc: c.dataset.desc, url: c.dataset.url,
++        color: c.dataset.color || PALETTE[0], logo: c.dataset.logo, glyph: c.dataset.glyph,
++    })));
++    // اگر برنامه‌های ویندوزی/سایر دیر رسیدند، تا ۲ ثانیه بعد «برنامه‌ای نیست» نشان داده نمی‌شود
++    setTimeout(() => { launcherReady = true; renderLauncher(); }, 2000);
++
+     // ═══ Launchers ═══════════════════════════════════════════════════════
+     function launchHidden(url, name) {
+         toast(`🚀 در حال اجرای ${name || 'برنامه'} ...`);
+@@ -63,22 +159,32 @@
+     }
+ 
+     function openApp(card) {
+-        const { kind, url, name } = card.dataset;
+-        if (kind === 'win') return launchHidden(url, name);
++        const { kind, url, name, id } = card.dataset;
++        if (kind === 'web' && !url) return toast('این سامانه به‌زودی فعال می‌شود.');
++        recordUse(id);
++        if (kind === 'win') {
++            card.classList.add('is-busy');
++            setTimeout(() => card.classList.remove('is-busy'), 1500);
++            return launchHidden(url, name);
++        }
+         if (kind === 'other') return launchOther(card);
+-        if (!url) return toast('این سامانه به‌زودی فعال می‌شود.');
+         window.open(url, '_blank', 'noopener');
+     }
  
      const launching = new Set();
      async function launchOther(card) {
@@ -5480,7 +5700,7 @@ index 8f009e3..549d81d 100644
          const win = isWin ? null : window.open('about:blank', '_blank');
  
          try {
-@@ -89,15 +99,16 @@
+@@ -89,15 +195,16 @@
              });
              if (!res.success) throw new Error(res.message);
  
@@ -5499,43 +5719,99 @@ index 8f009e3..549d81d 100644
          }
      }
  
-@@ -124,7 +135,10 @@
+@@ -105,10 +212,11 @@
+         const pin = e.target.closest('.db-app__pin');
+         if (pin) {
+             e.stopPropagation();
+-            const card = pin.closest('.db-app');
+-            pins.has(card.dataset.id) ? pins.delete(card.dataset.id) : pins.add(card.dataset.id);
++            const id = pin.closest('.db-app').dataset.id;
++            pins.has(id) ? pins.delete(id) : pins.add(id);
+             savePins();
+-            applyPins(card.parentElement);
++            renderLauncher();
++            $(`.db-app[data-id="${CSS.escape(id)}"] .db-app__pin`)?.focus();
+             return;
+         }
+         const card = e.target.closest('.db-app');
+@@ -118,78 +226,41 @@
+         if ((e.key === 'Enter' || e.key === ' ') && e.target.classList?.contains('db-app')) { e.preventDefault(); openApp(e.target); }
+     });
  
-     function setTab(tab) {
-         activeTab = tab;
+-    // ═══ Tabs + Search ═══════════════════════════════════════════════════
+-    const search = $('#appSearch');
+-    let activeTab = 'web';
+-
+-    function setTab(tab) {
+-        activeTab = tab;
 -        $$('.db-tab').forEach(t => t.classList.toggle('is-active', t.dataset.tab === tab));
-+        $$('.db-tab').forEach(t => {
-+            t.classList.toggle('is-active', t.dataset.tab === tab);
-+            t.setAttribute('aria-selected', String(t.dataset.tab === tab));
-+        });
-         $$('.db-pane').forEach(p => p.hidden = p.dataset.pane !== tab);
-         filterApps();
-     }
-@@ -153,12 +167,12 @@
-         $('#tabWin').hidden = false;
-         $('#countWin').textContent = list.length;
-         $('#windowsAppsGrid').innerHTML = list.map((a, i) => `
+-        $$('.db-pane').forEach(p => p.hidden = p.dataset.pane !== tab);
+-        filterApps();
+-    }
+-    $$('.db-tab').forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
+-
+-    function filterApps() {
+-        const q = (search?.value || '').trim().toLowerCase();
+-        const pane = $(`.db-pane[data-pane="${activeTab}"]`);
+-        let visible = 0;
+-        $$('.db-app', pane).forEach(c => {
+-            const hit = !q || (c.dataset.name || '').toLowerCase().includes(q) || (c.dataset.desc || '').toLowerCase().includes(q);
+-            c.classList.toggle('is-hidden', !hit);
+-            if (hit) visible++;
+-        });
+-        $('#appsNoResult').hidden = !(q && visible === 0);
+-    }
+-    search?.addEventListener('input', filterApps);
++    // ═══ Search ══════════════════════════════════════════════════════════
++    let searchTimer = 0;
++    search?.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderLauncher, 80); });
+     document.addEventListener('keydown', e => {
+         if (e.key === '/' && !/input|textarea|select/i.test(document.activeElement?.tagName)) { e.preventDefault(); search?.focus(); }
+-        if (e.key === 'Escape' && document.activeElement === search) { search.value = ''; filterApps(); search.blur(); }
++        if (e.key === 'Escape' && document.activeElement === search) { search.value = ''; renderLauncher(); search.blur(); }
+     });
+ 
+     // ═══ Renderers ═══════════════════════════════════════════════════════
+     function renderWindowsApps(list) {
+         if (!list?.length) return;
+-        $('#tabWin').hidden = false;
+-        $('#countWin').textContent = list.length;
+-        $('#windowsAppsGrid').innerHTML = list.map((a, i) => `
 -            <div class="db-app" tabindex="0" role="button" data-kind="win" data-id="win:${a.id}" data-url="${escAttr(a.launchUrl)}"
-+            <div class="db-app" tabindex="0" role="button" data-kind="win" data-id="win:${escAttr(a.id)}" data-url="${escAttr(a.launchUrl)}"
-                  data-name="${escAttr(a.name)}" data-desc="${escAttr(a.description)}" title="${escAttr(a.description)}"
-                  style="--_c:${PALETTE[(i + 3) % PALETTE.length]};animation-delay:${Math.min(i, 20) * 18}ms">
-                 <button type="button" class="db-app__pin" aria-label="سنجاق"><i class="fa fa-star"></i></button>
-                 <span class="db-app__icon">${a.id
+-                 data-name="${escAttr(a.name)}" data-desc="${escAttr(a.description)}" title="${escAttr(a.description)}"
+-                 style="--_c:${PALETTE[(i + 3) % PALETTE.length]};animation-delay:${Math.min(i, 20) * 18}ms">
+-                <button type="button" class="db-app__pin" aria-label="سنجاق"><i class="fa fa-star"></i></button>
+-                <span class="db-app__icon">${a.id
 -                    ? `<img src="/Grants/AppIcon/${a.id}" alt="" loading="lazy" onerror="this.outerHTML='<i class=&quot;fa fa-desktop&quot;></i>'">`
-+                    ? `<img src="/Grants/AppIcon/${encodeURIComponent(a.id)}" alt="" loading="lazy" data-fallback-icon="fa-desktop">`
-                     : '<i class="fa fa-desktop"></i>'}</span>
-                 <span class="db-app__name">${escHtml(a.name)}</span>
-             </div>`).join('');
-@@ -170,7 +184,7 @@
-         $('#tabOther').hidden = false;
-         $('#countOther').textContent = list.length;
-         $('#otherProgramsGrid').innerHTML = list.map((p, i) => `
+-                    : '<i class="fa fa-desktop"></i>'}</span>
+-                <span class="db-app__name">${escHtml(a.name)}</span>
+-            </div>`).join('');
+-        applyPins($('#windowsAppsGrid'));
++        addApps(list.map((a, i) => ({
++            id: `win:${a.id}`, kind: 'win', isWin: true, name: a.name, desc: a.description, url: a.launchUrl,
++            iconId: a.id, color: PALETTE[(i + 3) % PALETTE.length],
++        })));
+     }
+ 
+     function renderOtherPrograms(list) {
+         if (!list?.length) return;
+-        $('#tabOther').hidden = false;
+-        $('#countOther').textContent = list.length;
+-        $('#otherProgramsGrid').innerHTML = list.map((p, i) => `
 -        <div class="db-app" tabindex="0" role="button" data-kind="other" data-id="other:${p.id}" data-pid="${p.id}"
-+        <div class="db-app" tabindex="0" role="button" data-kind="other" data-id="other:${escAttr(p.id)}" data-pid="${escAttr(p.id)}"
-              data-name="${escAttr(p.name)}" data-iswin="${p.kind === 2}" title="${escAttr(p.name)}"
-              style="--_c:${PALETTE[(i + 6) % PALETTE.length]};animation-delay:${Math.min(i, 20) * 18}ms">
-             <button type="button" class="db-app__pin" aria-label="سنجاق"><i class="fa fa-star"></i></button>
-@@ -183,13 +197,13 @@
+-             data-name="${escAttr(p.name)}" data-iswin="${p.kind === 2}" title="${escAttr(p.name)}"
+-             style="--_c:${PALETTE[(i + 6) % PALETTE.length]};animation-delay:${Math.min(i, 20) * 18}ms">
+-            <button type="button" class="db-app__pin" aria-label="سنجاق"><i class="fa fa-star"></i></button>
+-            <span class="db-app__icon"><i class="fa ${p.kind === 2 ? 'fa-window-maximize' : 'fa-earth-asia'}"></i></span>
+-            <span class="db-app__name">${escHtml(p.name)}</span>
+-        </div>`).join('');
+-        applyPins($('#otherProgramsGrid'));
++        addApps(list.map((p, i) => ({
++            id: `other:${p.id}`, kind: 'other', isWin: p.kind === 2, name: p.name, pid: p.id,
++            color: PALETTE[(i + 6) % PALETTE.length],
++        })));
+     }
+ 
      const MEETING_STATUS = {
          1: { label: 'پیش رو', color: '#0ea5e9' },
          2: { label: 'برگزار شده', color: '#10b981' },
@@ -5551,7 +5827,7 @@ index 8f009e3..549d81d 100644
          if (!list.length) return ct.innerHTML = empty('fa-mug-hot', 'جلسه‌ای در ۴ روز آینده ندارید');
  
          ct.innerHTML = list.map(m => {
-@@ -197,10 +211,10 @@
+@@ -197,10 +268,10 @@
              const [datePart, timePart] = String(m.date || '').split(' - ');
              const [, mo, d] = (datePart || '').split('/');
              const st = MEETING_STATUS[m.status] || MEETING_STATUS[1];
@@ -5565,7 +5841,7 @@ index 8f009e3..549d81d 100644
                  <div class="db-meet__body">
                      <div class="db-meet__title" title="${escAttr(m.title)}">${escHtml(m.title)}</div>
                      <div class="db-meet__meta">
-@@ -219,7 +233,7 @@
+@@ -219,7 +290,7 @@
  
      function renderAnnouncements(list) {
          const ct = $('#announceContainer');
@@ -5574,7 +5850,7 @@ index 8f009e3..549d81d 100644
          const unread = list.filter(a => !a.isRead).length;
          setCount('#countUnread', unread, true);
          if (!list.length) return ct.innerHTML = empty('fa-bell-slash', 'اطلاعیه‌ای وجود ندارد');
-@@ -229,7 +243,7 @@
+@@ -229,7 +300,7 @@
              const pri = a.priority === 3 ? '<span class="p-badge" style="background:#ef44441f;color:#ef4444">فوری</span>'
                  : a.priority === 2 ? '<span class="p-badge" style="background:#f59e0b1f;color:#d97706">مهم</span>' : '';
              return `
@@ -5583,7 +5859,7 @@ index 8f009e3..549d81d 100644
                  <span class="db-ann__dot" style="background:${cfg.color}"></span>
                  <div style="min-width:0">
                      <div class="db-ann__title">${escHtml(a.title)}</div>
-@@ -252,7 +266,7 @@
+@@ -252,7 +323,7 @@
      function renderSurveys(list) {
          const ct = $('#surveyContainer');
          setCount('#countSurveys', list ? list.length : null);
@@ -5592,7 +5868,7 @@ index 8f009e3..549d81d 100644
          if (!list.length) return ct.innerHTML = empty('fa-circle-check', 'نظرسنجی فعالی برای شما وجود ندارد');
  
          ct.innerHTML = list.map(s => {
-@@ -261,9 +275,9 @@
+@@ -261,9 +332,9 @@
                  ? '<span class="p-badge" style="background:#f973161f;color:#ea580c">جدید</span>'
                  : '<span class="p-badge" style="background:#0ea5e91f;color:#0284c7">ناتمام</span>';
              return `
@@ -5604,7 +5880,7 @@ index 8f009e3..549d81d 100644
                  <div class="db-survey__meta">
                      <span><i class="fa fa-list-check"></i> ${fa(s.totalQuestions)} سؤال</span>
                      ${s.daysRemaining > 0 ? `<span><i class="fa fa-hourglass-half"></i> ${fa(s.daysRemaining)} روز مانده</span>` : ''}
-@@ -289,7 +303,7 @@
+@@ -289,7 +360,7 @@
              <div class="db-sugg__slide ${i === 0 ? 'is-active' : ''}">
                  <span class="db-sugg__rank">رتبه ${fa(i + 1)}</span>
                  ${s.imageUrl
@@ -5613,7 +5889,7 @@ index 8f009e3..549d81d 100644
                      : `<div class="db-sugg__avatar">${escHtml(initial(s.lfName))}</div>`}
                  <div class="db-sugg__name">${escHtml(s.lfName || 'بدون نام')}</div>
                  ${s.officeName ? `<div class="db-sugg__meta">${escHtml(s.officeName)}</div>` : ''}
-@@ -306,7 +320,14 @@
+@@ -306,7 +377,14 @@
              Sugg.cur = (i + Sugg.n) % Sugg.n;
              slides[Sugg.cur]?.classList.add('is-active'); dots[Sugg.cur]?.classList.add('is-active');
          };
@@ -5629,7 +5905,7 @@ index 8f009e3..549d81d 100644
          ct.onclick = e => {
              const step = e.target.closest('[data-sugg]'); const dot = e.target.closest('[data-sugg-go]');
              if (step) go(Sugg.cur + +step.dataset.sugg);
-@@ -314,8 +335,27 @@
+@@ -314,8 +392,27 @@
          };
          ct.onmouseenter = () => clearInterval(Sugg.timer);
          ct.onmouseleave = auto;
@@ -5657,7 +5933,7 @@ index 8f009e3..549d81d 100644
  
      // ═══ Force read (اطلاعیه‌های نیازمند تأیید) ═════════════════════════════
      const Force = { items: [], idx: 0 };
-@@ -336,23 +376,42 @@
+@@ -336,23 +433,42 @@
          $('#forceTitle').textContent = it.title;
          $('#forceSteps').innerHTML = Force.items.map((x, k) => `<span class="${x.ok ? 'is-ok' : k === i ? 'is-cur' : ''}"></span>`).join('');
          const body = $('#forceBody');
@@ -5703,7 +5979,7 @@ index 8f009e3..549d81d 100644
          const orig = btn.innerHTML;
          btn.disabled = true; btn.innerHTML = '<span class="p-spin"></span> در حال ثبت...';
          try {
-@@ -363,7 +422,7 @@
+@@ -363,7 +479,7 @@
              });
              if (!r.ok) throw new Error();
              it.ok = true;
@@ -5712,7 +5988,7 @@ index 8f009e3..549d81d 100644
              const next = Force.items.findIndex(x => !x.ok);
              if (next === -1) {
                  $('#forceReadOverlay').classList.remove('is-open');
-@@ -376,20 +435,23 @@
+@@ -376,20 +492,23 @@
  
      // ═══ Sessions modal ══════════════════════════════════════════════════
      let sessPicker = null;
@@ -5738,7 +6014,7 @@ index 8f009e3..549d81d 100644
      }
      function setPreset(days, chip) {
          const today = jalaaliToday();
-@@ -411,12 +473,15 @@
+@@ -411,12 +530,15 @@
      $$('.sess-preset-chip').forEach(c => c.addEventListener('click', () => setPreset(+c.dataset.days, c)));
  
      // ═══ User profiles (impersonation) ═══════════════════════════════════
@@ -5755,7 +6031,7 @@ index 8f009e3..549d81d 100644
              UP.hasMore = !!res.hasMore;
              UP.items = append ? UP.items.concat(res.items) : res.items;
              if (!UP.items.length) { body.innerHTML = empty('fa-user-slash', 'کاربری یافت نشد'); return; }
-@@ -428,10 +493,16 @@
+@@ -428,10 +550,16 @@
                          <div class="db-up__meta"><span>${fa(u.personnelCode)}</span>${u.mainPosition ? `<span>· ${escHtml(u.mainPosition)}</span>` : ''}
                          ${u.isSuperAdmin ? '<span class="p-badge" style="background:#ef44441f;color:#dc2626">سوپرادمین</span>' : ''}</div>
                      </div>
@@ -5775,9 +6051,20 @@ index 8f009e3..549d81d 100644
      }
      const resetUsers = () => { UP.page = 1; UP.items = []; UP.hasMore = true; $('#upBody').innerHTML = '<div class="p-skel" style="height:56px;margin:8px"></div>'.repeat(4); loadUsers(false); };
      $('#btnProfiles')?.addEventListener('click', () => { bootstrap.Modal.getOrCreateInstance($('#userProfileModal')).show(); resetUsers(); });
-@@ -478,31 +549,156 @@
+@@ -466,7 +594,7 @@
+             { selector: '#themeToggle', title: 'حالت روشن / تیره', html: 'ظاهر پورتال را بین حالت روشن و تیره جابه‌جا کنید. انتخاب شما در همین مرورگر ذخیره می‌شود.', placement: 'bottom' },
+             { selector: '#hdrUserBtn', title: 'منوی کاربری', html: 'تغییر رمز، تفویض اختیار، مستندات، بازنشانی رمز فرزین و خروج.', placement: 'bottom' },
+             { selector: '.db-actions', title: 'دسترسی سریع', html: 'دفترچه تلفن، سوابق ورود و (در صورت داشتن مجوز) ورود به پروفایل کاربران.', placement: 'bottom' },
+-            { selector: '.db-tabs', title: 'دسته‌بندی سامانه‌ها', html: 'سامانه‌های تحت وب، برنامه‌های ویندوزی و سایر سامانه‌ها در سه زبانه.', placement: 'bottom' },
++            { selector: '#appsLauncher', title: 'همه‌ی برنامه‌ها در یک‌جا', html: 'همه‌ی سامانه‌ها و برنامه‌ها (تحت وب یا روی رایانه) این‌جا هستند؛ کافی است روی هر کارت بزنید. برنامه‌های سنجاق‌شده و پرکاربرد بالای فهرست می‌آیند.', placement: 'bottom' },
+             { selector: '#appSearch', title: 'جستجوی سریع', html: 'کلید / را بزنید و نام سامانه را تایپ کنید. با ستاره‌ی روی هر کارت، آن را به ابتدای لیست سنجاق کنید.', placement: 'bottom' },
+             { selector: '#meetingContainer', title: 'جلسات ۴ روز آینده', html: 'با کلیک روی هر جلسه، جزئیات آن در سامانه‌ی مدیریت جلسات باز می‌شود.', placement: 'left' },
+             { selector: '#announceContainer', title: 'اطلاعیه‌ها', html: 'اطلاعیه‌های خوانده‌نشده با نوار آبی مشخص شده‌اند. آرشیو کامل از لینک بالای کارت.', placement: 'left' },
+@@ -476,33 +604,157 @@
+     }
+ 
      // ═══ Load all ════════════════════════════════════════════════════════
-     applyPins($('#systemsGrid'));
+-    applyPins($('#systemsGrid'));
  
 -    // نور دنبال‌کننده‌ی ماوس روی کاشی‌ها
 +    // نور دنبال‌کننده‌ی ماوس روی کاشی‌ها (حداکثر یک بار در هر فریم)
@@ -5882,8 +6169,8 @@ index 8f009e3..549d81d 100644
          } catch {
 -            renderMeetings(null); renderAnnouncements(null); renderSurveys(null); renderSuggesters(null);
 +            if (!cached) paint(widget, null);
-+        }
-+    }
+         }
+     }
 +
 +    function load() {
 +        // نمایش فوری از نشست قبلی (بدون انتظار برای شبکه)
@@ -5914,7 +6201,7 @@ index 8f009e3..549d81d 100644
 +        // صبر تا بسته شدن اطلاعیه‌ی اجباری (حداکثر چند دقیقه)
 +        for (let i = 0; i < 600 && $('#forceReadOverlay')?.classList.contains('is-open'); i++) {
 +            await new Promise(r => setTimeout(r, 500));
-         }
++        }
 +        try { sessionStorage.setItem(seenKey, '1'); } catch { }
 +
 +        // لینک ورود (با بلیط SSO) هنگام کلیک از «سایر برنامه‌ها» (شناسه‌ی سامانه فراگیر آموزش) ساخته می‌شود
@@ -5949,7 +6236,7 @@ index 8f009e3..549d81d 100644
 +        document.addEventListener('keydown', onKey);
 +        overlay.hidden = false;
 +        (programId ? go : $('#trainingEvalClose')).focus();
-     }
++    }
  })();
 diff --git a/EPC.SSO/wwwroot/js/document-browser.js b/EPC.SSO/wwwroot/js/document-browser.js
 index 980b1f2..2a139d5 100644

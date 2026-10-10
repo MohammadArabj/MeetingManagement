@@ -229,3 +229,30 @@ html[data-theme="dark"] .db-ann:hover { background: rgba(37,49,99,.45); }
 @keyframes db-train-fade { from { opacity: 0; } }
 @keyframes db-train-pop { from { opacity: 0; transform: translateY(12px) scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .db-train, .db-train__card { animation: none; } }
+
+/* ═══ لانچر یکپارچه‌ی برنامه‌ها (سنجاق‌شده / پرکاربرد / همه) ═══ */
+.db-launch { display: grid; gap: 18px; }
+.db-launch__sec { display: grid; gap: 10px; }
+.db-launch__head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 800; color: var(--text-mid); }
+.db-launch__head > i { width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font-size: 11px;
+  background: var(--orange-dim); color: var(--orange); }
+.db-launch__head em { font-style: normal; font-size: 10.5px; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 99px;
+  display: inline-grid; place-items: center; background: var(--inner-bg); color: var(--text-light); }
+.db-launch__head small { margin-inline-start: auto; font-weight: 500; color: var(--text-light); font-size: 11px; }
+.db-launch__head::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+.db-app__letter { font-size: 18px; font-weight: 900; line-height: 1; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.18); }
+.db-app.is-soon { opacity: .62; }
+.db-app.is-soon:hover { opacity: .85; }
+/* نشان کوچک «روی رایانه‌ی شما اجرا می‌شود» (بدون نیاز به دانستن نوع برنامه) */
+.db-app__where { position: absolute; bottom: 6px; left: 6px; width: 18px; height: 18px; border-radius: 6px; display: grid; place-items: center;
+  font-size: 9px; color: var(--text-light); background: var(--inner-bg); }
+/* در حال اجرا */
+.db-app__busy { position: absolute; inset: 0; display: none; place-items: center; border-radius: inherit;
+  background: color-mix(in srgb, var(--card-solid) 70%, transparent); }
+.db-app__busy::before { content: ""; width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--_c, var(--orange));
+  border-left-color: transparent; animation: db-spin .7s linear infinite; }
+.db-app.is-busy .db-app__busy { display: grid; }
+@keyframes db-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .db-app__busy::before { animation-duration: 2s; } }
+.db-launch.is-settled .db-app { animation: none; }

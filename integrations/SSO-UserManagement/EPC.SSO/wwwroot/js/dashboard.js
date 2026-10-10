@@ -45,17 +45,108 @@
         requestAnimationFrame(update);
     }
 
-    // ═══ Pins (سنجاق سامانه‌ها در مرورگر کاربر) ═══════════════════════════
+    // ═══ لانچر یکپارچه‌ی برنامه‌ها ═══════════════════════════════════════
+    /*  قبلاً برنامه‌ها در سه زبانه‌ی «تحت وب / ویندوزی / سایر» بودند و کاربر باید نوع هر برنامه را می‌دانست.
+        حالا همه در یک‌جا: «سنجاق‌شده» (ستاره)، «پرکاربرد» (بر اساس دفعات استفاده در همین مرورگر) و «همه‌ی
+        برنامه‌ها» به ترتیب الفبا؛ جستجو در همه. نحوه‌ی اجرا (مرورگر / رایانه / SSO) را خود کارت می‌داند. */
+    const search = $('#appSearch');
     const PIN_KEY = 'epc-pins';
-    const pins = new Set((() => { try { return JSON.parse(localStorage.getItem(PIN_KEY) || '[]'); } catch { return []; } })());
+    const USAGE_KEY = 'epc-app-usage';
+    const readJson = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? d; } catch { return d; } };
+    const pins = new Set(readJson(PIN_KEY, []));
+    const usage = readJson(USAGE_KEY, {});
     const savePins = () => { try { localStorage.setItem(PIN_KEY, JSON.stringify([...pins])); } catch { } };
+    const recordUse = id => {
+        usage[id] = { n: (usage[id]?.n || 0) + 1, t: Date.now() };
+        try { localStorage.setItem(USAGE_KEY, JSON.stringify(usage)); } catch { }
+    };
 
-    function applyPins(grid) {
-        if (!grid) return;
-        const cards = $$('.db-app', grid);
-        cards.forEach(c => $('.db-app__pin', c)?.classList.toggle('is-on', pins.has(c.dataset.id)));
-        cards.filter(c => pins.has(c.dataset.id)).reverse().forEach(c => grid.prepend(c));
+    /** همه‌ی برنامه‌ها: id → { id, kind: web|win|other, name, desc, url, pid, isWin, color, logo, glyph } */
+    const apps = new Map();
+    const normName = t => String(t || '').replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/\u200c/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+
+    function addApps(list) {
+        const names = new Set([...apps.values()].map(a => normName(a.name)));
+        for (const a of list) {
+            // همان برنامه با یک نام در دو منبع (مثلاً سامانه‌ی وب و «سایر») فقط یک بار نمایش داده می‌شود
+            if (!a.name || (names.has(normName(a.name)) && !apps.has(a.id))) continue;
+            apps.set(a.id, a);
+            names.add(normName(a.name));
+        }
+        renderLauncher();
     }
+
+    function iconHtml(a) {
+        if (a.logo) return `<img src="${escAttr(a.logo)}" alt="" loading="lazy" data-fallback-icon="${a.isWin ? 'fa-desktop' : 'fa-globe'}">`;
+        if (a.glyph) return `<span>${escHtml(a.glyph)}</span>`;
+        if (a.kind === 'win' && a.iconId) return `<img src="/Grants/AppIcon/${encodeURIComponent(a.iconId)}" alt="" loading="lazy" data-fallback-icon="fa-desktop">`;
+        // بدون آیکن: حرف اول نام روی رنگ کارت (خواناتر از یک آیکن تکراری برای همه)
+        return `<b class="db-app__letter">${escHtml((a.name || '؟').trim().charAt(0))}</b>`;
+    }
+
+    function tile(a, i) {
+        const soon = a.kind === 'web' && !a.url;
+        return `
+            <div class="db-app${soon ? ' is-soon' : ''}" tabindex="0" role="button" data-id="${escAttr(a.id)}" data-kind="${a.kind}"
+                 data-url="${escAttr(a.url || '')}" data-pid="${escAttr(a.pid || '')}" data-iswin="${!!a.isWin}" data-name="${escAttr(a.name)}"
+                 title="${escAttr(a.desc || a.name)}" style="--_c:${a.color};animation-delay:${Math.min(i, 24) * 14}ms">
+                ${soon ? '<span class="db-app__soon">به‌زودی</span>' : ''}
+                <button type="button" class="db-app__pin${pins.has(a.id) ? ' is-on' : ''}" aria-label="${pins.has(a.id) ? 'برداشتن سنجاق' : 'سنجاق به بالای فهرست'}" title="سنجاق"><i class="fa fa-star"></i></button>
+                <span class="db-app__icon">${iconHtml(a)}</span>
+                <span class="db-app__name">${escHtml(a.name)}</span>
+                ${a.isWin ? '<span class="db-app__where" title="روی رایانه‌ی شما اجرا می‌شود"><i class="fa fa-desktop"></i></span>' : ''}
+                <span class="db-app__busy" aria-hidden="true"></span>
+            </div>`;
+    }
+
+    const section = (title, icon, list, extra = '') => list.length ? `
+        <div class="db-launch__sec">
+            <div class="db-launch__head"><i class="fa ${icon}"></i><span>${title}</span><em>${fa(list.length)}</em>${extra}</div>
+            <div class="db-apps">${list.map(tile).join('')}</div>
+        </div>` : '';
+
+    const byName = (x, y) => x.name.localeCompare(y.name, 'fa');
+
+    let launcherRenders = 0;
+    function renderLauncher() {
+        const host = $('#appsLauncher');
+        if (!host) return;
+        // انیمیشن ورود فقط در نمایش اول (نه با هر سنجاق/جستجو/رسیدن برنامه‌های دیگر)
+        host.classList.toggle('is-settled', launcherRenders++ > 1);
+        const all = [...apps.values()];
+        const total = $('#appsTotal');
+        if (total) { total.textContent = fa(all.length); total.hidden = !all.length; }
+        $('#appsEmpty').hidden = !(launcherReady && !all.length);
+
+        const q = normName(search?.value);
+        if (q) {
+            const hits = all.filter(a => normName(a.name).includes(q) || normName(a.desc).includes(q)).sort(byName);
+            host.innerHTML = section('نتایج جستجو', 'fa-magnifying-glass', hits);
+            $('#appsNoResult').hidden = hits.length > 0;
+            return;
+        }
+        $('#appsNoResult').hidden = true;
+
+        const pinned = all.filter(a => pins.has(a.id)).sort(byName);
+        const frequent = all.filter(a => !pins.has(a.id) && usage[a.id]?.n >= 2)
+            .sort((x, y) => (usage[y.id].n - usage[x.id].n) || (usage[y.id].t - usage[x.id].t))
+            .slice(0, 6);
+        const rest = all.filter(a => !pins.has(a.id)).sort(byName);
+        host.innerHTML =
+            section('سنجاق‌شده', 'fa-star', pinned) +
+            section('پرکاربرد', 'fa-clock-rotate-left', frequent) +
+            section(pinned.length || frequent.length ? 'همه‌ی برنامه‌ها' : 'برنامه‌ها', 'fa-table-cells-large', rest,
+                !pinned.length ? '<small>با ستاره‌ی هر کارت، آن را بالای فهرست سنجاق کنید</small>' : '');
+    }
+
+    // سامانه‌های تحت وب (سمت سرور)
+    let launcherReady = false;
+    addApps($$('#systemsGrid .db-app').map(c => ({
+        id: c.dataset.id, kind: 'web', name: c.dataset.name, desc: c.dataset.desc, url: c.dataset.url,
+        color: c.dataset.color || PALETTE[0], logo: c.dataset.logo, glyph: c.dataset.glyph,
+    })));
+    // اگر برنامه‌های ویندوزی/سایر دیر رسیدند، تا ۲ ثانیه بعد «برنامه‌ای نیست» نشان داده نمی‌شود
+    setTimeout(() => { launcherReady = true; renderLauncher(); }, 2000);
 
     // ═══ Launchers ═══════════════════════════════════════════════════════
     function launchHidden(url, name) {
@@ -68,10 +159,15 @@
     }
 
     function openApp(card) {
-        const { kind, url, name } = card.dataset;
-        if (kind === 'win') return launchHidden(url, name);
+        const { kind, url, name, id } = card.dataset;
+        if (kind === 'web' && !url) return toast('این سامانه به‌زودی فعال می‌شود.');
+        recordUse(id);
+        if (kind === 'win') {
+            card.classList.add('is-busy');
+            setTimeout(() => card.classList.remove('is-busy'), 1500);
+            return launchHidden(url, name);
+        }
         if (kind === 'other') return launchOther(card);
-        if (!url) return toast('این سامانه به‌زودی فعال می‌شود.');
         window.open(url, '_blank', 'noopener');
     }
 
@@ -116,10 +212,11 @@
         const pin = e.target.closest('.db-app__pin');
         if (pin) {
             e.stopPropagation();
-            const card = pin.closest('.db-app');
-            pins.has(card.dataset.id) ? pins.delete(card.dataset.id) : pins.add(card.dataset.id);
+            const id = pin.closest('.db-app').dataset.id;
+            pins.has(id) ? pins.delete(id) : pins.add(id);
             savePins();
-            applyPins(card.parentElement);
+            renderLauncher();
+            $(`.db-app[data-id="${CSS.escape(id)}"] .db-app__pin`)?.focus();
             return;
         }
         const card = e.target.closest('.db-app');
@@ -129,69 +226,29 @@
         if ((e.key === 'Enter' || e.key === ' ') && e.target.classList?.contains('db-app')) { e.preventDefault(); openApp(e.target); }
     });
 
-    // ═══ Tabs + Search ═══════════════════════════════════════════════════
-    const search = $('#appSearch');
-    let activeTab = 'web';
-
-    function setTab(tab) {
-        activeTab = tab;
-        $$('.db-tab').forEach(t => {
-            t.classList.toggle('is-active', t.dataset.tab === tab);
-            t.setAttribute('aria-selected', String(t.dataset.tab === tab));
-        });
-        $$('.db-pane').forEach(p => p.hidden = p.dataset.pane !== tab);
-        filterApps();
-    }
-    $$('.db-tab').forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
-
-    function filterApps() {
-        const q = (search?.value || '').trim().toLowerCase();
-        const pane = $(`.db-pane[data-pane="${activeTab}"]`);
-        let visible = 0;
-        $$('.db-app', pane).forEach(c => {
-            const hit = !q || (c.dataset.name || '').toLowerCase().includes(q) || (c.dataset.desc || '').toLowerCase().includes(q);
-            c.classList.toggle('is-hidden', !hit);
-            if (hit) visible++;
-        });
-        $('#appsNoResult').hidden = !(q && visible === 0);
-    }
-    search?.addEventListener('input', filterApps);
+    // ═══ Search ══════════════════════════════════════════════════════════
+    let searchTimer = 0;
+    search?.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderLauncher, 80); });
     document.addEventListener('keydown', e => {
         if (e.key === '/' && !/input|textarea|select/i.test(document.activeElement?.tagName)) { e.preventDefault(); search?.focus(); }
-        if (e.key === 'Escape' && document.activeElement === search) { search.value = ''; filterApps(); search.blur(); }
+        if (e.key === 'Escape' && document.activeElement === search) { search.value = ''; renderLauncher(); search.blur(); }
     });
 
     // ═══ Renderers ═══════════════════════════════════════════════════════
     function renderWindowsApps(list) {
         if (!list?.length) return;
-        $('#tabWin').hidden = false;
-        $('#countWin').textContent = list.length;
-        $('#windowsAppsGrid').innerHTML = list.map((a, i) => `
-            <div class="db-app" tabindex="0" role="button" data-kind="win" data-id="win:${escAttr(a.id)}" data-url="${escAttr(a.launchUrl)}"
-                 data-name="${escAttr(a.name)}" data-desc="${escAttr(a.description)}" title="${escAttr(a.description)}"
-                 style="--_c:${PALETTE[(i + 3) % PALETTE.length]};animation-delay:${Math.min(i, 20) * 18}ms">
-                <button type="button" class="db-app__pin" aria-label="سنجاق"><i class="fa fa-star"></i></button>
-                <span class="db-app__icon">${a.id
-                    ? `<img src="/Grants/AppIcon/${encodeURIComponent(a.id)}" alt="" loading="lazy" data-fallback-icon="fa-desktop">`
-                    : '<i class="fa fa-desktop"></i>'}</span>
-                <span class="db-app__name">${escHtml(a.name)}</span>
-            </div>`).join('');
-        applyPins($('#windowsAppsGrid'));
+        addApps(list.map((a, i) => ({
+            id: `win:${a.id}`, kind: 'win', isWin: true, name: a.name, desc: a.description, url: a.launchUrl,
+            iconId: a.id, color: PALETTE[(i + 3) % PALETTE.length],
+        })));
     }
 
     function renderOtherPrograms(list) {
         if (!list?.length) return;
-        $('#tabOther').hidden = false;
-        $('#countOther').textContent = list.length;
-        $('#otherProgramsGrid').innerHTML = list.map((p, i) => `
-        <div class="db-app" tabindex="0" role="button" data-kind="other" data-id="other:${escAttr(p.id)}" data-pid="${escAttr(p.id)}"
-             data-name="${escAttr(p.name)}" data-iswin="${p.kind === 2}" title="${escAttr(p.name)}"
-             style="--_c:${PALETTE[(i + 6) % PALETTE.length]};animation-delay:${Math.min(i, 20) * 18}ms">
-            <button type="button" class="db-app__pin" aria-label="سنجاق"><i class="fa fa-star"></i></button>
-            <span class="db-app__icon"><i class="fa ${p.kind === 2 ? 'fa-window-maximize' : 'fa-earth-asia'}"></i></span>
-            <span class="db-app__name">${escHtml(p.name)}</span>
-        </div>`).join('');
-        applyPins($('#otherProgramsGrid'));
+        addApps(list.map((p, i) => ({
+            id: `other:${p.id}`, kind: 'other', isWin: p.kind === 2, name: p.name, pid: p.id,
+            color: PALETTE[(i + 6) % PALETTE.length],
+        })));
     }
 
     const MEETING_STATUS = {
@@ -537,7 +594,7 @@
             { selector: '#themeToggle', title: 'حالت روشن / تیره', html: 'ظاهر پورتال را بین حالت روشن و تیره جابه‌جا کنید. انتخاب شما در همین مرورگر ذخیره می‌شود.', placement: 'bottom' },
             { selector: '#hdrUserBtn', title: 'منوی کاربری', html: 'تغییر رمز، تفویض اختیار، مستندات، بازنشانی رمز فرزین و خروج.', placement: 'bottom' },
             { selector: '.db-actions', title: 'دسترسی سریع', html: 'دفترچه تلفن، سوابق ورود و (در صورت داشتن مجوز) ورود به پروفایل کاربران.', placement: 'bottom' },
-            { selector: '.db-tabs', title: 'دسته‌بندی سامانه‌ها', html: 'سامانه‌های تحت وب، برنامه‌های ویندوزی و سایر سامانه‌ها در سه زبانه.', placement: 'bottom' },
+            { selector: '#appsLauncher', title: 'همه‌ی برنامه‌ها در یک‌جا', html: 'همه‌ی سامانه‌ها و برنامه‌ها (تحت وب یا روی رایانه) این‌جا هستند؛ کافی است روی هر کارت بزنید. برنامه‌های سنجاق‌شده و پرکاربرد بالای فهرست می‌آیند.', placement: 'bottom' },
             { selector: '#appSearch', title: 'جستجوی سریع', html: 'کلید / را بزنید و نام سامانه را تایپ کنید. با ستاره‌ی روی هر کارت، آن را به ابتدای لیست سنجاق کنید.', placement: 'bottom' },
             { selector: '#meetingContainer', title: 'جلسات ۴ روز آینده', html: 'با کلیک روی هر جلسه، جزئیات آن در سامانه‌ی مدیریت جلسات باز می‌شود.', placement: 'left' },
             { selector: '#announceContainer', title: 'اطلاعیه‌ها', html: 'اطلاعیه‌های خوانده‌نشده با نوار آبی مشخص شده‌اند. آرشیو کامل از لینک بالای کارت.', placement: 'left' },
@@ -547,7 +604,6 @@
     }
 
     // ═══ Load all ════════════════════════════════════════════════════════
-    applyPins($('#systemsGrid'));
 
     // نور دنبال‌کننده‌ی ماوس روی کاشی‌ها (حداکثر یک بار در هر فریم)
     let glowFrame = 0, glowEvent = null;

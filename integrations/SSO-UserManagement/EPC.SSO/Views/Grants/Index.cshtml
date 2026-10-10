@@ -20,7 +20,7 @@
         <div class="db-col">
             <section class="p-card" id="systemsCard">
                 <div class="p-card__head">
-                    <h2 class="p-card__title"><span class="p-card__icon"><i class="fa fa-rocket"></i></span> سامانه‌های در دسترس</h2>
+                    <h2 class="p-card__title"><span class="p-card__icon"><i class="fa fa-rocket"></i></span> برنامه‌ها و سامانه‌های من <span class="p-card__count" id="appsTotal" hidden></span></h2>
                     <div class="db-actions">
                         <a class="db-act" asp-controller="PhoneDirectory" asp-action="Index" target="_blank" rel="noopener" title="دفترچه تلفن"><i class="fa fa-address-book"></i><span>دفترچه تلفن</span></a>
                         <button type="button" class="db-act login-history-btn" id="btnSessions" title="سوابق ورود"><i class="fa fa-clock-rotate-left"></i><span>سوابق ورود</span></button>
@@ -31,48 +31,32 @@
                     </div>
                 </div>
 
+                @* همه‌ی برنامه‌ها (تحت وب، ویندوزی و سایر) در یک لانچر؛ کاربر لازم نیست نوع برنامه را بداند *@
                 <div class="db-toolbar">
-                    <div class="db-tabs" role="tablist">
-                        <button type="button" class="db-tab is-active" role="tab" aria-selected="true" data-tab="web"><i class="fa fa-globe"></i> تحت وب <span class="db-tab__n">@grants.Count</span></button>
-                        <button type="button" class="db-tab" role="tab" aria-selected="false" data-tab="win" id="tabWin" hidden><i class="fa fa-desktop"></i> ویندوزی <span class="db-tab__n" id="countWin">0</span></button>
-                        <button type="button" class="db-tab" role="tab" aria-selected="false" data-tab="other" id="tabOther" hidden><i class="fa fa-layer-group"></i> سایر <span class="db-tab__n" id="countOther">0</span></button>
-                    </div>
                     <label class="db-search">
                         <i class="fa fa-magnifying-glass"></i>
-                        <input type="search" id="appSearch" placeholder="جستجوی سامانه..." autocomplete="off" aria-label="جستجوی سامانه" />
+                        <input type="search" id="appSearch" placeholder="جستجو در همه‌ی برنامه‌ها..." autocomplete="off" aria-label="جستجوی برنامه" />
                         <kbd>/</kbd>
                     </label>
                 </div>
 
-                <div class="db-pane" data-pane="web">
-                    <div class="db-apps" id="systemsGrid">
-                        @for (var i = 0; i < grants.Count; i++)
-                        {
-                            var g = grants[i];
-                            var hasUrl = !string.IsNullOrWhiteSpace(g.ClientUrl);
-                            var logo = g.ClientLogoUrl ?? "";
-                            var isImg = logo.StartsWith("/") || logo.StartsWith("http", StringComparison.OrdinalIgnoreCase) || logo.StartsWith("data:");
-                            <div class="db-app" tabindex="0" role="link" style="--_c:@palette[i % palette.Length];animation-delay:@(Math.Min(i, 24) * 15)ms"
-                                 data-id="web:@g.ClientId" data-url="@g.ClientUrl" data-name="@g.ClientName" data-desc="@g.Description" title="@(string.IsNullOrWhiteSpace(g.Description) ? g.ClientName : g.Description)">
-                                @if (!hasUrl) { <span class="db-app__soon">به‌زودی</span> }
-                                <button type="button" class="db-app__pin" aria-label="سنجاق" title="سنجاق به ابتدای لیست"><i class="fa fa-star"></i></button>
-                                <span class="db-app__icon">
-                                    @if (isImg) { <img src="@logo" alt="" loading="lazy" /> }
-                                    else if (!string.IsNullOrWhiteSpace(logo)) { <span>@logo</span> }
-                                    else { <i class="fa fa-globe"></i> }
-                                </span>
-                                <span class="db-app__name">@g.ClientName</span>
-                            </div>
-                        }
-                    </div>
-                    @if (grants.Count == 0)
+                @* سامانه‌های تحت وب (سمت سرور)؛ اسکریپت آن‌ها را با بقیه‌ی برنامه‌ها در لانچر یکپارچه می‌چیند *@
+                <div class="db-apps" id="systemsGrid" data-source hidden>
+                    @for (var i = 0; i < grants.Count; i++)
                     {
-                        <div class="p-empty"><i class="fa fa-box-open"></i>سامانه‌ای برای سمت فعلی شما تعریف نشده است</div>
+                        var g = grants[i];
+                        var logo = g.ClientLogoUrl ?? "";
+                        var isImg = logo.StartsWith("/") || logo.StartsWith("http", StringComparison.OrdinalIgnoreCase) || logo.StartsWith("data:");
+                        <div class="db-app" data-kind="web" data-id="web:@g.ClientId" data-url="@g.ClientUrl" data-name="@g.ClientName" data-desc="@g.Description"
+                             data-color="@palette[i % palette.Length]" data-logo="@(isImg ? logo : "")" data-glyph="@(isImg ? "" : logo)"></div>
                     }
                 </div>
-                <div class="db-pane" data-pane="win" hidden><div class="db-apps" id="windowsAppsGrid"></div></div>
-                <div class="db-pane" data-pane="other" hidden><div class="db-apps" id="otherProgramsGrid"></div></div>
-                <div class="p-empty" id="appsNoResult" hidden><i class="fa fa-magnifying-glass"></i>موردی با این عبارت پیدا نشد</div>
+
+                <div class="db-launch" id="appsLauncher">
+                    <div class="db-apps">@for (var i = 0; i < Math.Min(8, Math.Max(grants.Count, 4)); i++) { <div class="p-skel" style="height:96px"></div> }</div>
+                </div>
+                <div class="p-empty" id="appsNoResult" hidden><i class="fa fa-magnifying-glass"></i>برنامه‌ای با این عبارت پیدا نشد</div>
+                <div class="p-empty" id="appsEmpty" hidden><i class="fa fa-box-open"></i>برنامه‌ای برای سمت فعلی شما تعریف نشده است</div>
             </section>
 
             <section class="p-card" id="surveysCard">
