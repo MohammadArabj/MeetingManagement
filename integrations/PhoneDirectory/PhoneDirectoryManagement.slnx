@@ -1,0 +1,31 @@
+<Solution>
+  <Folder Name="/Application/">
+    <Project Path="PhoneDirectoryManagement.Application.Contracts/PhoneDirectoryManagement.Application.Contracts.csproj" />
+    <Project Path="PhoneDirectoryManagement.Application/PhoneDirectoryManagement.Application.csproj" />
+  </Folder>
+  <Folder Name="/Common/">
+    <Project Path="PhoneDirectoryManagement.Common/PhoneDirectoryManagement.Common.csproj" />
+  </Folder>
+  <Folder Name="/Domain/">
+    <Project Path="PhoneDirectoryManagement.Domain/PhoneDirectoryManagement.Domain.csproj" />
+  </Folder>
+  <Folder Name="/Front/">
+    <Project Path="Front/Front.esproj">
+      <Build />
+      <Deploy />
+    </Project>
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="PhoneDirectoryManagement.Infrastructure.Acl/PhoneDirectoryManagement.Infrastructure.Acl.csproj" />
+    <Project Path="PhoneDirectoryManagement.Infrastructure.Configuration/PhoneDirectoryManagement.Infrastructure.Configuration.csproj" />
+    <Project Path="PhoneDirectoryManagement.Infrastructure.Persistence/PhoneDirectoryManagement.Infrastructure.Persistence.csproj" />
+    <Project Path="PhoneDirectoryManagement.Infrastructure.Query.Contracts/PhoneDirectoryManagement.Infrastructure.Query.Contracts.csproj" />
+    <Project Path="PhoneDirectoryManagement.Infrastructure.Query/PhoneDirectoryManagement.Infrastructure.Query.csproj" />
+  </Folder>
+  <Folder Name="/Presentation/">
+    <Project Path="PhoneDirectoryManagement.Presentation.Api/PhoneDirectoryManagement.Presentation.Api.csproj" />
+    <Project Path="PhoneDirectoryManagement.Presentation.Facade.Command/PhoneDirectoryManagement.Presentation.Facade.Command.csproj" />
+    <Project Path="PhoneDirectoryManagement.Presentation.Facade.Contracts/PhoneDirectoryManagement.Presentation.Facade.Contracts.csproj" />
+    <Project Path="PhoneDirectoryManagement.Presentation.Facade.Query/PhoneDirectoryManagement.Presentation.Facade.Query.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Autofac.Extras.DynamicProxy" Version="8.1.0" />
+    <PackageReference Include="Epc.Autofac" Version="2.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PhoneDirectoryManagement.Application\PhoneDirectoryManagement.Application.csproj" />
+    <ProjectReference Include="..\PhoneDirectoryManagement.Infrastructure.Acl\PhoneDirectoryManagement.Infrastructure.Acl.csproj" />
+    <ProjectReference Include="..\PhoneDirectoryManagement.Infrastructure.Persistence\PhoneDirectoryManagement.Infrastructure.Persistence.csproj" />
+    <ProjectReference Include="..\PhoneDirectoryManagement.Infrastructure.Query\PhoneDirectoryManagement.Infrastructure.Query.csproj" />
+    <ProjectReference Include="..\PhoneDirectoryManagement.Presentation.Facade.Command\PhoneDirectoryManagement.Presentation.Facade.Command.csproj" />
+    <ProjectReference Include="..\PhoneDirectoryManagement.Presentation.Facade.Query\PhoneDirectoryManagement.Presentation.Facade.Query.csproj" />
+  </ItemGroup>
+
+</Project>
